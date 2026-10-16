@@ -82,6 +82,12 @@ PY
   sed -i "s|^ODOO_PASSWORD=.*|ODOO_PASSWORD=$NEWPW|" .env
 fi
 
+log "   WhatsApp-style test chat page (systemd service on :8090, password in .env)"
+grep -q '^WEBCHAT_PASSWORD=..*' .env || { sed -i '/^WEBCHAT_PASSWORD=/d;/^WEBCHAT_USER=/d' .env
+  printf 'WEBCHAT_USER=pharmacy\nWEBCHAT_PASSWORD=%s\n' "$(rnd 12)" >> .env; }
+cp channels/webchat/pharmacy-webchat.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now pharmacy-webchat >/dev/null 2>&1 || true
+
 log "7/8 smoke test (adapter against Odoo)"
 .venv/bin/python -m pytest adapter/test_adapter.py -q | tail -1
 
@@ -115,6 +121,7 @@ if [ "$WITH_FT" = "1" ]; then
 fi
 
 log "DONE. Odoo: http://$(curl -s https://api.ipify.org 2>/dev/null || echo localhost):8069 (db pharmacy, user admin,
-   password = ODOO_PASSWORD in .env). Odoo is bound to all interfaces: open the port with
-   'ufw allow 8069/tcp' only if you want it public. Chat with the agent: .venv/bin/python agent/chat.py
+   password = ODOO_PASSWORD in .env). Test chat: http://<server>:8090 (user/password =
+   WEBCHAT_USER/WEBCHAT_PASSWORD in .env). Both listen on all interfaces: open them with
+   'ufw allow 8069/tcp' / 'ufw allow 8090/tcp' only if you want them public. Chat with the agent: .venv/bin/python agent/chat.py
    Next steps / status: docs/RESTORE.md and the TO-DO list in docs/progress.md"

@@ -264,3 +264,20 @@ installed with **no SFDA data** — the file import is left to the owner.
 
 Engine: `odoo/addons/pharmacy_agent/models/sfda_sync.py` (scraper ported into the module; Odoo
 runs in its own container). Manual test script: `odoo/addons/pharmacy_agent/tests_manual/`.
+
+
+---
+
+## 5. WhatsApp-style test chat page
+**http://155.138.207.131:8090** — browser login: user `WEBCHAT_USER`, password `WEBCHAT_PASSWORD`
+(both in `/home/pharmacy-ai-agent/.env`). Runs the **real agent** (guards → Qwen via Ollama →
+tools → live Odoo sample data) with one conversation per browser tab.
+- **debug** toggle: under each reply shows the tool calls (arguments + short result), whether a
+  safety guard answered, and the time taken.
+- **model** picker: production base model vs fine-tuned experiments (e.g. `pharmacy-4b-ft3`);
+  switching starts a new chat. **محادثة جديدة** = new conversation.
+- Sample-message chips for quick tests. Orders/holds it creates are real records in the (dummy)
+  Odoo DB, attached to the demo customer.
+Service: `systemctl status|restart pharmacy-webchat` (unit in `channels/webchat/`), logs:
+`journalctl -u pharmacy-webchat -f`. Port 8090 is open in ufw; close with `ufw delete allow 8090/tcp`.
+Plain HTTP (password travels unencrypted) — fine for testing, put HTTPS in front for anything more.

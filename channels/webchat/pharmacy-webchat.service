@@ -1,0 +1,13 @@
+[Unit]
+Description=Pharmacy agent - WhatsApp-style test chat page (channels/webchat)
+After=network-online.target docker.service ollama.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/pharmacy-ai-agent
+ExecStart=/home/pharmacy-ai-agent/.venv/bin/uvicorn --app-dir channels/webchat server:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
