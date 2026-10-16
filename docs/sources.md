@@ -10,3 +10,5 @@ Record every external fact (model repo, license, API param) with its source and 
 
 > TODO: add sources for Whisper variants, Qwen3 sizes/licenses, NAMAA-Saudi-TTS and Chatterbox
 > when those benchmarks are set up (blocked on GPU box).
+| 2026-10-16 | Qwen3 dense sizes: 0.6B,1.7B,4B,8B,14B,32B; Ollama tags expose tools+thinking; Ollama >=0.6.6 | https://registry.ollama.ai/library/qwen3/tags |
+| 2026-10-16 | Ollama tool-calling via /api/chat `tools` param returns message.tool_calls | https://github.com/ollama/ollama/blob/main/docs/api.md |

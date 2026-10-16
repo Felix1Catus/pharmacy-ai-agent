@@ -46,3 +46,17 @@ Blocked (unchanged — all need the human, section 4):
 Recommend next (when unblocked): start the GPU box and run T-A5/A6/A7; get native review of the
 datasets; then Gate A (recommend a Qwen size + a TTS with numbers). Meanwhile Sprint B (agent loop,
 guardrails, WhatsApp simulator, text evals) can start against the adapter — it does not need the GPU.
+
+## 2026-10-16 — T-A7 Qwen3 baseline run on CPU (GPU box still unavailable)
+Ran the prompt-only Qwen3 tool-call baseline on THIS CPU workstation via Ollama (human asked to
+try Qwen locally, no GPU). Sizes 0.6B/1.7B/4B/8B over the 106-item text set, thinking off.
+- **0.6B, 1.7B fail the safety gates** (medical refusal 0% / 79%; dangerous transactions 6 / 2).
+- **Qwen3-4B-Instruct-2507 and 8B both pass** (100% medical + restricted-safe, 0 dangerous,
+  0% wrong-action, 95% / 97% acceptable action accuracy). 4B ~1.3s/turn, 8B ~2.5s/turn on CPU.
+- **Recommended size: Qwen3-4B-Instruct-2507** (smallest that clears every gate; CPU-friendly).
+  Details + table in docs/decisions.md. Results: results/qwen_baseline_*.json.
+- Finding: default `qwen3:4b` is unusable here (won't stop "thinking"); used the non-thinking
+  Instruct-2507 build. Stack: Ollama 0.40.5, CPU-only.
+
+Note on Gate A: the model-size recommendation is now evidence-backed on CPU. Whisper (T-A5) and
+TTS (T-A6) remain blocked on the GPU box + real voice notes, so Gate A is not fully closed.
