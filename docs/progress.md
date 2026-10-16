@@ -171,3 +171,11 @@ tool-call, 0/4 probe).
   on CPU. After training: GGUF export -> Ollama -> re-run evals vs baseline, keep only if it beats
   it with no new wrong-action cases (T-D5).
 Blocked: QLoRA training (GPU box) and native review of the Arabic.
+
+## 2026-10-16 — T-D3 dataset expanded (more templates/dialects, product hold-out)
+Grew the SFT set to ~632 (train 534 / test 98) with per-dialect phrasing banks (Gulf/Najdi,
+Egyptian, Levantine, MSA, English, mixed), added intents (delivery orders, create_dispatch,
+price, greetings), and HELD OUT 4 OTC products into test only (Betadine/Gaviscon/Strepsils/
+Brufen) so the test split measures generalization. Balanced so search no longer dominates;
+final-turn gold spans all 8 tools + text replies. Validated: 0 malformed, 0 customer_id leaks.
+Still machine-drafted/unreviewed; training stays on the GPU box (T-D4).
