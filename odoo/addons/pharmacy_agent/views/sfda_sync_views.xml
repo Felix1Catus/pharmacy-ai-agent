@@ -93,7 +93,8 @@
           <group>
             <group>
               <field name="trigger"/><field name="started"/><field name="finished"/>
-              <field name="pages"/><field name="scanned"/>
+              <field name="pages"/><field name="next_page"/><field name="last_page"/>
+              <field name="scanned"/>
             </group>
             <group>
               <field name="new"/><field name="changed"/><field name="unchanged"/>

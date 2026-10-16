@@ -146,6 +146,13 @@ def _same(a, b):
 
 
 # ---------------------------------------------------------------- models
+# Odoo kills a background job after ~120 s (limit_time_real), so a run is processed in CHUNKS of a
+# few list pages: each cron call handles one chunk (well under the limit), saves progress on the
+# run, then re-triggers itself. A run interrupted by a restart is resumed from its saved page.
+PAGES_PER_CHUNK = 3
+STALE_MINUTES = 10
+
+
 class PharmacySfdaUpdater(models.Model):
     _name = "pharmacy.sfda.updater"
     _description = "SFDA registry updater (Update List)"
@@ -167,8 +174,10 @@ class PharmacySfdaUpdater(models.Model):
     delay = fields.Float(string="Pause per request (s)", default=0.5)
     run_ids = fields.One2many("pharmacy.sfda.run", "updater_id", string="Runs")
     last_run_id = fields.Many2one("pharmacy.sfda.run", compute="_compute_last_run")
-    last_run_state = fields.Selection(related="last_run_id.state", string="Last run status")
-    last_run_summary = fields.Char(related="last_run_id.summary", string="Last run")
+    last_run_state = fields.Selection([("queued", "Queued"), ("running", "Running"),
+                                       ("done", "Done"), ("failed", "Failed")],
+                                      compute="_compute_last_run", string="Last run status")
+    last_run_summary = fields.Char(compute="_compute_last_run", string="Last run")
 
     def _compute_next_auto_run(self):
         cron = self.env.ref("pharmacy_agent.ir_cron_sfda_auto", raise_if_not_found=False)
@@ -177,7 +186,10 @@ class PharmacySfdaUpdater(models.Model):
 
     def _compute_last_run(self):
         for rec in self:
-            rec.last_run_id = rec.run_ids[:1]
+            run = rec.run_ids[:1]
+            rec.last_run_id = run
+            rec.last_run_state = run.state or False
+            rec.last_run_summary = run.summary or False
 
     def write(self, vals):
         res = super().write(vals)
@@ -196,23 +208,30 @@ class PharmacySfdaUpdater(models.Model):
     def _get_singleton(self):
         return self.env.ref("pharmacy_agent.sfda_updater_singleton")
 
-    def _check_not_running(self):
-        stale = fields.Datetime.now() - timedelta(hours=3)
-        busy = self.env["pharmacy.sfda.run"].search(
-            [("state", "in", ("queued", "running")), ("create_date", ">", stale)], limit=1)
-        if busy:
-            raise UserError(_("An update is already %s (started %s). Wait for it to finish.")
-                            % (busy.state, busy.create_date))
+    def _active_run(self):
+        return self.env["pharmacy.sfda.run"].search(
+            [("state", "in", ("queued", "running"))], order="id", limit=1)
+
+    @api.model
+    def _trigger_worker(self):
+        self.env.ref("pharmacy_agent.ir_cron_sfda_manual").sudo()._trigger()
 
     def action_run_now(self):
         self.ensure_one()
-        self._check_not_running()
-        self.env["pharmacy.sfda.run"].create({"updater_id": self.id, "trigger": "manual"})
-        self.env.ref("pharmacy_agent.ir_cron_sfda_manual").sudo()._trigger()
+        run = self._active_run()
+        if run and not run._is_stale():
+            raise UserError(_("An update is already in progress: %s") % (run.summary or run.state))
+        if run:   # interrupted earlier (e.g. Odoo restarted): resume it from its saved page
+            run.write({"state": "queued", "summary": _("resuming from page %d") % run.next_page})
+        else:
+            self.env["pharmacy.sfda.run"].create({
+                "updater_id": self.id, "trigger": "manual", "next_page": self.first_page,
+                "last_page": self.last_page, "summary": _("queued")})
+        self._trigger_worker()
         return {"type": "ir.actions.client", "tag": "display_notification", "params": {
             "title": _("SFDA update started"),
-            "message": _("Running in the background (about 15-20 minutes for 100 pages). "
-                         "Reload this screen to follow progress."),
+            "message": _("Running in the background, a few pages at a time (about 15-20 minutes "
+                         "for 100 pages). Reload this screen to see progress."),
             "type": "info", "sticky": False,
             "next": {"type": "ir.actions.client", "tag": "soft_reload"}}}
 
@@ -225,41 +244,68 @@ class PharmacySfdaUpdater(models.Model):
     @api.model
     def _cron_auto(self):
         upd = self._get_singleton()
-        if not upd.auto_update:
+        if not upd.auto_update or upd._active_run():
             return
-        try:
-            upd._check_not_running()
-        except UserError:
-            return
-        run = self.env["pharmacy.sfda.run"].create({"updater_id": upd.id, "trigger": "auto"})
-        self.env.cr.commit()
-        upd._process(run)
+        self.env["pharmacy.sfda.run"].create({
+            "updater_id": upd.id, "trigger": "auto", "next_page": upd.first_page,
+            "last_page": upd.last_page, "summary": _("queued")})
+        self._trigger_worker()
 
     @api.model
     def _cron_manual(self):
-        for run in self.env["pharmacy.sfda.run"].search([("state", "=", "queued")], order="id"):
-            run.updater_id._process(run)
+        """Worker: process ONE chunk of the oldest active run, then re-trigger if more remains."""
+        run = self._get_singleton()._active_run()
+        if not run or (run.state == "running" and not run._is_stale()):
+            return
+        more = run.updater_id._process_chunk(run)
+        if more:
+            self._trigger_worker()
 
-    # ---------------------------------------------------------------- the sync itself
-    def _process(self, run):
+    # ---------------------------------------------------------------- one chunk
+    def _process_chunk(self, run):
         self.ensure_one()
         cr = self.env.cr
-        run.write({"state": "running", "started": fields.Datetime.now()})
+        first = run.next_page
+        last = min(run.last_page, first + PAGES_PER_CHUNK - 1)
+        run.write({"state": "running", "started": run.started or fields.Datetime.now(),
+                   "summary": _("working on pages %d-%d of %d-%d...")
+                   % (first, last, run.updater_id.first_page, run.last_page)})
         cr.commit()
         try:
-            counts = self._do_sync(run)
-            run.write(dict(counts, state="done", finished=fields.Datetime.now()))
+            c = self._do_sync(list(range(first, last + 1)))
         except Exception as e:  # noqa: BLE001
             cr.rollback()
-            _logger.exception("SFDA update failed")
+            _logger.exception("SFDA update chunk failed")
             run.write({"state": "failed", "finished": fields.Datetime.now(),
-                       "notes": (run.notes or "") + "\nFAILED: %s" % e})
+                       "notes": (run.notes or "") + "\nFAILED on pages %d-%d: %s" % (first, last, e)})
+            cr.commit()
+            return False
+        vals = {k: run[k] + c[k] for k in ("pages", "scanned", "new", "changed", "unchanged",
+                                           "newly_scheduled", "relaxed", "errors")}
+        if c["notes"]:
+            vals["notes"] = ((run.notes + "\n") if run.notes else "") + c["notes"]
+        vals["next_page"] = last + 1
+        done = last >= run.last_page
+        total_pages = run.last_page - run.updater_id.first_page + 1
+        vals["summary"] = (_("%(new)d new, %(chg)d changed, %(unch)d unchanged, %(sched)d newly "
+                             "Scheduled, %(rev)d to review, %(err)d errors") if done else
+                           _("pages %(pd)d/%(pt)d done - %(scan)d drugs so far: %(new)d new, "
+                             "%(chg)d changed, %(unch)d unchanged")) % {
+            "new": vals["new"], "chg": vals["changed"], "unch": vals["unchanged"],
+            "sched": vals["newly_scheduled"], "rev": vals["relaxed"], "err": vals["errors"],
+            "pd": vals["pages"], "pt": total_pages, "scan": vals["scanned"]}
+        if done:
+            vals.update(state="done", finished=fields.Datetime.now())
+            if not vals.get("notes") and not run.notes:
+                vals["notes"] = _("No new drugs and no changes.")
+        else:
+            vals["state"] = "queued"
+        run.write(vals)
         cr.commit()
+        return not done
 
-    def _do_sync(self, run):
-        cr = self.env.cr
+    def _do_sync(self, pages):
         delay, workers = max(0.1, self.delay), max(1, min(self.workers, 8))
-        pages = list(range(self.first_page, self.last_page + 1))
 
         # 1) list pages (threaded HTTP)
         def get_list(p):
@@ -275,9 +321,6 @@ class PharmacySfdaUpdater(models.Model):
             for r in page_rows or []:
                 if r["key"] not in seen:
                     seen.add(r["key"]); rows.append(r)
-        run.write({"pages": len(pages), "scanned": len(rows), "errors": errors,
-                   "summary": _("fetching %d drug pages...") % len(rows)})
-        cr.commit()
 
         # 2) details pages (threaded HTTP)
         def get_details(r):
@@ -292,7 +335,7 @@ class PharmacySfdaUpdater(models.Model):
             recs = list(ex.map(get_details, rows))
         errors += sum(1 for x in recs if x is None)
         recs = [r for r in recs if r]
-        if rows and errors > 0.2 * (len(rows) + len(pages)):
+        if (rows or pages) and errors > 0.5 * (len(rows) + len(pages)):
             raise RuntimeError("too many fetch errors (%d) - SFDA site unreachable?" % errors)
 
         # 3) upsert (ORM, this thread only)
@@ -303,9 +346,10 @@ class PharmacySfdaUpdater(models.Model):
         for r in recs:
             by_reg.setdefault(r["reg_no"], r)          # SFDA lists a few drugs twice
         existing = {p.sfda_reg_no: p for p in Product.search([("sfda_reg_no", "in", list(by_reg))])}
-        c = dict(new=0, changed=0, unchanged=0, newly_scheduled=0, relaxed=0)
+        c = dict(pages=len(pages), scanned=len(rows), new=0, changed=0, unchanged=0,
+                 newly_scheduled=0, relaxed=0, errors=errors)
         notes = []
-        for i, (reg, r) in enumerate(by_reg.items(), 1):
+        for reg, r in by_reg.items():
             vals = _sfda_vals(r)
             controlled = r["control"] in SCHEDULED_VALUES
             prod = existing.get(reg)
@@ -336,21 +380,13 @@ class PharmacySfdaUpdater(models.Model):
                     diff["list_price"] = vals["sfda_public_price"]
                 if diff:
                     changes = ", ".join("%s: %s -> %s" % (f, prod[f], v) for f, v in diff.items()
-                                        if f not in ("schedule_class",))
+                                        if f != "schedule_class")
                     prod.write(diff)
                     c["changed"] += 1
                     notes.append("CHANGED %s %s: %s" % (reg, prod.name, changes[:400]))
                 else:
                     c["unchanged"] += 1
-            if i % 200 == 0:
-                run.write(dict(c, summary=_("processed %d/%d") % (i, len(by_reg))))
-                cr.commit()
-        c["errors"] = errors
-        c["notes"] = "\n".join(notes[:2000]) or _("No new drugs and no changes.")
-        c["summary"] = _("%(new)d new, %(changed)d changed, %(unchanged)d unchanged, "
-                         "%(sched)d newly Scheduled, %(rev)d to review, %(err)d errors") % {
-            "new": c["new"], "changed": c["changed"], "unchanged": c["unchanged"],
-            "sched": c["newly_scheduled"], "rev": c["relaxed"], "err": errors}
+        c["notes"] = "\n".join(notes)
         return c
 
 
@@ -363,9 +399,11 @@ class PharmacySfdaRun(models.Model):
     trigger = fields.Selection([("manual", "Manual"), ("auto", "Automatic")], default="manual")
     state = fields.Selection([("queued", "Queued"), ("running", "Running"), ("done", "Done"),
                               ("failed", "Failed")], default="queued", index=True)
+    next_page = fields.Integer(string="Next page", help="Resume point (pages are 0-based).")
+    last_page = fields.Integer(string="Last page")
     started = fields.Datetime()
     finished = fields.Datetime()
-    pages = fields.Integer()
+    pages = fields.Integer(string="Pages done")
     scanned = fields.Integer(string="Drugs scanned")
     new = fields.Integer(string="New")
     changed = fields.Integer(string="Changed")
@@ -377,3 +415,9 @@ class PharmacySfdaRun(models.Model):
     errors = fields.Integer()
     summary = fields.Char()
     notes = fields.Text(string="Details")
+
+    def _is_stale(self):
+        """running but no progress saved for a while -> the job was killed; safe to resume."""
+        self.ensure_one()
+        return self.state == "running" and self.write_date < (
+            fields.Datetime.now() - timedelta(minutes=STALE_MINUTES))

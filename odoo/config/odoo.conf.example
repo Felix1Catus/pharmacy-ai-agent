@@ -8,3 +8,4 @@ addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
 list_db = False
 dbfilter = ^pharmacy$
 proxy_mode = False
+limit_time_real_cron = 600
