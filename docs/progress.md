@@ -212,3 +212,16 @@ on the small Qwen3-0.6B to prove the pipeline end-to-end (finetune/train_lora_cp
   than the live agent. Next try: escalation ~12-15%, symptom->search examples, agent's real
   prompt, longer max length. hold_item 0/6 for every model -> inspect those labels.
 Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).
+
+## TO-DO (backlog, in order agreed with the owner)
+1. **Fine-tune round 3** — finish (running: finetune/run_round3.sh), compare vs 92%, decide.
+2. **Owner / ops-manager assistant** (internal, read-only Odoo analytics): seed dummy sales
+   history per branch; tools stock_by_branch / revenue / top_products / low_stock /
+   open_holds_and_deliveries; own prompt + allow-listed owner identities; CLI first, later the
+   owner's WhatsApp via the official Cloud API; small eval set. Never customer-facing.
+3. **Clarify-once-then-escalate + pregnancy-test fix** — edits sit uncommitted in
+   agent/agent.py and evals/runners/qwen_baseline.py; sanity-check, re-run T-B4, commit.
+4. **WhatsApp channel (T-B3)** — Meta Cloud API webhook + local simulator.
+5. **Voice (Sprint C)** — Whisper ingest + NAMAA-Saudi-TTS replies.
+6. **HTTPS for Odoo** — domain + reverse proxy, then bind Odoo back to localhost.
+7. **SSH hardening** — key-only login, disable password auth.
