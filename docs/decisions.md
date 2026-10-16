@@ -106,3 +106,17 @@ Reviewed AyoubChLin/Qwen3.5-4B-saudi-dialect + its dataset for fine-tuning our a
 - **Sequencing:** our current limiter is tool-invocation (a prompt issue, being fixed now), not
   dialect understanding. Fix prompt first, re-measure per-dialect (T-B4), then decide if a
   dialect-targeted fine-tune adds value (T-D2 justification).
+
+## 2026-10-16 — Model swap to ASL-4B-v1 / Qwen3.5-4B-saudi-dialect: NOT NOW (arch unsupported)
+Evaluated swapping Qwen3-4B-Instruct-2507 -> ASL-4B-v1 (saai-sa) or Qwen3.5-4B-saudi-dialect
+(AyoubChLin). Decision: KEEP Qwen3-4B-Instruct-2507 for now.
+- Both are arch **Qwen3_5ForConditionalGeneration** (model_type qwen3_5): NEW multimodal,
+  hybrid linear+full attention. llama.cpp/Ollama do not support it; **no GGUF exists** for
+  either. They cannot run in our CPU + Ollama stack. Running needs vLLM/Transformers (GPU,
+  currently blocked).
+- Neither advertises TOOL/function calling (our critical path); both are Arabic
+  generation/chat models. Their strengths (Arabic knowledge/dialect) address understanding,
+  which post-tuning is NOT our bottleneck (per-dialect already 79-100% acceptable).
+- Revisit only when the GPU box is up: serve ASL-4B-v1 via vLLM and run our tool-call baseline
+  (evals/runners/qwen_baseline.py) head-to-head; adopt only if it tool-calls at least as well
+  AND reads Saudi better. The Saudi-dialect dataset stays usable as fine-tune input variety.
