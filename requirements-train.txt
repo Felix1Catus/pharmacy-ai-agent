@@ -1,0 +1,12 @@
+# Fine-tuning on CPU (LoRA) + export.  pip install -r requirements-train.txt
+# (gguf comes from the pinned llama.cpp checkout: pip install /opt/llama.cpp-src/gguf-py)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+transformers==5.20.0
+peft==0.21.2
+accelerate==1.15.0
+datasets==3.2.0
+safetensors==0.8.0
+tokenizers==0.23.3
+sentencepiece==0.2.2
+protobuf==7.36.2
