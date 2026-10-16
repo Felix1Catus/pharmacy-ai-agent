@@ -1,6 +1,6 @@
 {
     "name": "Pharmacy AI Agent",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.1.0",
     "summary": "Scheduled-medication flags + customer prescription (image/OCR) model for the AI ordering agent",
     "description": "Adds controlled/scheduled-substance classification to products and a "
                    "pharmacy.prescription model (image + OCR extraction + pharmacist "
@@ -13,6 +13,7 @@
     "data": [
         "security/ir.model.access.csv",
         "views/pharmacy_views.xml",
+        "views/product_views.xml",
     ],
     "application": True,
     "installable": True,

@@ -1,0 +1,49 @@
+<odoo>
+  <!-- Product form (Inventory / Sales): a "Pharmacy" tab with the scheduled flag -->
+  <record id="product_template_form_pharmacy" model="ir.ui.view">
+    <field name="name">product.template.form.pharmacy</field>
+    <field name="model">product.template</field>
+    <field name="inherit_id" ref="product.product_template_form_view"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="Pharmacy" name="pharmacy">
+          <group>
+            <group string="Controlled substances">
+              <field name="is_scheduled" string="Scheduled"/>
+              <field name="schedule_class" invisible="not is_scheduled"/>
+            </group>
+          </group>
+          <div class="text-muted" invisible="not is_scheduled">
+            Scheduled products are never ordered or held by the WhatsApp agent; customers asking
+            for them are referred to a pharmacist.
+          </div>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Product list: optional "Scheduled" column -->
+  <record id="product_template_list_pharmacy" model="ir.ui.view">
+    <field name="name">product.template.list.pharmacy</field>
+    <field name="model">product.template</field>
+    <field name="inherit_id" ref="product.product_template_tree_view"/>
+    <field name="arch" type="xml">
+      <xpath expr="//field[@name='name']" position="after">
+        <field name="is_scheduled" string="Scheduled" optional="show"/>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Search: "Scheduled" filter -->
+  <record id="product_template_search_pharmacy" model="ir.ui.view">
+    <field name="name">product.template.search.pharmacy</field>
+    <field name="model">product.template</field>
+    <field name="inherit_id" ref="product.product_template_search_view"/>
+    <field name="arch" type="xml">
+      <xpath expr="//filter[@name='filter_to_sell']" position="before">
+        <filter string="Scheduled" name="filter_scheduled" domain="[('is_scheduled', '=', True)]"/>
+        <separator/>
+      </xpath>
+    </field>
+  </record>
+</odoo>
