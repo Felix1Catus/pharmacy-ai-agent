@@ -18,3 +18,4 @@ results/ft_cpu_v2/adapter/
 results/ft_4b/adapter/
 results/gguf/
 odoo/config/odoo.conf
+data_sources/sfda/cache/

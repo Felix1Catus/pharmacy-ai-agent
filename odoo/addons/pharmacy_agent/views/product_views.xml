@@ -17,6 +17,33 @@
             Scheduled products are never ordered or held by the WhatsApp agent; customers asking
             for them are referred to a pharmacist.
           </div>
+          <group string="SFDA registry" invisible="not sfda_reg_no">
+            <group>
+              <field name="sfda_reg_no"/>
+              <field name="sfda_scientific_name"/>
+              <field name="sfda_strength"/>
+              <field name="sfda_dosage_form"/>
+              <field name="sfda_route"/>
+              <field name="sfda_pack"/>
+              <field name="sfda_atc_code"/>
+              <field name="sfda_public_price"/>
+            </group>
+            <group>
+              <field name="sfda_control"/>
+              <field name="sfda_dispensing"/>
+              <field name="sfda_requires_prescription"/>
+              <field name="sfda_distribution"/>
+              <field name="sfda_license_status"/>
+              <field name="sfda_marketing_status"/>
+              <field name="sfda_shelf_life"/>
+              <field name="sfda_storage"/>
+            </group>
+            <group colspan="2">
+              <field name="sfda_manufacturer"/>
+              <field name="sfda_marketing_company"/>
+              <field name="sfda_agent"/>
+            </group>
+          </group>
         </page>
       </xpath>
     </field>
@@ -42,6 +69,8 @@
     <field name="arch" type="xml">
       <xpath expr="//filter[@name='filter_to_sell']" position="before">
         <filter string="Scheduled" name="filter_scheduled" domain="[('is_scheduled', '=', True)]"/>
+        <filter string="Prescription (SFDA)" name="filter_sfda_rx" domain="[('sfda_requires_prescription', '=', True)]"/>
+        <filter string="From SFDA registry" name="filter_sfda" domain="[('sfda_reg_no', '!=', False)]"/>
         <separator/>
       </xpath>
     </field>
