@@ -179,3 +179,19 @@ price, greetings), and HELD OUT 4 OTC products into test only (Betadine/Gaviscon
 Brufen) so the test split measures generalization. Balanced so search no longer dominates;
 final-turn gold spans all 8 tools + text replies. Validated: 0 malformed, 0 customer_id leaks.
 Still machine-drafted/unreviewed; training stays on the GPU box (T-D4).
+
+## 2026-10-16 — T-D4 on CPU: LoRA fine-tune of Qwen3-0.6B (no GPU) — pipeline proven
+No GPU, so QLoRA (CUDA-only) wasn't possible; ran plain LoRA (transformers+peft, bf16 on CPU)
+on the small Qwen3-0.6B to prove the pipeline end-to-end (finetune/train_lora_cpu.py).
+- Run 1 FAILED instructively: loss was computed over the whole sequence, so the model learned
+  to recite the ~1.5k-token system prompt (loss -> 0.005) and collapsed, emitting "<tools></tools>"
+  (held-out 52% -> ~12%). FIX: completion-only loss (labels=-100 on prompt; only the final
+  assistant turn is scored), lr 1e-4, 70 steps (~1 epoch). Also: detached + checkpoint every 25
+  steps + auto-resume (run 0 was killed at step 64 by a session restart).
+- Run 2 (masked): 30 min, loss 0.77 -> ~0.06. Held-out test (98, incl. 4 unseen products):
+  **base 52% -> fine-tuned 71%**. search_product 32/43 -> 43/43, create_dispatch 0/3 -> 3/3,
+  create_order 5/13 -> 8/13, escalate 1/16 -> 5/16; regressions: text replies 3/4 -> 0/4,
+  track 3/5 -> 2/5. Dominant new error: over-calling search_product (search is ~45% of data).
+- Verdict: pipeline works on CPU and generalizes; 0.6B+FT is NOT a replacement for the 4B agent
+  (92% acceptable, 100% safety). Next: rebalance/upweight escalation + text classes, then run the
+  same recipe on Qwen3-4B (est. ~3.5 h on this CPU for 70 steps). Results: results/ft_cpu/eval.json.

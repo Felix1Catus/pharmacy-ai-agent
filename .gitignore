@@ -12,3 +12,5 @@ odoo/filestore/
 results/handovers.jsonl
 results/*.jsonl
 finetune/data/*.parquet
+results/ft_cpu/adapter/
+results/ft_cpu/checkpoints/
