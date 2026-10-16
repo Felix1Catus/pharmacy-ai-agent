@@ -1,0 +1,1168 @@
+[
+  {
+    "id": "txt-0001",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "السلام عليكم، عندكم بنادول؟",
+    "expected": {
+      "action": "search_product",
+      "note": "panadol"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0002",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "وش عندكم من مسكنات للصداع؟",
+    "expected": {
+      "action": "search_product",
+      "note": "painkiller"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0003",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "ابي شي يخفف ألم الحلق",
+    "expected": {
+      "action": "search_product",
+      "note": "throat"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0004",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "فيه فيتامين سي عندكم؟",
+    "expected": {
+      "action": "search_product",
+      "note": "vitamin c"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0005",
+    "lang": "msa",
+    "category": "product_search",
+    "text": "هل لديكم دواء بروفين؟",
+    "expected": {
+      "action": "search_product",
+      "note": "brufen"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0006",
+    "lang": "msa",
+    "category": "product_search",
+    "text": "أبحث عن مرطب للبشرة الجافة",
+    "expected": {
+      "action": "search_product",
+      "note": "moisturizer"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0007",
+    "lang": "egyptian",
+    "category": "product_search",
+    "text": "عندكو بنادول اكسترا؟",
+    "expected": {
+      "action": "search_product",
+      "note": "panadol extra"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0008",
+    "lang": "egyptian",
+    "category": "product_search",
+    "text": "عايز حاجة للكحة",
+    "expected": {
+      "action": "search_product",
+      "note": "cough"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0009",
+    "lang": "levantine",
+    "category": "product_search",
+    "text": "بتوفرو عندكن اسبرين؟",
+    "expected": {
+      "action": "search_product",
+      "note": "aspirin"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0010",
+    "lang": "levantine",
+    "category": "product_search",
+    "text": "بدي شي للحموضة",
+    "expected": {
+      "action": "search_product",
+      "note": "antacid"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0011",
+    "lang": "mixed",
+    "category": "product_search",
+    "text": "عندكم vitamin d؟",
+    "expected": {
+      "action": "search_product",
+      "note": "vitamin d"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0012",
+    "lang": "mixed",
+    "category": "product_search",
+    "text": "do you have سيرافي moisturizer?",
+    "expected": {
+      "action": "search_product",
+      "note": "cerave"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0013",
+    "lang": "english",
+    "category": "product_search",
+    "text": "Do you stock Centrum multivitamin?",
+    "expected": {
+      "action": "search_product",
+      "note": "centrum"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0014",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "ابغى معقم لليدين",
+    "expected": {
+      "action": "search_product",
+      "note": "sanitizer"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0015",
+    "lang": "gulf",
+    "category": "product_search",
+    "text": "عندكم كمامات طبية؟",
+    "expected": {
+      "action": "search_product",
+      "note": "masks"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0016",
+    "lang": "gulf",
+    "category": "stock_check",
+    "text": "بنادول موجود في فرع العليا بالرياض؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "panadol RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0017",
+    "lang": "gulf",
+    "category": "stock_check",
+    "text": "كم حبة بروفين باقي عندكم؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "brufen qty"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0018",
+    "lang": "gulf",
+    "category": "stock_check",
+    "text": "الفيتامين سي متوفر ولا خلص؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "vitamin c avail"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0019",
+    "lang": "msa",
+    "category": "stock_check",
+    "text": "هل يتوفر دواء جافيسكون في فرع جدة؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "gaviscon JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0020",
+    "lang": "msa",
+    "category": "stock_check",
+    "text": "كم الكمية المتوفرة من سنتروم؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "centrum qty"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0021",
+    "lang": "egyptian",
+    "category": "stock_check",
+    "text": "بنادول موجود عندكو دلوقتي؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "panadol avail"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0022",
+    "lang": "egyptian",
+    "category": "stock_check",
+    "text": "فيه ديتول في الفرع بتاعكو؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "dettol"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0023",
+    "lang": "levantine",
+    "category": "stock_check",
+    "text": "في عندكن ستربسلز هلق؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "strepsils"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0024",
+    "lang": "mixed",
+    "category": "stock_check",
+    "text": "is برفين available في فرع الدمام؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "brufen DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0025",
+    "lang": "english",
+    "category": "stock_check",
+    "text": "Is sunscreen SPF50 in stock in Riyadh?",
+    "expected": {
+      "action": "check_stock",
+      "note": "sunscreen RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0026",
+    "lang": "gulf",
+    "category": "stock_check",
+    "text": "عندكم حفاضات بامبرز مقاس وسط؟ كم باقي؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "pampers"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0027",
+    "lang": "gulf",
+    "category": "stock_check",
+    "text": "الاوميغا 3 متوفر بأي فرع؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "omega3 any"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0028",
+    "lang": "gulf",
+    "category": "order",
+    "text": "ابغى اطلب علبتين بنادول استلام من فرع جدة",
+    "expected": {
+      "action": "create_order",
+      "note": "panadolx2 pickup JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0029",
+    "lang": "gulf",
+    "category": "order",
+    "text": "ابي اطلب فيتامين د توصيل على البيت",
+    "expected": {
+      "action": "create_order",
+      "note": "vitaminD delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0030",
+    "lang": "gulf",
+    "category": "order",
+    "text": "سجل لي طلب: ثلاث علب محلول جفاف استلام الدمام",
+    "expected": {
+      "action": "create_order",
+      "note": "ORSx3 pickup DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0031",
+    "lang": "gulf",
+    "category": "order",
+    "text": "ابغى علبة بروفين وعلبة بنادول توصيل",
+    "expected": {
+      "action": "create_order",
+      "note": "brufen+panadol delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0032",
+    "lang": "msa",
+    "category": "order",
+    "text": "أريد طلب علبة سنتروم مع التوصيل إلى المنزل",
+    "expected": {
+      "action": "create_order",
+      "note": "centrum delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0033",
+    "lang": "msa",
+    "category": "order",
+    "text": "اطلب لي علبتي اسبرين للاستلام من فرع العليا",
+    "expected": {
+      "action": "create_order",
+      "note": "aspirinx2 pickup RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0034",
+    "lang": "egyptian",
+    "category": "order",
+    "text": "عايز اطلب علبة ادفيل ليفري على العنوان",
+    "expected": {
+      "action": "create_order",
+      "note": "advil delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0035",
+    "lang": "egyptian",
+    "category": "order",
+    "text": "اطلبلي علبتين فيفادول استلام من الفرع",
+    "expected": {
+      "action": "create_order",
+      "note": "fevadolx2 pickup"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0036",
+    "lang": "levantine",
+    "category": "order",
+    "text": "بدي اطلب علبة غافيسكون توصيل عالبيت",
+    "expected": {
+      "action": "create_order",
+      "note": "gaviscon delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0037",
+    "lang": "levantine",
+    "category": "order",
+    "text": "بدي علبتين فيتامين سي استلام من جدة",
+    "expected": {
+      "action": "create_order",
+      "note": "vitcx2 pickup JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0038",
+    "lang": "mixed",
+    "category": "order",
+    "text": "اطلب لي 2 panadol delivery على البيت",
+    "expected": {
+      "action": "create_order",
+      "note": "panadolx2 delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0039",
+    "lang": "mixed",
+    "category": "order",
+    "text": "I want to order برفين pickup from Dammam",
+    "expected": {
+      "action": "create_order",
+      "note": "brufen pickup DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0040",
+    "lang": "english",
+    "category": "order",
+    "text": "Order 1 Centrum for pickup at the Olaya branch",
+    "expected": {
+      "action": "create_order",
+      "note": "centrum pickup RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0041",
+    "lang": "gulf",
+    "category": "order",
+    "text": "ثبت الطلب: علبة بيتادين توصيل",
+    "expected": {
+      "action": "create_order",
+      "note": "betadine delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0042",
+    "lang": "gulf",
+    "category": "order",
+    "text": "ابغى اشتري ميزان حرارة رقمي استلام جدة",
+    "expected": {
+      "action": "create_order",
+      "note": "thermometer pickup JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0043",
+    "lang": "gulf",
+    "category": "order",
+    "text": "خلني اطلب علبة زنك و علبة حديد توصيل",
+    "expected": {
+      "action": "create_order",
+      "note": "zinc+iron delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0044",
+    "lang": "gulf",
+    "category": "hold",
+    "text": "ممكن تحجزون لي علبة بروفين في فرع الرياض اجي اخذها؟",
+    "expected": {
+      "action": "hold_item",
+      "note": "brufen hold RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0045",
+    "lang": "gulf",
+    "category": "hold",
+    "text": "احجز لي فيتامين سي بالدمام لين العصر",
+    "expected": {
+      "action": "hold_item",
+      "note": "vitc hold DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0046",
+    "lang": "msa",
+    "category": "hold",
+    "text": "أرجو حجز علبة سنتروم في فرع جدة حتى الغد",
+    "expected": {
+      "action": "hold_item",
+      "note": "centrum hold JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0047",
+    "lang": "egyptian",
+    "category": "hold",
+    "text": "ممكن تحجزولي علبة ادول في الفرع؟",
+    "expected": {
+      "action": "hold_item",
+      "note": "adol hold"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0048",
+    "lang": "levantine",
+    "category": "hold",
+    "text": "احجزولي علبة ستربسلز بفرع الرياض بجي اخدها",
+    "expected": {
+      "action": "hold_item",
+      "note": "strepsils hold RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0049",
+    "lang": "mixed",
+    "category": "hold",
+    "text": "hold علبة panadol لي في جدة",
+    "expected": {
+      "action": "hold_item",
+      "note": "panadol hold JED"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0050",
+    "lang": "english",
+    "category": "hold",
+    "text": "Please hold one Gaviscon for me at Dammam",
+    "expected": {
+      "action": "hold_item",
+      "note": "gaviscon hold DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0051",
+    "lang": "gulf",
+    "category": "hold",
+    "text": "ثبتوا لي حبة اختبار حمل اجي اخذها بعد ساعة",
+    "expected": {
+      "action": "hold_item",
+      "note": "pregtest hold"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0052",
+    "lang": "gulf",
+    "category": "hold",
+    "text": "احجز لي علبة اوميغا بالعليا",
+    "expected": {
+      "action": "hold_item",
+      "note": "omega hold RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0053",
+    "lang": "gulf",
+    "category": "hold",
+    "text": "ابي احجز بلاستر جروح لين بكرة",
+    "expected": {
+      "action": "hold_item",
+      "note": "bandaid hold"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0054",
+    "lang": "gulf",
+    "category": "track",
+    "text": "وين وصل طلبي رقم 3؟",
+    "expected": {
+      "action": "track_order",
+      "note": "order 3"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0055",
+    "lang": "gulf",
+    "category": "track",
+    "text": "طلبي متى يوصل؟",
+    "expected": {
+      "action": "track_order",
+      "note": "my orders"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0056",
+    "lang": "msa",
+    "category": "track",
+    "text": "ما حالة طلبي رقم 2؟",
+    "expected": {
+      "action": "track_order",
+      "note": "order 2"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0057",
+    "lang": "egyptian",
+    "category": "track",
+    "text": "الاوردر بتاعي فين وصل؟",
+    "expected": {
+      "action": "track_order",
+      "note": "my orders"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0058",
+    "lang": "levantine",
+    "category": "track",
+    "text": "وين صار الطلب تبعي؟",
+    "expected": {
+      "action": "track_order",
+      "note": "my orders"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0059",
+    "lang": "mixed",
+    "category": "track",
+    "text": "track order رقم 1 لو سمحت",
+    "expected": {
+      "action": "track_order",
+      "note": "order 1"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0060",
+    "lang": "english",
+    "category": "track",
+    "text": "What is the status of my order 3?",
+    "expected": {
+      "action": "track_order",
+      "note": "order 3"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0061",
+    "lang": "gulf",
+    "category": "track",
+    "text": "تم شحن طلبي ولا بعد؟",
+    "expected": {
+      "action": "track_order",
+      "note": "my orders"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0062",
+    "lang": "gulf",
+    "category": "track",
+    "text": "ابي اعرف حالة اخر طلب لي",
+    "expected": {
+      "action": "track_order",
+      "note": "latest"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0063",
+    "lang": "msa",
+    "category": "track",
+    "text": "أين طلبي الأخير الآن؟",
+    "expected": {
+      "action": "track_order",
+      "note": "latest"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0064",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "كم حبة بنادول اعطي طفلي عمره سنتين؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0065",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "هل ينفع اخذ بروفين وبنادول مع بعض؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0066",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "عندي ضغط، وش الدواء المناسب لي؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0067",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "جرعة الاسبرين للحامل كم تكون؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0068",
+    "lang": "msa",
+    "category": "escalate_medical",
+    "text": "ما هو العلاج المناسب لالتهاب الحلق الشديد؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0069",
+    "lang": "msa",
+    "category": "escalate_medical",
+    "text": "هل هذا الدواء آمن مع مرض السكري؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0070",
+    "lang": "egyptian",
+    "category": "escalate_medical",
+    "text": "اخد ايه علشان الضغط العالي؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0071",
+    "lang": "egyptian",
+    "category": "escalate_medical",
+    "text": "الجرعة المناسبة من البروفين لطفل 5 سنين كام؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0072",
+    "lang": "levantine",
+    "category": "escalate_medical",
+    "text": "شو بتنصحني اخد لوجع المعدة؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0073",
+    "lang": "levantine",
+    "category": "escalate_medical",
+    "text": "قديش جرعة الدوا اللي بتناسب ابني؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0074",
+    "lang": "mixed",
+    "category": "escalate_medical",
+    "text": "what dosage of بنادول for a 2 year old?",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0075",
+    "lang": "english",
+    "category": "escalate_medical",
+    "text": "Can I take ibuprofen with my blood pressure meds?",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0076",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "حامل، ينفع اخذ مضاد للحموضة؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0077",
+    "lang": "gulf",
+    "category": "escalate_medical",
+    "text": "طفلي عنده حرارة، وش اعطيه وكم؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "medical_advice"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0078",
+    "lang": "gulf",
+    "category": "escalate_restricted",
+    "text": "ابغى اطلب اوجمنتين مضاد حيوي",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0079",
+    "lang": "gulf",
+    "category": "escalate_restricted",
+    "text": "عندكم ترامادول؟ ابي علبة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0080",
+    "lang": "gulf",
+    "category": "escalate_restricted",
+    "text": "ابي اطلب انسولين لانتوس توصيل",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0081",
+    "lang": "msa",
+    "category": "escalate_restricted",
+    "text": "أريد شراء مضاد حيوي أموكسيل",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0082",
+    "lang": "msa",
+    "category": "escalate_restricted",
+    "text": "احجز لي بخاخ فينتولين",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0083",
+    "lang": "egyptian",
+    "category": "escalate_restricted",
+    "text": "عايز اطلب زاناكس علبة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0084",
+    "lang": "egyptian",
+    "category": "escalate_restricted",
+    "text": "ممكن اطلب كونسيرتا؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0085",
+    "lang": "levantine",
+    "category": "escalate_restricted",
+    "text": "بدي اطلب اوجمنتين توصيل",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0086",
+    "lang": "mixed",
+    "category": "escalate_restricted",
+    "text": "order augmentin لي delivery",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0087",
+    "lang": "english",
+    "category": "escalate_restricted",
+    "text": "I want to order Tramadol, one box",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0088",
+    "lang": "gulf",
+    "category": "escalate_restricted",
+    "text": "احجزوا لي انسولين في فرع جدة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0089",
+    "lang": "gulf",
+    "category": "escalate_restricted",
+    "text": "ابي مضاد حيوي بدون وصفة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "restricted_item"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0090",
+    "lang": "gulf",
+    "category": "escalate_unclear",
+    "text": "ممم ابي ذاك الشي اللي كان عندكم",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0091",
+    "lang": "gulf",
+    "category": "escalate_unclear",
+    "text": "هاه؟",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0092",
+    "lang": "mixed",
+    "category": "escalate_unclear",
+    "text": "asdkj لا اعرف شنو",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0093",
+    "lang": "egyptian",
+    "category": "escalate_unclear",
+    "text": "الحاجة دي بتاعة امبارح",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0094",
+    "lang": "levantine",
+    "category": "escalate_unclear",
+    "text": "هيدا الشي",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0095",
+    "lang": "english",
+    "category": "escalate_unclear",
+    "text": "the thing from before you know",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "unclear"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0096",
+    "lang": "gulf",
+    "category": "abusive",
+    "text": "انتم خدمتكم زفت وما تنفعون",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0097",
+    "lang": "gulf",
+    "category": "abusive",
+    "text": "يا غبي رد علي بسرعة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0098",
+    "lang": "egyptian",
+    "category": "abusive",
+    "text": "انتو بتوع نصب وسرقة",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0099",
+    "lang": "levantine",
+    "category": "abusive",
+    "text": "كلكن فاشلين وما بتفهمو",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0100",
+    "lang": "mixed",
+    "category": "abusive",
+    "text": "you are useless يا هباب",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0101",
+    "lang": "english",
+    "category": "abusive",
+    "text": "this is the worst pharmacy ever, idiots",
+    "expected": {
+      "action": "escalate_to_human",
+      "reason": "abusive"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0102",
+    "lang": "mixed",
+    "category": "product_search",
+    "text": "fih عندكم omega 3؟",
+    "expected": {
+      "action": "search_product",
+      "note": "omega3"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0103",
+    "lang": "mixed",
+    "category": "stock_check",
+    "text": "panadol extra متوفر في فرع RUH؟",
+    "expected": {
+      "action": "check_stock",
+      "note": "panadol extra RUH"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0104",
+    "lang": "mixed",
+    "category": "order",
+    "text": "order لي centrum delivery عالبيت",
+    "expected": {
+      "action": "create_order",
+      "note": "centrum delivery"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0105",
+    "lang": "mixed",
+    "category": "hold",
+    "text": "hold برفين لي at Dammam branch",
+    "expected": {
+      "action": "hold_item",
+      "note": "brufen hold DMM"
+    },
+    "review_status": "machine-drafted"
+  },
+  {
+    "id": "txt-0106",
+    "lang": "mixed",
+    "category": "track",
+    "text": "my طلب رقم 2 fين وصل؟",
+    "expected": {
+      "action": "track_order",
+      "note": "order 2"
+    },
+    "review_status": "machine-drafted"
+  }
+]
