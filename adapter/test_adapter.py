@@ -139,8 +139,16 @@ def test_hold_otc_success(gw, customer_id):
     assert "hold_id" in r.json()
 
 
+def test_hold_scheduled_refused(gw, customer_id):
+    pid = _variant(gw, "RX-0005")  # Tramadol — scheduled/controlled
+    r = _call("hold_item", {"product_id": pid, "branch_id": 2,
+                            "qty": 1, "customer_id": customer_id})
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "scheduled_item"
+
+
 def test_hold_restricted_refused(gw, customer_id):
-    pid = _variant(gw, "RX-0005")  # Tramadol
+    pid = _variant(gw, "RX-0003")  # Ventolin — prescription, not scheduled
     r = _call("hold_item", {"product_id": pid, "branch_id": 2,
                             "qty": 1, "customer_id": customer_id})
     assert r.status_code == 400

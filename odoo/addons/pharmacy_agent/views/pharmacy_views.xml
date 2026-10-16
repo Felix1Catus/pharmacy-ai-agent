@@ -1,0 +1,56 @@
+<odoo>
+  <record id="view_pharmacy_prescription_tree" model="ir.ui.view">
+    <field name="name">pharmacy.prescription.tree</field>
+    <field name="model">pharmacy.prescription</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="name"/>
+        <field name="partner_id"/>
+        <field name="extracted_drug"/>
+        <field name="ocr_status"/>
+        <field name="state"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="view_pharmacy_prescription_form" model="ir.ui.view">
+    <field name="name">pharmacy.prescription.form</field>
+    <field name="model">pharmacy.prescription</field>
+    <field name="arch" type="xml">
+      <form>
+        <sheet>
+          <group>
+            <group>
+              <field name="name"/>
+              <field name="partner_id"/>
+              <field name="sale_order_id"/>
+              <field name="state"/>
+              <field name="verified_by"/>
+            </group>
+            <group>
+              <field name="ocr_status"/>
+              <field name="ocr_engine"/>
+              <field name="ocr_confidence"/>
+              <field name="extracted_drug"/>
+              <field name="extracted_dosage"/>
+              <field name="extracted_quantity"/>
+            </group>
+          </group>
+          <field name="image" widget="image"/>
+          <field name="ocr_text"/>
+          <field name="notes"/>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_pharmacy_prescription" model="ir.actions.act_window">
+    <field name="name">Prescriptions</field>
+    <field name="res_model">pharmacy.prescription</field>
+    <field name="view_mode">list,form</field>
+  </record>
+
+  <menuitem id="menu_pharmacy_root" name="Pharmacy"/>
+  <menuitem id="menu_pharmacy_prescription" parent="menu_pharmacy_root"
+            action="action_pharmacy_prescription"/>
+</odoo>

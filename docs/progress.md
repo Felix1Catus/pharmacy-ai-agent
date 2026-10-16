@@ -93,3 +93,21 @@ text set through the agent (T-B4) for per-dialect end-to-end numbers (stub was p
      (a) accept a safe text refusal as meeting the gate;
      (b) add a deterministic pre-filter (keyword/intent) that forces escalate_to_human before
          the LLM sees medical/dosage messages; (c) add few-shot escalate examples to the prompt.
+
+## 2026-10-16 — Iteration 2: deterministic safety + scheduled meds + Odoo module
+- **Odoo module pharmacy_agent** (odoo/addons/pharmacy_agent): is_scheduled/schedule_class on
+  products + pharmacy.prescription model (image/OCR/verification spots). Mounted + installed.
+- **Scheduled/controlled meds** flagged in data (Tramadol, Xanax, Concerta). Gateway hard-blocks
+  them (scheduled_item) in create_order/hold_item; search exposes is_scheduled.
+- **Deterministic guards (agent/guards.py)** run before the LLM: medical-advice intent -> fixed
+  refusal + escalate (14/14 recall, 0 FP on the dataset); scheduled denylist (from Odoo flags)
+  -> fixed refusal + escalate. Tool-result scheduled_item/restricted_item also force a handover.
+- Canned replies: medical refusal and scheduled refusal both offer "find/locate/price, except
+  scheduled meds" per the product direction.
+- **Prescription OCR**: designed only (docs/prescription-ocr-design.md) — future, human-in-loop,
+  packageable; real handwriting OCR deferred. Model spots verified writable.
+- Adapter tests: 17/17 (added scheduled-hold test). End-to-end smoke: medical/scheduled/restricted
+  all refuse+handover deterministically; normal OTC proceeds.
+
+Next candidates: fold x_ manual fields into the module; run the full text set through the agent
+end-to-end (T-B4) for per-dialect numbers; WhatsApp media ingest (T-C1) to feed the OCR spots.

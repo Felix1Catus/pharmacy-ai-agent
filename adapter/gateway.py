@@ -65,7 +65,8 @@ class Gateway:
         rows = self.c.search_read(
             "product.product", [["id", "=", variant_id]],
             ["name", "default_code", "x_name_ar", "x_brand",
-             "x_is_restricted", "x_requires_prescription"])
+             "x_is_restricted", "x_requires_prescription",
+             "is_scheduled", "schedule_class"])
         return rows[0] if rows else None
 
     # ---- 1. search_product ---------------------------------------------------
@@ -78,7 +79,8 @@ class Gateway:
         tmpls = self.c.search_read(
             "product.template", domain,
             ["name", "x_name_ar", "x_brand", "x_is_restricted",
-             "x_requires_prescription", "product_variant_id"],
+             "x_requires_prescription", "is_scheduled", "schedule_class",
+             "product_variant_id"],
             limit=max(1, min(limit, 20)))
         candidates = []
         for t in tmpls:
@@ -94,6 +96,8 @@ class Gateway:
                 "brand": t.get("x_brand") or "",
                 "is_restricted": bool(t.get("x_is_restricted")),
                 "requires_prescription": bool(t.get("x_requires_prescription")),
+                "is_scheduled": bool(t.get("is_scheduled")),
+                "schedule_class": t.get("schedule_class") or "",
             })
         return {"candidates": candidates}
 
@@ -125,6 +129,11 @@ class Gateway:
             flags = self._product_flags(it["product_id"])
             if not flags:
                 return err("not_found", f"no product with id {it['product_id']}")
+            if flags.get("is_scheduled"):
+                return err("scheduled_item",
+                           f"{flags['name']} is a scheduled/controlled substance — "
+                           f"never dispensed via the agent; refer to a human",
+                           product_id=it["product_id"])
             if flags.get("x_is_restricted") or flags.get("x_requires_prescription"):
                 return err("restricted_item",
                            f"{flags['name']} is restricted/prescription — escalate to a human",
@@ -195,6 +204,10 @@ class Gateway:
         flags = self._product_flags(product_id)
         if not flags:
             return err("not_found", f"no product with id {product_id}")
+        if flags.get("is_scheduled"):
+            return err("scheduled_item",
+                       f"{flags['name']} is a scheduled/controlled substance — "
+                       f"never held via the agent; refer to a human", product_id=product_id)
         if flags.get("x_is_restricted") or flags.get("x_requires_prescription"):
             return err("restricted_item",
                        f"{flags['name']} is restricted/prescription — escalate",

@@ -67,8 +67,16 @@ _P = [
     ("RX-0007", "Concerta 18mg", "كونسيرتا ١٨", "Concerta", "Methylphenidate", "ميثيل فينيديت", 0.0, True, True),
 ]
 
+# Controlled/SCHEDULED substances (strictest class): the agent hard-blocks and refers to a
+# human — never ordered, held, or advised on. Distinct from merely prescription-only items
+# (antibiotics, insulin, inhaler) which a pharmacist can dispense against a valid prescription.
+# Codes here: Tramadol, Xanax (alprazolam), Concerta (methylphenidate).
+SCHEDULED_CODES = {"RX-0005", "RX-0006", "RX-0007"}
+
 PRODUCTS = [
     dict(code=c, name_en=ne, name_ar=na, brand=b, ingredient_en=ie, ingredient_ar=ia,
-         price=p, restricted=r, rx=rx)
+         price=p, restricted=r, rx=rx,
+         scheduled=(c in SCHEDULED_CODES),
+         schedule_class=("controlled" if c in SCHEDULED_CODES else ""))
     for (c, ne, na, b, ie, ia, p, r, rx) in _P
 ]

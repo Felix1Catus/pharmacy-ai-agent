@@ -66,6 +66,8 @@ def ensure_products():
             "x_name_ar": p["name_ar"], "x_brand": p["brand"],
             "x_ingredient_en": p["ingredient_en"], "x_ingredient_ar": p["ingredient_ar"],
             "x_is_restricted": p["restricted"], "x_requires_prescription": p["rx"],
+            # scheduled/controlled flags come from the pharmacy_agent module
+            "is_scheduled": p["scheduled"], "schedule_class": p["schedule_class"],
         }
         ids = c.search("product.template", [["default_code", "=", p["code"]]])
         if ids:

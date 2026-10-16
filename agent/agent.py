@@ -31,6 +31,8 @@ sys.path.insert(0, str(ROOT / "agent"))
 
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
+from guards import (ScheduledDenylist, medical_advice_intent,  # noqa: E402
+                    MEDICAL_REFUSAL, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 
 AUDIT = ROOT / "results" / "audit.jsonl"
@@ -75,6 +77,14 @@ class PharmacyAgent:
         self.llm = llm or LLMClient()
         self.gw = gateway or Gateway()
         self.tools = contract.tools_for_llm()
+        # built from Odoo's is_scheduled flag (official scheduling) at startup
+        self.denylist = ScheduledDenylist.from_odoo(self.gw.c)
+
+    def _escalate(self, conv, reason, summary):
+        esc = dispatch(self.gw, "escalate_to_human",
+                       {"reason": reason, "customer_id": conv.customer_id, "summary": summary})
+        self._audit(conv.conv_id, "guard_escalate", {"reason": reason, "result": esc})
+        return esc
 
     def _audit(self, conv_id, kind, payload):
         AUDIT.parent.mkdir(exist_ok=True)
@@ -94,6 +104,22 @@ class PharmacyAgent:
     def respond(self, conv: Conversation, user_text: str) -> str:
         conv.messages.append({"role": "user", "content": user_text})
         self._audit(conv.conv_id, "user", {"text": user_text})
+
+        # --- deterministic guards BEFORE the LLM (do not depend on the model) ---
+        if medical_advice_intent(user_text):
+            self._escalate(conv, "medical_advice", f"deterministic medical guard: {user_text}")
+            conv.messages.append({"role": "assistant", "content": MEDICAL_REFUSAL})
+            self._audit(conv.conv_id, "reply", {"text": MEDICAL_REFUSAL, "guard": "medical"})
+            return MEDICAL_REFUSAL
+        hit = self.denylist.match(user_text)
+        if hit:
+            self._escalate(conv, "restricted_item",
+                           f"deterministic scheduled-med guard matched {hit!r}: {user_text}")
+            conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
+            self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
+                                                "guard": "scheduled", "matched": hit})
+            return SCHEDULED_REFUSAL
+
         calls_made = 0
 
         while calls_made <= MAX_TOOL_CALLS:
@@ -116,6 +142,23 @@ class PharmacyAgent:
                         {"action": name, "args": args, "result": result})
             conv.messages.append({"role": "tool", "tool_name": name,
                                   "content": json.dumps(result, ensure_ascii=False)})
+
+            # deterministic: a scheduled/restricted error ends the turn with a handover,
+            # regardless of what the model would do next.
+            if isinstance(result, dict) and "error" in result:
+                code = result["error"].get("code")
+                if code == "scheduled_item":
+                    self._escalate(conv, "restricted_item", f"tool returned scheduled_item: {name}")
+                    conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
+                    self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
+                                                        "guard": "scheduled_tool"})
+                    return SCHEDULED_REFUSAL
+                if code == "restricted_item":
+                    self._escalate(conv, "restricted_item", f"tool returned restricted_item: {name}")
+                    conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
+                    self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
+                                                        "guard": "restricted_tool"})
+                    return SCHEDULED_REFUSAL
 
             # terminal: a completed handover ends the turn with its acknowledgement
             if name == "escalate_to_human" and isinstance(result, dict) and "handover_id" in result:

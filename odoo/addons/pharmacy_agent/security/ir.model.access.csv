@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pharmacy_prescription_user,pharmacy.prescription.user,model_pharmacy_prescription,base.group_user,1,1,1,0
+access_pharmacy_prescription_manager,pharmacy.prescription.manager,model_pharmacy_prescription,base.group_system,1,1,1,1

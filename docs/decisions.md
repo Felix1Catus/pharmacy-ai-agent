@@ -66,3 +66,27 @@ Caveats: these are CPU latencies (not the GPU serving target); VRAM column is N/
 is a single-turn PROMPT-ONLY baseline — real tool-call accuracy needs the Sprint B agent loop
 and (for voice) real recordings. Dialect set is machine-drafted, not native-reviewed, so treat
 the per-dialect numbers as indicative only.
+
+## 2026-10-16 — Medical/scheduled safety architecture (human-directed)
+Layered, deterministic-first handling (human direction):
+- **Scheduled/controlled meds** (new `is_scheduled` flag in the pharmacy_agent Odoo module,
+  populated from official scheduling): INSTANT deterministic block. agent/guards.py builds a
+  denylist from Odoo's flagged products (name/brand/ingredient) and refuses before the LLM; the
+  Gateway also returns `scheduled_item` for create_order/hold_item as a backstop. Never ordered,
+  held or discussed beyond referral.
+- **Medical-advice/dosage questions**: deterministic pre-filter (agent/guards.py
+  medical_advice_intent) → fixed polite refusal + escalate_to_human(medical_advice). Validated
+  on the 106-item set: 14/14 recall, 0 false positives. This guarantees the 100% medical gate
+  regardless of the LLM (the 4B model otherwise tends to refuse in prose without a handover).
+- **Prescription-only (non-scheduled)**: Gateway returns `restricted_item`; the agent escalates.
+- **Prescription OCR** (read a script photo for dosage/qty): FUTURE phase, human-in-the-loop,
+  packageable service. Data-model spots built now (pharmacy.prescription). Design in
+  docs/prescription-ocr-design.md. Real handwriting OCR is deferred and must be production-grade.
+
+## 2026-10-16 — Odoo module `pharmacy_agent` (module formulation)
+Replaced ad-hoc intentions with a real addon at odoo/addons/pharmacy_agent (mounted via
+compose /mnt/extra-addons): adds `is_scheduled`/`schedule_class` to product.template and the
+`pharmacy.prescription` model (image + OCR fields + pharmacist verification state) with a
+Prescriptions menu. Installed into the pharmacy DB. The existing x_ manual fields
+(x_is_restricted, x_requires_prescription, x_name_ar, ...) remain; folding them into the module
+is a documented follow-up.
