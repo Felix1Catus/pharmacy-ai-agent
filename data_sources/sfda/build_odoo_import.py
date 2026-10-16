@@ -3,7 +3,8 @@
 
 Reads the scrape cache (data_sources/sfda/cache/, from scrape_sfda.py) so it also works on a
 partial scrape. Mapping rules:
-  المراقبة == "مقيد"                  -> is_scheduled = True   (Odoo "Scheduled" checkbox)
+  المراقبة in SCHEDULED_VALUES        -> is_scheduled = True   (Odoo "Scheduled" checkbox)
+     = "مقيد" (restricted) and "خاضعة للرقابة وفق أحكام وشروط خاصة" (special-conditions control)
   طريقة الصرف starts with "يحتاج"     -> sfda_requires_prescription = True
   ("لا يحتاج ..." -> False)
 All other SFDA fields go to the sfda_* fields of the pharmacy_agent module (Pharmacy tab).
@@ -27,6 +28,9 @@ sys.path.insert(0, str(HERE))
 from scrape_sfda import parse_details, parse_list  # noqa: E402
 
 CACHE, DATA = HERE / "cache", HERE / "data"
+
+# SFDA control values that tick Odoo's Scheduled box (owner decision 2026-10-16)
+SCHEDULED_VALUES = {"مقيد", "خاضعة للرقابة وفق أحكام وشروط خاصة"}
 
 # Arabic SFDA label -> our key (order = column order of the database file)
 FIELDS = [
@@ -90,9 +94,9 @@ def main():
     DATA.mkdir(parents=True, exist_ok=True)
 
     # 1) reference database: every SFDA field, Arabic headers + a few derived columns
-    db_header = [ar for ar, _ in FIELDS] + ["مقيد؟", "يحتاج وصفة؟", "صفحة القائمة", "رابط التفاصيل"]
+    db_header = [ar for ar, _ in FIELDS] + ["مجدول (Scheduled)؟", "يحتاج وصفة؟", "صفحة القائمة", "رابط التفاصيل"]
     db_rows = [[r[k] for _, k in FIELDS] +
-               ["نعم" if r["control"] == "مقيد" else "لا",
+               ["نعم" if r["control"] in SCHEDULED_VALUES else "لا",
                 "نعم" if r["dispensing"].startswith("يحتاج") else "لا",
                 r["list_page"], r["details_url"]] for r in recs]
     write_table(DATA / "sfda_drugs_database", db_header, db_rows)
@@ -120,7 +124,7 @@ def main():
             or f"SFDA {r['reg_no']}"
         imp_rows.append([
             ext, name, r["reg_no"], "consu", "True", "True", num(r["price"]),
-            "True" if r["control"] == "مقيد" else "False", r["control"],
+            "True" if r["control"] in SCHEDULED_VALUES else "False", r["control"],
             r["reg_no"], r["scientific_name"],
             " ".join(x for x in [r["strength"], r["strength_unit"]] if x), r["dosage_form"],
             r["route"], pack, r["dispensing"],
@@ -134,9 +138,9 @@ def main():
         w = csv.writer(fh); w.writerow(imp_header); w.writerows(imp_rows)
 
     n = len(recs)
-    restricted = sum(r["control"] == "مقيد" for r in recs)
+    restricted = sum(r["control"] in SCHEDULED_VALUES for r in recs)
     rx = sum(r["dispensing"].startswith("يحتاج") for r in recs)
-    print(f"{n} drugs | مقيد (-> Scheduled): {restricted} | prescription: {rx} | "
+    print(f"{n} drugs | Scheduled (مقيد + خاضعة للرقابة): {restricted} | prescription: {rx} | "
           f"control values: {sorted({r['control'] for r in recs})}")
 
 

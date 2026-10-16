@@ -237,3 +237,5 @@ external IDs; المراقبة=مقيد -> Scheduled (45), يحتاج وصفة -
 drugs. New pharmacy_agent 18.0.1.2.0 fields (19 sfda_*) + SFDA registry section on the Pharmacy
 tab. Verified on a scratch DB: 2,014 imported, 0 errors, 45/45 Scheduled, re-import idempotent.
 NOT imported into the live DB yet (waits for TO-DO 1b gateway fix + round-3 eval).
+
+Update: owner decided 'خاضعة للرقابة وفق أحكام وشروط خاصة' also ticks Scheduled -> 75 Scheduled (45 مقيد + 30); re-verified on a fresh scratch DB (75/75, 0 errors).

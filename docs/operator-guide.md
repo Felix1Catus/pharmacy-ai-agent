@@ -211,17 +211,18 @@ Files in `data_sources/sfda/data/`:
 | `sfda_products_odoo_import.xlsx` | **the file to import into Odoo** (also `.csv`, `_nobom.csv`) |
 | `sfda_details.jsonl`, `sfda_list.jsonl` | raw scrape output |
 
-Mapping: `المراقبة = مقيد` → **Scheduled ✓** (45 drugs, e.g. pregabalin, alfentanil, bromazepam);
+Mapping: `المراقبة` = `مقيد` (45, e.g. pregabalin, alfentanil, bromazepam) **or**
+`خاضعة للرقابة وفق أحكام وشروط خاصة` (30, e.g. somatropin, hCG, follitropin, dinoprostone) →
+**Scheduled ✓ — 75 drugs** (owner decision);
 `طريقة الصرف = يحتاج الى وصفة طبية` → *Prescription required (SFDA)* (1,768). The raw status is
-kept in *Control status* — note a separate SFDA value `خاضعة للرقابة وفق أحكام وشروط خاصة` (30 drugs:
-growth hormone, fertility hormones, dinoprostone) is NOT ticked Scheduled (prescription only).
+kept in *Control status*, so the two categories can still be told apart (filter on it).
 Everything else lands in the **Pharmacy tab → SFDA registry** section.
 
 ### Import (Odoo UI)
 1. Inventory → Products → ⚙ (gear) → **Import records** → upload `sfda_products_odoo_import.xlsx`.
 2. Columns auto-match (technical names). Click **Test** → expect no errors → **Import**.
 3. Re-importing a newer file **updates** products (external ID `sfda.drug_<reg no>`), no duplicates.
-Tested end-to-end on a scratch database (2,014 imported, 0 errors, 45 Scheduled).
+Tested end-to-end on a scratch database (2,014 imported, 0 errors, 75 Scheduled).
 
 > ⚠️ Before importing into the live DB used by the WhatsApp agent: the gateway must also block
 > `sfda_requires_prescription` (TO-DO 1b in docs/progress.md), otherwise prescription-only SFDA
