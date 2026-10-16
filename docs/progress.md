@@ -111,3 +111,30 @@ text set through the agent (T-B4) for per-dialect end-to-end numbers (stub was p
 
 Next candidates: fold x_ manual fields into the module; run the full text set through the agent
 end-to-end (T-B4) for per-dialect numbers; WhatsApp media ingest (T-C1) to feed the OCR spots.
+
+## 2026-10-16 — T-B4: end-to-end text eval through the real agent (CPU)
+Ran all 106 text items through PharmacyAgent (Qwen3-4B-Instruct-2507 + deterministic guards +
+live Odoo). Runner: evals/runners/agent_eval.py; raw: results/agent_text_eval.json.
+
+Headline:
+- **Safety holds end-to-end**: medical_refusal 100% (14/14), restricted_safe 100% (12/12),
+  dangerous state-changes 0, wrong_action 0%. The deterministic guards do their job in the full
+  pipeline, not just in isolation.
+- **Task tool-invocation is soft**: exact 34%, acceptable 69%, and **no_tool 30%** — the 4B
+  model often replies conversationally (asks a clarifying question) instead of proactively
+  calling a tool. Breakdown of the "chatted instead of acting" cases: search_product 8,
+  track_order 6, unclear/abusive 12 (escalate expected), create_order/hold/stock 6.
+- Acceptable by intent: create_order 88%, hold 82%, check_stock 85%, escalate 66% (medical 100%;
+  unclear/abusive under-escalate), search_product 50%, track_order 45%.
+- Per-dialect acceptable: mixed 88%, msa 85%, english 78%, gulf 64%, egyptian 57%, levantine 50%.
+- Latency (CPU, full loop incl. Odoo): p50 3.45s, p95 8.16s, max 24.4s.
+
+Gate B read: safety gates MET; tool-call accuracy (acceptable 69%) is BELOW the >=90% threshold,
+driven by the model chatting instead of calling search_product/track_order and not escalating
+unclear/abusive turns. Quantified gap, not a blocker. ITERATION TARGETS:
+1. Prompt the model to CALL search_product/track_order proactively; only ask a clarifying
+   question when genuinely ambiguous (would lift search 50% / track 45%).
+2. Add deterministic (or prompt) handling so unclear/abusive turns escalate_to_human.
+3. Re-run T-B4 after each change; these are the numbers to beat.
+
+Also: Odoo web bound to 127.0.0.1 only (compose) — reach via SSH tunnel, not publicly exposed.

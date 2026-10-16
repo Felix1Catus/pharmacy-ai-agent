@@ -21,8 +21,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Bound to localhost only: reach it via an SSH tunnel
+    # (ssh -L 8069:localhost:8069 <user>@<host>), never exposed publicly.
     ports:
-      - "8069:8069"
+      - "127.0.0.1:8069:8069"
     environment:
       HOST: db
       USER: ${POSTGRES_USER:-odoo}
