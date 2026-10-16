@@ -9,3 +9,5 @@ odoo/filestore/
 *.mp3
 !evals/datasets/**/*.wav
 .pytest_cache/
+results/handovers.jsonl
+results/*.jsonl
