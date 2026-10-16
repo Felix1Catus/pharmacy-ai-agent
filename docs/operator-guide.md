@@ -224,10 +224,9 @@ Everything else lands in the **Pharmacy tab → SFDA registry** section.
 3. Re-importing a newer file **updates** products (external ID `sfda.drug_<reg no>`), no duplicates.
 Tested end-to-end on a scratch database (2,014 imported, 0 errors, 75 Scheduled).
 
-> ⚠️ Before importing into the live DB used by the WhatsApp agent: the gateway must also block
-> `sfda_requires_prescription` (TO-DO 1b in docs/progress.md), otherwise prescription-only SFDA
-> drugs that aren't مقيد could be ordered by the agent. After importing, restart the agent so its
-> scheduled-medicine block list reloads from Odoo.
+> The gateway refuses orders/holds for SFDA prescription drugs (`sfda_requires_prescription`) as
+> well as Scheduled ones, so the file is safe to import into the live DB. After importing, restart
+> the agent so its scheduled-medicine block list reloads from Odoo.
 
 ### Refresh / extend
 ```bash

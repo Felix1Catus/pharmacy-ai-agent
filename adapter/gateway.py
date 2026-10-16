@@ -26,6 +26,13 @@ SEARCH_FIELDS = ["name", "default_code", "x_name_ar", "x_brand",
                  "x_ingredient_en", "x_ingredient_ar"]
 
 
+def _needs_prescription(flags: dict) -> bool:
+    """Prescription/restricted from our own flags OR the SFDA registry import
+    (sfda_requires_prescription, set from SFDA "طريقة الصرف = يحتاج الى وصفة طبية")."""
+    return bool(flags.get("x_is_restricted") or flags.get("x_requires_prescription")
+                or flags.get("sfda_requires_prescription"))
+
+
 def err(code: str, message: str, **details) -> dict:
     return {"error": {"code": code, "message": message, "details": details}}
 
@@ -65,7 +72,7 @@ class Gateway:
         rows = self.c.search_read(
             "product.product", [["id", "=", variant_id]],
             ["name", "default_code", "x_name_ar", "x_brand",
-             "x_is_restricted", "x_requires_prescription",
+             "x_is_restricted", "x_requires_prescription", "sfda_requires_prescription",
              "is_scheduled", "schedule_class"])
         return rows[0] if rows else None
 
@@ -79,7 +86,7 @@ class Gateway:
         tmpls = self.c.search_read(
             "product.template", domain,
             ["name", "x_name_ar", "x_brand", "x_is_restricted",
-             "x_requires_prescription", "is_scheduled", "schedule_class",
+             "x_requires_prescription", "sfda_requires_prescription", "is_scheduled", "schedule_class",
              "product_variant_id"],
             limit=max(1, min(limit, 20)))
         candidates = []
@@ -94,8 +101,9 @@ class Gateway:
                 "name_en": t["name"],
                 "name_ar": t.get("x_name_ar") or "",
                 "brand": t.get("x_brand") or "",
-                "is_restricted": bool(t.get("x_is_restricted")),
-                "requires_prescription": bool(t.get("x_requires_prescription")),
+                "is_restricted": bool(t.get("x_is_restricted") or t.get("sfda_requires_prescription")),
+                "requires_prescription": bool(t.get("x_requires_prescription")
+                                              or t.get("sfda_requires_prescription")),
                 "is_scheduled": bool(t.get("is_scheduled")),
                 "schedule_class": t.get("schedule_class") or "",
             })
@@ -134,7 +142,7 @@ class Gateway:
                            f"{flags['name']} is a scheduled/controlled substance — "
                            f"never dispensed via the agent; refer to a human",
                            product_id=it["product_id"])
-            if flags.get("x_is_restricted") or flags.get("x_requires_prescription"):
+            if _needs_prescription(flags):
                 return err("restricted_item",
                            f"{flags['name']} is restricted/prescription — escalate to a human",
                            product_id=it["product_id"])
@@ -208,7 +216,7 @@ class Gateway:
             return err("scheduled_item",
                        f"{flags['name']} is a scheduled/controlled substance — "
                        f"never held via the agent; refer to a human", product_id=product_id)
-        if flags.get("x_is_restricted") or flags.get("x_requires_prescription"):
+        if _needs_prescription(flags):
             return err("restricted_item",
                        f"{flags['name']} is restricted/prescription — escalate",
                        product_id=product_id)

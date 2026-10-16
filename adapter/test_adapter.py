@@ -178,3 +178,36 @@ def test_escalate():
 def test_escalate_bad_reason_is_422():
     r = _call("escalate_to_human", {"reason": "nope", "summary": "x"})
     assert r.status_code == 422
+
+
+# ---- SFDA registry prescription flag (gateway must block it like our own flags) ----
+@pytest.fixture()
+def sfda_rx_product(gw):
+    """Temporary product flagged ONLY via the SFDA import field (no x_ flags, not scheduled)."""
+    tmpl = gw.c.create("product.template", {
+        "name": "TEST SFDA RX ONLY", "type": "consu", "sale_ok": True,
+        "sfda_reg_no": "TEST-SFDA-RX", "sfda_requires_prescription": True,
+        "sfda_dispensing": "يحتاج الى وصفة طبية", "sfda_control": "غير مقيد"})
+    vid = gw.c.read("product.template", tmpl, ["product_variant_id"])[0]["product_variant_id"][0]
+    yield vid
+    gw.c.execute_kw("product.template", "unlink", [[tmpl]])
+
+
+def test_create_order_sfda_prescription_refused(sfda_rx_product, customer_id):
+    r = _call("create_order", {"customer_id": customer_id,
+                               "items": [{"product_id": sfda_rx_product, "qty": 1}],
+                               "fulfillment": "pickup", "branch_id": 2})
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "restricted_item"
+
+
+def test_hold_sfda_prescription_refused(sfda_rx_product, customer_id):
+    r = _call("hold_item", {"product_id": sfda_rx_product, "branch_id": 2,
+                            "qty": 1, "customer_id": customer_id})
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "restricted_item"
+
+
+def test_search_reports_sfda_prescription(sfda_rx_product):
+    c = _call("search_product", {"query": "TEST SFDA RX ONLY"}).json()["candidates"][0]
+    assert c["requires_prescription"] and c["is_restricted"] and not c["is_scheduled"]
