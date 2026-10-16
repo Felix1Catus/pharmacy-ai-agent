@@ -215,7 +215,11 @@ Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).
 
 ## TO-DO (backlog, in order agreed with the owner)
 1. **Fine-tune round 3** — finish (running: finetune/run_round3.sh), compare vs 92%, decide.
-2. **Owner / ops-manager assistant** (internal, read-only Odoo analytics): seed dummy sales
+1b. **Gateway: block SFDA prescription drugs** — make create_order/hold_item also refuse
+   `sfda_requires_prescription` (today only is_scheduled + x_ flags). Do right AFTER the
+   round-3 eval (keeps that eval on the exact 92% code), and BEFORE importing the SFDA file
+   into the live DB.
+2. **Owner / ops-manager assistant** (LATER — parked by owner) (internal, read-only Odoo analytics): seed dummy sales
    history per branch; tools stock_by_branch / revenue / top_products / low_stock /
    open_holds_and_deliveries; own prompt + allow-listed owner identities; CLI first, later the
    owner's WhatsApp via the official Cloud API; small eval set. Never customer-facing.
