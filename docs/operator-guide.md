@@ -23,7 +23,7 @@ full-precision weights to compute gradients.
 customer msg ──> agent (Python, /home/pharmacy-ai-agent)
                    │  1. deterministic guards (agent/guards.py)  ← medical / scheduled blocks
                    │  2. LLM call over HTTP ──> Ollama (127.0.0.1:11434) ──> Qwen3-4B GGUF
-                   │  3. tool calls ──> adapter/gateway.py ──> Odoo 18 (Docker, 127.0.0.1:8069)
+                   │  3. tool calls ──> adapter/gateway.py ──> Odoo 18 (Docker, public :8069)
                    └─ reply
 ```
 - **Ollama**: binary `/usr/local/bin/ollama`, runs as a systemd service `ollama` (user
@@ -174,11 +174,24 @@ curl -s http://localhost:11434/api/chat -d '{
   ]}'
 ```
 
-### 3.5 Using Ollama / Odoo from your own laptop (safely)
-Both are bound to localhost on the server on purpose. Tunnel them over SSH instead of opening
-ports:
+### 3.5 Odoo web access (public) and Ollama from your laptop
+**Odoo** is reachable at **http://155.138.207.131:8069** — database `pharmacy`, login `admin`,
+password = `ODOO_PASSWORD` in `/home/pharmacy-ai-agent/.env` (`grep ODOO_PASSWORD .env`).
+Hardening applied when it was opened up:
+- strong random **admin** password (the old `admin/admin` no longer works);
+- strong random **master password** (`admin_passwd`, stored only in the gitignored
+  `odoo/config/odoo.conf` and `ODOO_MASTER_PASSWORD` in `.env`; the repo has `odoo.conf.example`);
+- **database manager disabled** (`list_db = False`) and `dbfilter = ^pharmacy$`;
+- firewall rule `ufw allow 8069/tcp`.
+> ⚠️ It is plain **HTTP**: passwords travel unencrypted. Before any real data or staff use, put
+> HTTPS in front (a domain name + Caddy/nginx reverse proxy with Let's Encrypt), then bind Odoo
+> back to localhost behind the proxy. To change the admin password: Odoo → Settings → Users →
+> admin, then update `ODOO_PASSWORD` in `.env` (the agent logs in with it).
+> To go back to local-only: in `odoo/docker-compose.yml` set `"127.0.0.1:8069:8069"`, then
+> `cd odoo && docker compose up -d odoo` and `ufw delete allow 8069/tcp`.
+
+**Ollama** stays localhost-only on purpose. From your laptop, tunnel it:
 ```bash
-ssh -L 11434:localhost:11434 -L 8069:localhost:8069 root@155.138.207.131
-# then on your laptop: http://localhost:8069 (Odoo, db pharmacy, admin/admin)
-#                       http://localhost:11434 (Ollama API — e.g. point Open WebUI / scripts here)
+ssh -L 11434:localhost:11434 root@155.138.207.131
+# then http://localhost:11434 on your laptop (scripts, Open WebUI, ...)
 ```

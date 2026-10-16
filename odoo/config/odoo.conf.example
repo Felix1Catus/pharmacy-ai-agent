@@ -1,0 +1,10 @@
+[options]
+admin_passwd = CHANGE_ME_master_password
+db_host = db
+db_user = odoo
+db_password = odoo
+addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+; public-exposure hardening: hide/disable the database manager, serve only this DB
+list_db = False
+dbfilter = ^pharmacy$
+proxy_mode = False

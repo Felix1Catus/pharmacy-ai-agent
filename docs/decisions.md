@@ -132,3 +132,10 @@ without degrading tool-calling. Training is QLoRA on the GPU box (deferred); kee
 Pre-set rule: adopt only if the full-agent eval beats 92% with no new wrong actions. Result 88%
 (7 over-escalation regressions), so production keeps base Qwen3-4B-Instruct-2507. The fine-tune
 is real at model level (held-out 65% -> 87%), so the path stays open with corrected data mix.
+
+## 2026-10-16 — Odoo web made public again (human request), hardened first
+Odoo bound to 0.0.0.0:8069 + ufw allow 8069. Before exposing: rotated the admin user password
+(was admin/admin) and the Odoo master password (was "admin", allowed DB backup/drop via
+/web/database/manager), set list_db=False and dbfilter=^pharmacy$. Secrets live only in
+.env and the now-gitignored odoo/config/odoo.conf (repo keeps odoo.conf.example). Still plain
+HTTP — HTTPS via a domain + reverse proxy is the recommended next step before real data.
