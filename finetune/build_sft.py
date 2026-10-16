@@ -325,10 +325,15 @@ def gen_nonproduct(prods, branches):
 
 
 # per-intent caps for TRAIN (test gets ~0.18x). Balanced: search no longer dominates.
-TARGETS = {"search": 200, "price": 40, "check_stock_mt": 40, "create_order_mt": 44,
+TARGETS = {"search": 110, "price": 15, "check_stock_mt": 40, "create_order_mt": 44,
            "create_order_delivery": 28, "hold_item_mt": 34, "create_dispatch_mt": 16,
            "track": 26, "branches": 15, "escalate_medical": 72, "escalate_scheduled": 36,
            "escalate_restricted": 24, "unclear": 12, "abusive": 12, "greeting": 12}
+
+
+# train-only repetition factor per intent (v2): fewer searches, more escalation/text/track/hold
+OVERSAMPLE = {"escalate_medical": 1, "escalate_scheduled": 1, "escalate_restricted": 2,
+              "abusive": 2, "unclear": 4, "greeting": 4, "track": 2, "hold_item_mt": 2}
 
 
 def cap(rows, frac=1.0):
@@ -360,6 +365,9 @@ def main():
     test_np, train_np = nonprod[:cut], nonprod[cut:]
 
     train = cap(train_prod + train_np, frac=1.0)
+    # v2 rebalance: the 0.6B run over-called search_product, so upweight (repeat) the weak
+    # classes in TRAIN only. The test split is unaffected.
+    train += [(k, r) for k, r in train for _ in range(OVERSAMPLE.get(k, 1) - 1)]
     test = cap(test_prod + test_np, frac=0.18)
     random.shuffle(train); random.shuffle(test)
 

@@ -195,3 +195,20 @@ on the small Qwen3-0.6B to prove the pipeline end-to-end (finetune/train_lora_cp
 - Verdict: pipeline works on CPU and generalizes; 0.6B+FT is NOT a replacement for the 4B agent
   (92% acceptable, 100% safety). Next: rebalance/upweight escalation + text classes, then run the
   same recipe on Qwen3-4B (est. ~3.5 h on this CPU for 70 steps). Results: results/ft_cpu/eval.json.
+
+## 2026-10-16 — Fine-tune v2: rebalanced data, 0.6B re-check, then Qwen3-4B on CPU
+- Rebalanced train set (test set kept byte-identical): search 23%, escalation 30%, text 12%.
+- 0.6B v2 held-out: 72% (v1 71%); text replies fixed (0/4 -> 3/4), escalation unchanged (5/16).
+- **4B LoRA on CPU**: 70 steps in 96 min (loss 1.34 -> 0.018). Exported merge -> GGUF f16 ->
+  Q4_K_M -> Ollama `pharmacy-4b-ft` (90 s; reuses production template/params).
+- **Held-out (bare model): base 65% -> fine-tuned 87%** (create_order 0/13 -> 13/13,
+  check_stock 4/7 -> 7/7, escalate 9/16 -> 12/16; hold_item 0/6 both; text 4/4 -> 2/4).
+- **T-B4 full agent, committed code (the 92% run): fine-tuned 88% vs baseline 92% -> NOT
+  ADOPTED.** Safety identical (100%/100%/0 dangerous, 0% wrong-action); no-tool 6% -> 1%;
+  egyptian 79->86, english 78->89, but gulf 93->79. 7 regressions, all OVER-ESCALATION of plain
+  requests (sanitizer, masks, ORS order, Gaviscon delivery, Omega hold); p95 latency 7.3 -> 24.6 s.
+- Diagnosis: escalation upweighted to 30% overcorrected for the 4B (it already escalated well);
+  plus 768-token truncation hides the system prompt, and training used a different system prompt
+  than the live agent. Next try: escalation ~12-15%, symptom->search examples, agent's real
+  prompt, longer max length. hold_item 0/6 for every model -> inspect those labels.
+Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).

@@ -127,3 +127,8 @@ Ollama but emits 0/4 tool calls -> unusable as the agent LLM. So we use only its
 (HeshamHaroon/saudi-dialect-conversations, Apache-2.0) as Najdi phrasing variety feeding a
 TOOL-USE SFT set (finetune/). Targets are tool calls, not chat, so dialect fluency is added
 without degrading tool-calling. Training is QLoRA on the GPU box (deferred); keep only per T-D5.
+
+## 2026-10-16 — Fine-tuned 4B (v2) not adopted
+Pre-set rule: adopt only if the full-agent eval beats 92% with no new wrong actions. Result 88%
+(7 over-escalation regressions), so production keeps base Qwen3-4B-Instruct-2507. The fine-tune
+is real at model level (held-out 65% -> 87%), so the path stays open with corrected data mix.

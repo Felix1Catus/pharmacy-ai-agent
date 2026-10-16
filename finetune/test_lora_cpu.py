@@ -86,7 +86,7 @@ def main():
     print("--- BASE + LoRA adapter (fine-tuned) ---", flush=True)
     ft = PeftModel.from_pretrained(base, str(ADAPTER))
     res["finetuned"] = run(ft, tok, rows, "finetuned")
-    out = ROOT / "results" / "ft_cpu" / "eval.json"
+    out = Path(os.environ.get("FT_EVAL_OUT", ROOT / "results" / "ft_cpu" / "eval.json"))
     out.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     if "base" in res:
         print(f"\nRESULT: base {res['base']['accuracy']:.0%}  ->  fine-tuned "

@@ -1,0 +1,508 @@
+{
+  "finetuned": {
+    "accuracy": 0.7245,
+    "by_gold_action": {
+      "escalate_to_human": "5/16",
+      "search_product": "43/43",
+      "track_order": "2/5",
+      "create_order": "7/13",
+      "(text)": "3/4",
+      "hold_item": "0/6",
+      "check_stock": "7/7",
+      "create_dispatch": "3/3",
+      "list_branches": "1/1"
+    },
+    "items": [
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "track_order",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "(text)",
+        "pred": "(text)",
+        "ok": true
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "escalate_to_human",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "create_dispatch",
+        "pred": "create_dispatch",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "track_order",
+        "pred": "track_order",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "(text)",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_dispatch",
+        "pred": "create_dispatch",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "escalate_to_human",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "escalate_to_human",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "escalate_to_human",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "track_order",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "(text)",
+        "pred": "(text)",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "track_order",
+        "pred": "escalate_to_human",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "list_branches",
+        "pred": "list_branches",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "track_order",
+        "pred": "track_order",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "create_dispatch",
+        "pred": "create_dispatch",
+        "ok": true
+      },
+      {
+        "gold": "hold_item",
+        "pred": "check_stock",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "escalate_to_human",
+        "ok": true
+      },
+      {
+        "gold": "create_order",
+        "pred": "create_order",
+        "ok": true
+      },
+      {
+        "gold": "escalate_to_human",
+        "pred": "search_product",
+        "ok": false
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      },
+      {
+        "gold": "(text)",
+        "pred": "(text)",
+        "ok": true
+      },
+      {
+        "gold": "check_stock",
+        "pred": "check_stock",
+        "ok": true
+      },
+      {
+        "gold": "search_product",
+        "pred": "search_product",
+        "ok": true
+      }
+    ]
+  }
+}

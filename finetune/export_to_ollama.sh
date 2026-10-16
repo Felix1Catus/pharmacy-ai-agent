@@ -27,6 +27,10 @@ AutoTokenizer.from_pretrained(base).save_pretrained(out)
 print("merged ->", out)
 PY
 
+if [ "${DROP_BASE_CACHE:-0}" = "1" ]; then   # free disk; base re-downloads quickly if needed
+  rm -rf "$HOME/.cache/huggingface/hub/models--${BASE//\//--}"; log "dropped HF cache for $BASE"
+fi
+
 log "2/4 convert to GGUF f16"
 $PY $LCPP/convert_hf_to_gguf.py "$WORK/merged" --outtype f16 --outfile "$WORK/f16.gguf" 2>&1 | tail -1
 rm -rf "$WORK/merged"
@@ -36,7 +40,12 @@ $LCPP/build/bin/llama-quantize "$WORK/f16.gguf" "$WORK/q4_k_m.gguf" Q4_K_M 2>&1 
 rm -f "$WORK/f16.gguf"
 
 log "4/4 ollama create $NAME"
-printf 'FROM %s/%s/q4_k_m.gguf\n' "$PWD" "$WORK" > "$WORK/Modelfile"
+if [ -n "${TEMPLATE_FROM:-}" ]; then
+  # reuse the reference model's chat template (incl. tool calling) + parameters, swap the weights
+  ollama show "$TEMPLATE_FROM" --modelfile | sed "s|^FROM .*|FROM $PWD/$WORK/q4_k_m.gguf|" > "$WORK/Modelfile"
+else
+  printf 'FROM %s/%s/q4_k_m.gguf\n' "$PWD" "$WORK" > "$WORK/Modelfile"
+fi
 ollama create "$NAME" -f "$WORK/Modelfile" 2>&1 | tail -1
 rm -f "$WORK/q4_k_m.gguf"
 log "done -> ollama model '$NAME'"
