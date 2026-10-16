@@ -229,3 +229,11 @@ Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).
 5. **Voice (Sprint C)** — Whisper ingest + NAMAA-Saudi-TTS replies.
 6. **HTTPS for Odoo** — domain + reverse proxy, then bind Odoo back to localhost.
 7. **SSH hardening** — key-only login, disable password auth.
+
+## 2026-10-16 — SFDA drugs registry scraped + Odoo import file
+Scraped SFDA drugs-list pages 0-100 + all 2,020 details pages (4 parallel workers, 0 failures).
+Built data_sources/sfda/data/: full reference DB (xlsx/csv) and an Odoo import (xlsx/csv) with
+external IDs; المراقبة=مقيد -> Scheduled (45), يحتاج وصفة -> prescription (1,768); 2,014 unique
+drugs. New pharmacy_agent 18.0.1.2.0 fields (19 sfda_*) + SFDA registry section on the Pharmacy
+tab. Verified on a scratch DB: 2,014 imported, 0 errors, 45/45 Scheduled, re-import idempotent.
+NOT imported into the live DB yet (waits for TO-DO 1b gateway fix + round-3 eval).

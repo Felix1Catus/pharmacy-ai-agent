@@ -195,3 +195,43 @@ Hardening applied when it was opened up:
 ssh -L 11434:localhost:11434 root@155.138.207.131
 # then http://localhost:11434 on your laptop (scripts, Open WebUI, ...)
 ```
+
+---
+
+## 4. SFDA drugs registry → Odoo
+
+Source: SFDA registered-drugs list (https://www.sfda.gov.sa/ar/drugs-list) + each drug's
+التفاصيل page. Scraped pages 0–100 (the site's pager is 0-based, so this covers UI pages 1–101):
+**2,020 entries → 2,014 unique drugs** (SFDA lists 6 twice).
+
+Files in `data_sources/sfda/data/`:
+| File | Use |
+|---|---|
+| `sfda_drugs_database.xlsx` / `.csv` | full reference database — every SFDA field, Arabic headers, + مقيد؟ / يحتاج وصفة؟ / source link |
+| `sfda_products_odoo_import.xlsx` | **the file to import into Odoo** (also `.csv`, `_nobom.csv`) |
+| `sfda_details.jsonl`, `sfda_list.jsonl` | raw scrape output |
+
+Mapping: `المراقبة = مقيد` → **Scheduled ✓** (45 drugs, e.g. pregabalin, alfentanil, bromazepam);
+`طريقة الصرف = يحتاج الى وصفة طبية` → *Prescription required (SFDA)* (1,768). The raw status is
+kept in *Control status* — note a separate SFDA value `خاضعة للرقابة وفق أحكام وشروط خاصة` (30 drugs:
+growth hormone, fertility hormones, dinoprostone) is NOT ticked Scheduled (prescription only).
+Everything else lands in the **Pharmacy tab → SFDA registry** section.
+
+### Import (Odoo UI)
+1. Inventory → Products → ⚙ (gear) → **Import records** → upload `sfda_products_odoo_import.xlsx`.
+2. Columns auto-match (technical names). Click **Test** → expect no errors → **Import**.
+3. Re-importing a newer file **updates** products (external ID `sfda.drug_<reg no>`), no duplicates.
+Tested end-to-end on a scratch database (2,014 imported, 0 errors, 45 Scheduled).
+
+> ⚠️ Before importing into the live DB used by the WhatsApp agent: the gateway must also block
+> `sfda_requires_prescription` (TO-DO 1b in docs/progress.md), otherwise prescription-only SFDA
+> drugs that aren't مقيد could be ordered by the agent. After importing, restart the agent so its
+> scheduled-medicine block list reloads from Odoo.
+
+### Refresh / extend
+```bash
+cd /home/pharmacy-ai-agent
+.venv/bin/python data_sources/sfda/scrape_sfda.py 0 100     # resumable; SFDA_WORKERS=4 SFDA_DELAY=0.5
+.venv/bin/python data_sources/sfda/build_odoo_import.py      # rebuild the files
+```
+More pages: change `0 100` (e.g. `0 455`); already-fetched pages are reused from the cache.

@@ -105,13 +105,21 @@ def main():
                   "sfda_control", "sfda_distribution", "sfda_atc_code", "sfda_shelf_life",
                   "sfda_storage", "sfda_manufacturer", "sfda_marketing_company", "sfda_agent",
                   "sfda_license_status", "sfda_marketing_status", "sfda_public_price"]
-    imp_rows = []
+    imp_rows, used = [], set()
     for r in recs:
         ext = "sfda.drug_" + re.sub(r"[^A-Za-z0-9_]", "_", r["reg_no"])
+        if ext in used:          # SFDA lists a few drugs twice (same reg no/pack/price): keep one
+            continue
+        used.add(ext)
         size = " ".join(x for x in [r["size"], r["size_unit"]] if x)
         pack = " ".join(x for x in [r["pack_size"], r["pack_type"], f"({size})" if size else ""] if x)
+        # some SFDA entries have no trade name (e.g. contrast agents): Odoo requires a name, so
+        # fall back to "scientific name strength unit form", then to the registration number
+        name = r["trade_name"] or " ".join(x for x in [
+            r["scientific_name"], r["strength"], r["strength_unit"], r["dosage_form"]] if x) \
+            or f"SFDA {r['reg_no']}"
         imp_rows.append([
-            ext, r["trade_name"], r["reg_no"], "consu", "True", "True", num(r["price"]),
+            ext, name, r["reg_no"], "consu", "True", "True", num(r["price"]),
             "True" if r["control"] == "مقيد" else "False", r["control"],
             r["reg_no"], r["scientific_name"],
             " ".join(x for x in [r["strength"], r["strength_unit"]] if x), r["dosage_form"],

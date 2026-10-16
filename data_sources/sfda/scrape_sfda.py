@@ -28,11 +28,22 @@ BASE = "https://www.sfda.gov.sa"
 HERE = Path(__file__).resolve().parent
 CACHE = HERE / "cache"
 DATA = HERE / "data"
-UA = "Mozilla/5.0 (X11; Linux x86_64) pharmacy-catalogue-research (polite, 1 req/s)"
-DELAY = 1.0
+UA = "Mozilla/5.0 (X11; Linux x86_64) pharmacy-catalogue-research (polite)"
+import os  # noqa: E402
+import threading  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 
-session = requests.Session()
-session.headers.update({"User-Agent": UA, "Accept-Language": "ar"})
+DELAY = float(os.environ.get("SFDA_DELAY", "0.5"))     # per-worker pause between requests
+WORKERS = int(os.environ.get("SFDA_WORKERS", "4"))     # parallel detail-page fetchers
+
+_local = threading.local()
+
+
+def _session():
+    if not hasattr(_local, "s"):
+        _local.s = requests.Session()
+        _local.s.headers.update({"User-Agent": UA, "Accept-Language": "ar"})
+    return _local.s
 
 
 def fetch(url: str, cache_file: Path) -> str:
@@ -41,7 +52,7 @@ def fetch(url: str, cache_file: Path) -> str:
     for attempt in range(5):
         time.sleep(DELAY + random.uniform(0, 0.5))
         try:
-            r = session.get(url, timeout=30)
+            r = _session().get(url, timeout=30)
             if r.status_code == 200:
                 cache_file.parent.mkdir(parents=True, exist_ok=True)
                 cache_file.write_text(r.text, encoding="utf-8")
@@ -98,19 +109,29 @@ def main():
         for r in all_rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    details, seen = [], set()
-    for i, r in enumerate(all_rows, 1):
+    jobs, seen = [], set()
+    for r in all_rows:
         key = r["details_url"].split("details_data?")[1].split("&page=")[0]
-        if key in seen:
-            continue
-        seen.add(key)
+        if key not in seen:
+            seen.add(key); jobs.append((key, r))
+
+    done, lock = [0], threading.Lock()
+    restricted = [0]
+
+    def work(job):
+        key, r = job
         safe = re.sub(r"[^A-Za-z0-9_-]", "_", key)
         d = parse_details(fetch(r["details_url"], CACHE / "details" / f"{safe}.html"))
         d["_reg_no_from_link"] = r["reg_no"]; d["_details_url"] = r["details_url"]
-        details.append(d)
-        if i % 25 == 0 or i == len(all_rows):
-            n_restricted = sum(1 for x in details if x.get("المراقبة") == "مقيد")
-            print(f"[details] {i}/{len(all_rows)}  (مقيد so far: {n_restricted})", flush=True)
+        with lock:
+            done[0] += 1; restricted[0] += d.get("المراقبة") == "مقيد"
+            if done[0] % 25 == 0 or done[0] == len(jobs):
+                print(f"[details] {done[0]}/{len(jobs)}  (مقيد so far: {restricted[0]})", flush=True)
+        return d
+
+    print(f"[details] {len(jobs)} detail pages, {WORKERS} workers, {DELAY}s pause", flush=True)
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        details = list(ex.map(work, jobs))   # keeps original order
     with (DATA / "sfda_details.jsonl").open("w", encoding="utf-8") as fh:
         for d in details:
             fh.write(json.dumps(d, ensure_ascii=False) + "\n")
