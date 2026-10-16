@@ -1,0 +1,16 @@
+{
+  "name": "list_branches",
+  "description": "List the pharmacy branches (id and name). Call this to map a branch NAME the customer mentions (e.g. 'Jeddah', 'جدة', 'الرياض') to the branch_id needed by check_stock, create_order (pickup) and hold_item. Read-only.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "branches: list of {branch_id, name}.",
+    "properties": {"branches": {"type": "array"}}
+  },
+  "errors": []
+}

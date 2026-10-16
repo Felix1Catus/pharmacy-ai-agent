@@ -6,9 +6,10 @@ from pathlib import Path
 
 SCHEMA_DIR = Path(__file__).parent / "schemas"
 
-# The seven actions the agent may call. Order is stable for prompts/evals.
+# The actions the agent may call. Order is stable for prompts/evals.
 ACTIONS = [
     "search_product",
+    "list_branches",
     "check_stock",
     "create_order",
     "create_dispatch",

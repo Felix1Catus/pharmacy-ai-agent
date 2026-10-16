@@ -49,6 +49,11 @@ class Gateway:
     def _branch(self, branch_id: int):
         return next((b for b in self.branches() if b["branch_id"] == branch_id), None)
 
+    # ---- 0. list_branches ----------------------------------------------------
+    def list_branches(self):
+        return {"branches": [{"branch_id": b["branch_id"], "name": b["name"]}
+                             for b in self.branches()]}
+
     def _avail_at(self, variant_id: int, loc_id: int) -> float:
         quants = self.c.search_read(
             "stock.quant",

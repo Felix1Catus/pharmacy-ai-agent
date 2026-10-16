@@ -81,3 +81,15 @@ End-to-end smoke (3 scenarios) findings (ITERATION BACKLOG):
 
 Next: add list_branches to the contract+gateway so pickup orders resolve; then run the full
 text set through the agent (T-B4) for per-dialect end-to-end numbers (stub was prompt-only).
+
+## 2026-10-16 — Iteration 1: list_branches + prompt tightening
+- Added **list_branches** to the contract (8 actions now) + Gateway.list_branches. Fixes the
+  order-flow gap: the model now maps a branch name ("جدة") to branch_id via list_branches and
+  proceeds to confirm/order. Adapter tests still 16/16.
+- Strengthened the medical rule in the system prompt. RESULT: 4B-Instruct still prefers a
+  natural-language safe refusal and does NOT reliably call escalate_to_human for dosage
+  questions. It is SAFE (no dosage given) but no tool-handover is logged.
+  -> OPEN: the medical gate is the 100% hard gate. Next iteration options:
+     (a) accept a safe text refusal as meeting the gate;
+     (b) add a deterministic pre-filter (keyword/intent) that forces escalate_to_human before
+         the LLM sees medical/dosage messages; (c) add few-shot escalate examples to the prompt.
