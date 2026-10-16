@@ -19,3 +19,6 @@ results/ft_4b/adapter/
 results/gguf/
 odoo/config/odoo.conf
 data_sources/sfda/cache/
+results/ft_4b_r3/adapter/
+results/ft_4b_r3/checkpoints/
+results/release/

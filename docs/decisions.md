@@ -139,3 +139,7 @@ Odoo bound to 0.0.0.0:8069 + ufw allow 8069. Before exposing: rotated the admin 
 /web/database/manager), set list_db=False and dbfilter=^pharmacy$. Secrets live only in
 .env and the now-gitignored odoo/config/odoo.conf (repo keeps odoo.conf.example). Still plain
 HTTP — HTTPS via a domain + reverse proxy is the recommended next step before real data.
+
+## 2026-10-16 — Fine-tune round 3 not adopted
+Agent eval 81% < 92% (pre-set rule). Production model unchanged (base Qwen3-4B-Instruct-2507).
+Adapters of rounds 2 and 3 kept as experiment records in the GitHub Release `models-v1`.

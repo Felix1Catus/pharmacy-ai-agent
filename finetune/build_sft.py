@@ -34,13 +34,22 @@ random.seed(7)
 HERE = Path(__file__).resolve().parent
 TOOLS = contract.tools_for_llm()
 
-SYSTEM = (
-    "You are the ordering assistant for a pharmacy franchise on WhatsApp. Customers write in "
-    "Arabic dialects or English. Act by calling the provided tools; call search_product to "
-    "resolve any product first, list_branches to map a branch name, check_stock for "
-    "availability, track_order for order status, create_order/hold_item only after confirming, "
-    "and escalate_to_human for medical advice, scheduled/prescription medicines, or abuse."
-)
+def _agent_system_prompt() -> str:
+    """Round 3: train with the EXACT system prompt the live agent sends (agent/agent.py
+    SYSTEM_PROMPT, as committed — the code the agent eval runs), not a separate training prompt."""
+    import ast
+    import re
+    import subprocess
+    try:
+        src = subprocess.run(["git", "show", "HEAD:agent/agent.py"], cwd=ROOT, check=True,
+                             capture_output=True, text=True).stdout
+    except Exception:  # noqa: BLE001
+        src = (ROOT / "agent" / "agent.py").read_text(encoding="utf-8")
+    blk = re.search(r"SYSTEM_PROMPT = \((.*?)\n\)", src, re.S).group(1)
+    return "".join(ast.literal_eval(s) for s in re.findall(r'"(?:[^"\\]|\\.)*"', blk))
+
+
+SYSTEM = _agent_system_prompt()
 
 # ---- dialect frame banks -------------------------------------------------
 GULF_GREET = ["", "", "", "السلام عليكم ", "هلا والله ", "الله يعطيك العافية ", "يا طيب "]
@@ -222,6 +231,14 @@ def gen_for_products(prods, branches, otc):
                 term = random.choice(term_variants(p))
                 u = gfill(random.choice(PRICE[d])).format(x=term).strip()
                 rows.append(("price", ex(su(u) + [asst_tool("search_product", {"query": term})])))
+            # round 3: FIRST move of an order/hold/stock request is search_product. In the
+            # multi-turn examples that first search is context (masked), so it was never a
+            # trained target — and the v2 model escalated plain orders instead.
+            bank = random.choice([ORDER_PICKUP, ORDER_DELIVERY, HOLD, STOCK])
+            term = random.choice(term_variants(p)); b = random.choice(branches)
+            u = gfill(random.choice(bank[d])).format(x=term, q=random.choice([1, 2, 3]),
+                                                     b=b["ar"], addr=ADDR[d]).strip()
+            rows.append(("first_move", ex(su(u) + [asst_tool("search_product", {"query": term})])))
     # multi-turn stock / order(pickup+delivery) / hold / dispatch on a product sample
     sample = otc * 2
     for p in sample[:36]:
@@ -257,9 +274,13 @@ def gen_for_products(prods, branches, otc):
     for p in sample[:24]:
         d = random.choice(DIALECTS); b = random.choice(branches); term = random.choice(term_variants(p))
         u = gfill(random.choice(HOLD[d])).format(x=term, b=b["ar"]).strip()
+        # round 3: confirm before hold (hold_item requires confirmed intent, like create_order);
+        # this also stops hold examples looking identical to check_stock examples.
         rows.append(("hold_item_mt", ex(su(u) + [
             asst_tool("search_product", {"query": term}), found(p),
             asst_tool("list_branches", {}), branch_list(branches),
+            {"role": "assistant", "content": f"أحجز لك 1 {p['ar']} في {b['name']} لمدة 24 ساعة. أؤكد الحجز؟"},
+            {"role": "user", "content": random.choice(["ايه احجز", "نعم", "تمام", "اوكي", "yes"])},
             asst_tool("hold_item", {"product_id": p["vid"], "branch_id": b["id"], "qty": 1})])))
     # dispatch after a delivery order
     for p in sample[:12]:
@@ -312,6 +333,19 @@ def gen_nonproduct(prods, branches):
                 rows.append(("escalate_restricted", ex(su(u) + [
                     asst_tool("escalate_to_human", {"reason": "restricted_item",
                                                     "summary": f"prescription-only: {p['en']}"})])))
+    # round 3: category / symptom-style product requests -> search_product (NOT escalate).
+    # "something for a cough", "masks", "sanitizer" are shopping, not medical advice.
+    for d in DIALECTS:
+        for fr in CATEGORY_FRAMES[d]:
+            for ar, en in CATEGORIES:
+                q = en if d == "english" else ar
+                rows.append(("symptom_search", ex(su(gfill(fr).format(c=q).strip()) + [
+                    asst_tool("search_product", {"query": q})])))
+        for fr in SYMPTOM_FRAMES[d]:
+            for ar, en in SYMPTOMS:
+                q = en if d in ("english", "mixed") else ar
+                rows.append(("symptom_search", ex(su(gfill(fr).format(s=q).strip()) + [
+                    asst_tool("search_product", {"query": q})])))
     # abusive / unclear / greeting
     for u in ABUSIVE:
         rows.append(("abusive", ex(su(u) + [
@@ -324,16 +358,34 @@ def gen_nonproduct(prods, branches):
     return rows
 
 
-# per-intent caps for TRAIN (test gets ~0.18x). Balanced: search no longer dominates.
-TARGETS = {"search": 110, "price": 15, "check_stock_mt": 40, "create_order_mt": 44,
-           "create_order_delivery": 28, "hold_item_mt": 34, "create_dispatch_mt": 16,
-           "track": 26, "branches": 15, "escalate_medical": 72, "escalate_scheduled": 36,
-           "escalate_restricted": 24, "unclear": 12, "abusive": 12, "greeting": 12}
+# round 3 category/symptom banks (shopping requests that must SEARCH, not escalate)
+CATEGORIES = [("كمامات", "face masks"), ("معقم", "hand sanitizer"), ("ميزان حرارة", "thermometer"),
+              ("حفاضات", "diapers"), ("بلاستر", "plasters"), ("فيتامينات", "vitamins"),
+              ("واقي شمس", "sunscreen"), ("مرطب", "moisturizer"), ("اختبار حمل", "pregnancy test"),
+              ("مسكن", "pain relief")]
+SYMPTOMS = [("الزكام", "a cold"), ("الكحة", "a cough"), ("الحلق", "a sore throat"),
+            ("الحموضة", "heartburn"), ("الحساسية", "allergies"), ("الصداع", "a headache")]
+CATEGORY_FRAMES = {
+    "gulf": ["{g}فيه عندكم {c}؟", "{g}{r} {c}", "{g}تبيعون {c}؟"],
+    "egyptian": ["عندكو {c}؟", "محتاج {c}"], "levantine": ["في عندكن {c}؟", "بدي {c}"],
+    "msa": ["هل تبيعون {c}؟"], "english": ["Do you sell {c}?", "I'm looking for {c}"],
+    "mixed": ["عندكم {c} please؟"]}
+SYMPTOM_FRAMES = {
+    "gulf": ["{g}عندكم شي لـ{s}؟", "{g}{r} شي لـ{s}"], "egyptian": ["عندكو حاجة لـ{s}؟"],
+    "levantine": ["في عندكن شي لـ{s}؟"], "msa": ["هل لديكم شيء لـ{s}؟"],
+    "english": ["Do you have anything for {s}?"], "mixed": ["عندكم شي for {s}؟"]}
+
+# per-intent caps for TRAIN. Round 3: escalation ~12-15% of train (v2's 30% made the 4B
+# over-escalate plain orders); first-move + symptom/category searches added.
+TARGETS = {"search": 70, "price": 15, "first_move": 60, "symptom_search": 50,
+           "check_stock_mt": 40, "create_order_mt": 44, "create_order_delivery": 28,
+           "hold_item_mt": 34, "create_dispatch_mt": 16, "track": 26, "branches": 15,
+           "escalate_medical": 34, "escalate_scheduled": 18, "escalate_restricted": 12,
+           "unclear": 12, "abusive": 10, "greeting": 12}
 
 
-# train-only repetition factor per intent (v2): fewer searches, more escalation/text/track/hold
-OVERSAMPLE = {"escalate_medical": 1, "escalate_scheduled": 1, "escalate_restricted": 2,
-              "abusive": 2, "unclear": 4, "greeting": 4, "track": 2, "hold_item_mt": 2}
+# train-only repetition factor per intent
+OVERSAMPLE = {"unclear": 4, "greeting": 4, "track": 2, "hold_item_mt": 2}
 
 
 def cap(rows, frac=1.0):
@@ -364,12 +416,26 @@ def main():
     cut = int(len(nonprod) * 0.18)
     test_np, train_np = nonprod[:cut], nonprod[cut:]
 
-    train = cap(train_prod + train_np, frac=1.0)
-    # v2 rebalance: the 0.6B run over-called search_product, so upweight (repeat) the weak
-    # classes in TRAIN only. The test split is unaffected.
+    # never train on a message that appears in the 106-item agent eval (keeps T-B4 clean)
+    eval_texts = {e["text"].strip() for e in json.loads(
+        (ROOT / "evals" / "datasets" / "text_messages.json").read_text(encoding="utf-8"))}
+    pool = [(k, r) for k, r in train_prod + train_np
+            if r["messages"][1]["content"].strip() not in eval_texts]
+    print(f"dropped {len(train_prod) + len(train_np) - len(pool)} train examples identical to agent-eval messages")
+
+    train = cap(pool, frac=1.0)
+    # upweight (repeat) the weak classes in TRAIN only
     train += [(k, r) for k, r in train for _ in range(OVERSAMPLE.get(k, 1) - 1)]
     test = cap(test_prod + test_np, frac=0.18)
-    random.shuffle(train); random.shuffle(test)
+    # held-out test is FROZEN at the v1 examples (comparable across rounds); only the system
+    # prompt is swapped to the one used in training/serving
+    frozen = HERE / "data" / "sft_test_frozen_v1.jsonl"
+    if frozen.exists():
+        test = []
+        for line in frozen.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line); r["messages"][0]["content"] = SYSTEM; test.append(("frozen", r))
+    random.shuffle(train)
 
     (HERE / "data" / "sft_train.jsonl").write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for _, r in train) + "\n", encoding="utf-8")

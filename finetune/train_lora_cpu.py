@@ -43,7 +43,7 @@ OUT = Path(os.environ.get("FT_OUT", ROOT / "results" / "ft_cpu"))
 BASE = os.environ.get("FT_BASE", "Qwen/Qwen3-0.6B")
 MAX_STEPS = int(os.environ.get("FT_MAX_STEPS", "70"))
 EPOCHS = float(os.environ.get("FT_EPOCHS", "1"))
-MAX_LEN = 768
+MAX_LEN = int(os.environ.get("FT_MAX_LEN", "768"))
 
 torch.set_num_threads(os.cpu_count())
 

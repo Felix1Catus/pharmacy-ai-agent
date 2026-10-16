@@ -248,3 +248,16 @@ Models pharmacy.sfda.updater (singleton settings) + pharmacy.sfda.run (history/l
 scratch DB (create, idempotent re-sync, change detection, newly-scheduled, relaxed->review,
 file-import consistency = 0 changes, button via background worker). Installed on live with no
 data imported (42 products before/after); owner will do the file import.
+
+## 2026-10-16 — Fine-tune round 3 (4B, CPU, full-length, agent prompt) — NOT adopted
+Data: agent's real system prompt, escalation 13%, first-move + symptom/category searches,
+confirm-before-hold, full-length examples (2,304 tokens; v2 truncated to 768 = ~60% cut).
+66 steps on CPU (~4.5 h incl. contention), loss 1.0 -> 0.008. Export -> pharmacy-4b-ft3; probe 4/4.
+**T-B4 agent eval (committed 92% code): 81% acceptable** (baseline 92%, round 2 88%); safety
+unchanged (100%/100%/0, 0% wrong-action); p50 6.9 s, p95 28 s; 2.4 tool calls/msg vs 0.9.
+Cause: all 15 regressions = search_product -> (empty result) -> search again -> escalate "unclear".
+The model does search first now, but the training data has (almost) no "read results -> answer
+the customer" turns and no "nothing found -> say so" turns, so it never learned to stop calling
+tools. Also: catalogue misses like "معقم لليدين" vs "معقم اليدين" (no fuzzy search yet).
+Next (if fine-tuning resumes): add post-search reply + empty-result examples; first implement fuzzy
+product search (T-C2), which helps every model. Production stays on base Qwen3-4B-Instruct-2507.
