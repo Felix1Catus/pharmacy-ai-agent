@@ -12,3 +12,5 @@ Record every external fact (model repo, license, API param) with its source and 
 > when those benchmarks are set up (blocked on GPU box).
 | 2026-10-16 | Qwen3 dense sizes: 0.6B,1.7B,4B,8B,14B,32B; Ollama tags expose tools+thinking; Ollama >=0.6.6 | https://registry.ollama.ai/library/qwen3/tags |
 | 2026-10-16 | Ollama tool-calling via /api/chat `tools` param returns message.tool_calls | https://github.com/ollama/ollama/blob/main/docs/api.md |
+| 2026-10-16 | AyoubChLin/Qwen3.5-4B-saudi-dialect: Saudi-dialect CONVERSATIONAL SFT, merged + separate LoRA repo, base unsloth/Qwen3.5-4B(-Base), Apache-2.0, task=chat (NOT tool-use) | https://huggingface.co/AyoubChLin/Qwen3.5-4B-saudi-dialect |
+| 2026-10-16 | HeshamHaroon/saudi-dialect-conversations: 3,545 Najdi conversations / 22,536 turns, SYNTHETIC (GPT-4o), MARBERT-validated, NO human review, chat schema (messages/scenario/topic), Apache-2.0 | https://huggingface.co/datasets/HeshamHaroon/saudi-dialect-conversations |

@@ -90,3 +90,19 @@ compose /mnt/extra-addons): adds `is_scheduled`/`schedule_class` to product.temp
 Prescriptions menu. Installed into the pharmacy DB. The existing x_ manual fields
 (x_is_restricted, x_requires_prescription, x_name_ar, ...) remain; folding them into the module
 is a documented follow-up.
+
+## 2026-10-16 — External Saudi-dialect model/dataset (evaluated, not adopted as-is)
+Reviewed AyoubChLin/Qwen3.5-4B-saudi-dialect + its dataset for fine-tuning our agent to Saudi dialect.
+- **Their LoRA: NOT usable.** It is bound to base `Qwen3.5-4B(-Base)`; our validated base is
+  `Qwen3-4B-Instruct-2507`. A LoRA cannot be loaded onto a different base generation, and swapping
+  base would discard the non-thinking 2507 behavior we chose. Rejected.
+- **Their dataset (HeshamHaroon/saudi-dialect-conversations, Apache-2.0): usable as dialect
+  AUGMENTATION material only, not direct SFT.** It is CHAT data (Najdi). Direct conversational SFT
+  would worsen our measured problem (model already over-chats instead of calling tools, T-B4
+  no_tool 30%). It is also synthetic (GPT-4o) and unreviewed -> our plan requires native review.
+- **Correct path (T-D3 when fine-tuning is justified):** mine the Najdi data for input variety and
+  build OUR tool-use dataset where each Najdi message maps to the correct TOOL CALL (targets stay
+  tool calls, not chat). Native-review the result. QLoRA on the GPU box (T-D4, currently blocked).
+- **Sequencing:** our current limiter is tool-invocation (a prompt issue, being fixed now), not
+  dialect understanding. Fix prompt first, re-measure per-dialect (T-B4), then decide if a
+  dialect-targeted fine-tune adds value (T-D2 justification).

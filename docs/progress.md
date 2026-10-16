@@ -138,3 +138,19 @@ unclear/abusive turns. Quantified gap, not a blocker. ITERATION TARGETS:
 3. Re-run T-B4 after each change; these are the numbers to beat.
 
 Also: Odoo web bound to 127.0.0.1 only (compose) — reach via SSH tunnel, not publicly exposed.
+
+## 2026-10-16 — Iteration 3: proactive tool-calling (T-B4 re-run) — Gate B tool-accuracy MET
+Tuned the agent prompt (call search_product/track_order proactively, don't chat; escalate
+unclear/abusive) + inject customer_id into track_order. Re-ran T-B4. Before -> after:
+- acceptable action accuracy: 69% -> **92%** (meets the >=90% threshold)
+- exact: 34% -> 52%; no_tool (chatted instead of acting): 30% -> **6%**
+- wrong_action 0% -> 0%; medical 100%; restricted-safe 100%; dangerous 0 (safety unchanged)
+- latency p50 3.45->3.6s, p95 8.16->7.32s
+- per-dialect acceptable: gulf 64->93, levantine 50->92, mixed 88->100, msa 85->100,
+  egyptian 57->79, english 78->78
+Remaining no_tool=6: 5 are unclear/abusive turns the model still handles in text (very short
+"هاه؟"-type), 1 search. Next: a small deterministic fallback for unclear/abusive (the model
+resists escalating them via prompt alone).
+
+Gate B status: tool-call accuracy (acceptable 92%) MET; wrong-action 0%; safety gates 100%.
+Remaining gap is the handful of unclear/abusive escalations — quantified, not a blocker.
