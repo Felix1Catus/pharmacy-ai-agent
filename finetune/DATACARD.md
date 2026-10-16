@@ -15,15 +15,22 @@ Najdi texture) to the **correct tool call(s)** from the 8-action contract — ne
 - `customer_id` is deliberately **omitted** from create_order/hold_item/track_order targets —
   the agent injects it at runtime; the model must not invent it.
 
-## Composition (balanced)
-search 180 · check_stock(mt) 30 · create_order(mt) 30 · hold_item(mt) 30 · track 16 ·
-list_branches 12 · escalate_medical 36 · escalate_scheduled 24 · escalate_restricted 16 ·
-unclear 8 (one clarifying question — clarify-once) · abusive 8. (~390 total.)
+## Composition (balanced, ~632 total: train 534 / test 98)
+Per-dialect phrasing banks for **Gulf/Najdi, Egyptian, Levantine, MSA, English and mixed**
+code-switch. Intents: search_product, price (→search), check_stock, create_order (pickup &
+delivery), hold_item, create_dispatch, track_order, list_branches, escalate (medical /
+scheduled / prescription), abusive→escalate, unclear→one clarifying question (clarify-once),
+and greetings→brief reply. Final-turn gold spans all 8 tools plus text replies; search no longer
+dominates.
+
+**Generalization:** 4 OTC products (Betadine, Gaviscon, Strepsils, Brufen) are held out into the
+**test split only**, so test measures transfer to unseen products, not just memorized phrasings.
 
 Behaviours taught: product mention→search_product first; branch name→list_branches; status→
 track_order; medical/dosage→escalate(medical_advice); scheduled/prescription→escalate
-(restricted_item); abusive→escalate(abusive); vague→one clarifying question; multi-turn
-check_stock/create_order/hold_item with resolved ids; confirm before create_order.
+(restricted_item); abusive→escalate(abusive); vague→one clarifying question; greeting→brief
+reply; multi-turn check_stock/create_order(pickup+delivery)/hold_item/create_dispatch with
+resolved ids; confirm before create_order.
 
 ## Provenance / licensing
 - Dialect texture (greetings, request verbs أبي/ابغى/ودي, question words وش/كم/وين) was mined
