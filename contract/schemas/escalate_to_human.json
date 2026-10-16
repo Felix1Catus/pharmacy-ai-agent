@@ -1,0 +1,21 @@
+{
+  "name": "escalate_to_human",
+  "description": "Hand the conversation to a human pharmacist/agent. ALWAYS use this for: any request for dosage, diagnosis or medical advice; restricted or prescription items; low confidence in the right action; abusive input; or anything the contract cannot serve. This is a terminal action for the turn.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "reason": {"type": "string", "enum": ["medical_advice", "restricted_item", "low_confidence", "abusive", "unclear", "out_of_scope"]},
+      "summary": {"type": "string", "description": "One line for the human: what the customer wants and why it was escalated."},
+      "customer_id": {"type": "integer"}
+    },
+    "required": ["reason", "summary"],
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "handover_id, acknowledgement text to send to the customer.",
+    "properties": {"handover_id": {"type": "integer"}}
+  },
+  "errors": []
+}

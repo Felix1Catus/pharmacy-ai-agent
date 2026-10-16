@@ -1,0 +1,23 @@
+{
+  "name": "create_dispatch",
+  "description": "Create a delivery/dispatch (stock picking) for an existing confirmed order. Call only after create_order succeeded and the customer wants delivery.",
+  "requires_confirmed_intent": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "order_id": {"type": "integer"},
+      "courier_note": {"type": "string", "description": "Optional note for the courier."}
+    },
+    "required": ["order_id"],
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "dispatch_id, state, tracking_ref.",
+    "properties": {"dispatch_id": {"type": "integer"}, "state": {"type": "string"}}
+  },
+  "errors": [
+    {"code": "not_found", "when": "order_id does not exist"},
+    {"code": "invalid_input", "when": "order is not in a state that can be dispatched"}
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "check_stock",
+  "description": "Check available quantity of a resolved product. If branch_id is given, returns stock at that branch; otherwise returns stock per branch. Never invent stock numbers — always call this.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "product_id": {"type": "integer", "description": "A product_id returned by search_product."},
+      "branch_id": {"type": "integer", "description": "Optional branch to check."}
+    },
+    "required": ["product_id"],
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "stock: list of {branch_id, branch_name, qty_available}.",
+    "properties": {"stock": {"type": "array"}}
+  },
+  "errors": [
+    {"code": "not_found", "when": "product_id does not exist"},
+    {"code": "invalid_input", "when": "product_id missing"}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "name": "create_order",
+  "description": "Create a sales order for a customer. ONLY call after the customer has explicitly confirmed the items and quantities. Restricted / prescription items must NOT be ordered here — escalate_to_human instead. For pickup, branch_id is required and must have stock; for delivery, the system picks a branch with stock.",
+  "requires_confirmed_intent": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "customer_id": {"type": "integer"},
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "properties": {
+            "product_id": {"type": "integer"},
+            "qty": {"type": "number", "exclusiveMinimum": 0}
+          },
+          "required": ["product_id", "qty"],
+          "additionalProperties": false
+        }
+      },
+      "fulfillment": {"type": "string", "enum": ["pickup", "delivery"]},
+      "branch_id": {"type": "integer", "description": "Required when fulfillment = pickup."},
+      "delivery_address": {"type": "string", "description": "Required when fulfillment = delivery."}
+    },
+    "required": ["customer_id", "items", "fulfillment"],
+    "allOf": [
+      {"if": {"properties": {"fulfillment": {"const": "pickup"}}}, "then": {"required": ["branch_id"]}},
+      {"if": {"properties": {"fulfillment": {"const": "delivery"}}}, "then": {"required": ["delivery_address"]}}
+    ],
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "order_id, state, total, branch_id used.",
+    "properties": {"order_id": {"type": "integer"}, "state": {"type": "string"}}
+  },
+  "errors": [
+    {"code": "restricted_item", "when": "any item is restricted/prescription — must escalate instead"},
+    {"code": "out_of_stock", "when": "requested qty unavailable at the required/only branch"},
+    {"code": "not_found", "when": "customer_id or a product_id does not exist"},
+    {"code": "invalid_input", "when": "missing branch_id for pickup or delivery_address for delivery"}
+  ]
+}

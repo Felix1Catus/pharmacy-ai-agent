@@ -1,0 +1,27 @@
+{
+  "name": "hold_item",
+  "description": "Reserve (hold) a quantity of a product at a branch for a customer to collect later, without creating a full order. Restricted / prescription items must NOT be held — escalate instead.",
+  "requires_confirmed_intent": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "product_id": {"type": "integer"},
+      "branch_id": {"type": "integer"},
+      "qty": {"type": "number", "exclusiveMinimum": 0},
+      "customer_id": {"type": "integer"},
+      "hours": {"type": "integer", "minimum": 1, "maximum": 72, "default": 24, "description": "How long to hold."}
+    },
+    "required": ["product_id", "branch_id", "qty", "customer_id"],
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "hold_id, expires_at.",
+    "properties": {"hold_id": {"type": "integer"}, "expires_at": {"type": "string"}}
+  },
+  "errors": [
+    {"code": "restricted_item", "when": "product is restricted/prescription — escalate instead"},
+    {"code": "out_of_stock", "when": "qty unavailable at branch"},
+    {"code": "not_found", "when": "product/branch/customer not found"}
+  ]
+}

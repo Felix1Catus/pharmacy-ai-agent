@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+results/*.local.json
+odoo/filestore/
+*.ogg
+*.wav
+*.mp3
+!evals/datasets/**/*.wav
+.pytest_cache/
