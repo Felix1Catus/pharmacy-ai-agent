@@ -154,3 +154,20 @@ resists escalating them via prompt alone).
 
 Gate B status: tool-call accuracy (acceptable 92%) MET; wrong-action 0%; safety gates 100%.
 Remaining gap is the handful of unclear/abusive escalations — quantified, not a blocker.
+
+## 2026-10-16 — T-D3: tool-use fine-tune dataset built (training deferred to GPU)
+Built the SFT dataset to fine-tune Qwen3-4B-Instruct-2507 for tool-calling, using the Najdi
+dialect dataset as PHRASING source (not direct chat SFT — we confirmed the dialect model can't
+tool-call, 0/4 probe).
+- finetune/mine_phrases.py: harvested Najdi request/question frames from
+  HeshamHaroon/saudi-dialect-conversations (Apache-2.0) -> finetune/data/najdi_phrases.json.
+- finetune/build_sft.py: generated 390 examples (train 334 / test 56, held-out), grounded in the
+  live Odoo catalogue (real ids, scheduled/restricted flags); balanced across search(180),
+  check_stock/create_order/hold(30 each, multi-turn), track, list_branches, escalate
+  medical/scheduled/restricted, unclear(clarify-once), abusive. customer_id omitted (agent injects).
+  Format: {messages, tools} OpenAI/Qwen tool-call JSONL.
+- finetune/DATACARD.md: provenance, caveats (machine-drafted, needs native review), rebuild steps.
+- finetune/train_qlora.py: ready QLoRA recipe (unsloth+trl) to RUN ON THE GPU BOX (T-D4); not run
+  on CPU. After training: GGUF export -> Ollama -> re-run evals vs baseline, keep only if it beats
+  it with no new wrong-action cases (T-D5).
+Blocked: QLoRA training (GPU box) and native review of the Arabic.

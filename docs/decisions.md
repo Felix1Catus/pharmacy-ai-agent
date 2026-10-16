@@ -120,3 +120,10 @@ Evaluated swapping Qwen3-4B-Instruct-2507 -> ASL-4B-v1 (saai-sa) or Qwen3.5-4B-s
 - Revisit only when the GPU box is up: serve ASL-4B-v1 via vLLM and run our tool-call baseline
   (evals/runners/qwen_baseline.py) head-to-head; adopt only if it tool-calls at least as well
   AND reads Saudi better. The Saudi-dialect dataset stays usable as fine-tune input variety.
+
+## 2026-10-16 — Dialect data used as fine-tune INPUT source (not a model swap / not chat SFT)
+Confirmed empirically the dialect GGUF (mradermacher/Qwen3.5-4B-saudi-dialect-GGUF) loads in our
+Ollama but emits 0/4 tool calls -> unusable as the agent LLM. So we use only its DATASET
+(HeshamHaroon/saudi-dialect-conversations, Apache-2.0) as Najdi phrasing variety feeding a
+TOOL-USE SFT set (finetune/). Targets are tool calls, not chat, so dialect fluency is added
+without degrading tool-calling. Training is QLoRA on the GPU box (deferred); keep only per T-D5.

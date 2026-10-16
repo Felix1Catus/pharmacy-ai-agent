@@ -11,3 +11,4 @@ odoo/filestore/
 .pytest_cache/
 results/handovers.jsonl
 results/*.jsonl
+finetune/data/*.parquet
