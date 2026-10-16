@@ -1,0 +1,29 @@
+<odoo noupdate="1">
+  <!-- the single settings record behind Inventory > Products > Update List -->
+  <record id="sfda_updater_singleton" model="pharmacy.sfda.updater">
+    <field name="name">SFDA registry</field>
+  </record>
+
+  <!-- automatic check every N days: OFF until the owner switches it on in Update List -->
+  <record id="ir_cron_sfda_auto" model="ir.cron">
+    <field name="name">Pharmacy: SFDA registry automatic update</field>
+    <field name="model_id" ref="model_pharmacy_sfda_updater"/>
+    <field name="state">code</field>
+    <field name="code">model._cron_auto()</field>
+    <field name="interval_number">3</field>
+    <field name="interval_type">days</field>
+    <field name="active" eval="False"/>
+  </record>
+
+  <!-- on-demand worker: only runs when the "Check for updates now" button triggers it -->
+  <record id="ir_cron_sfda_manual" model="ir.cron">
+    <field name="name">Pharmacy: SFDA registry update (on demand)</field>
+    <field name="model_id" ref="model_pharmacy_sfda_updater"/>
+    <field name="state">code</field>
+    <field name="code">model._cron_manual()</field>
+    <field name="interval_number">52</field>
+    <field name="interval_type">weeks</field>
+    <field name="nextcall" eval="(DateTime.now() + relativedelta(years=30)).strftime('%Y-%m-%d %H:%M:%S')"/>
+    <field name="active" eval="True"/>
+  </record>
+</odoo>

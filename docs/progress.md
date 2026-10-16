@@ -239,3 +239,12 @@ tab. Verified on a scratch DB: 2,014 imported, 0 errors, 45/45 Scheduled, re-imp
 NOT imported into the live DB yet (waits for TO-DO 1b gateway fix + round-3 eval).
 
 Update: owner decided 'خاضعة للرقابة وفق أحكام وشروط خاصة' also ticks Scheduled -> 75 Scheduled (45 مقيد + 30); re-verified on a fresh scratch DB (75/75, 0 errors).
+
+## 2026-10-16 — Odoo "Update List" (SFDA auto/manual sync) — pharmacy_agent 18.0.1.3.0
+Inventory/Sales > Products > Update List: manual "Check for updates now" (background cron
+trigger) + automatic every N days (OFF by default). Creates new SFDA drugs, updates changed sfda_*
+fields, auto-ticks Scheduled but never unticks (REVIEW log instead), keeps own sale prices.
+Models pharmacy.sfda.updater (singleton settings) + pharmacy.sfda.run (history/log). Tested on a
+scratch DB (create, idempotent re-sync, change detection, newly-scheduled, relaxed->review,
+file-import consistency = 0 changes, button via background worker). Installed on live with no
+data imported (42 products before/after); owner will do the file import.

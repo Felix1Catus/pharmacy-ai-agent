@@ -235,3 +235,32 @@ cd /home/pharmacy-ai-agent
 .venv/bin/python data_sources/sfda/build_odoo_import.py      # rebuild the files
 ```
 More pages: change `0 100` (e.g. `0 455`); already-fetched pages are reused from the cache.
+
+### Update List — keep products in sync with SFDA (inside Odoo)
+**Inventory → Products → Update List** (also Sales → Products → Update List).
+- **Check for updates now** (Inventory administrators): runs in the background (~15–20 min for
+  pages 0–100); reload the screen to follow progress. Results land in **Run history**: new /
+  changed / unchanged / newly Scheduled / to review / errors, plus a details log per drug.
+- **Automatic updates** toggle + **Every (days)** (default 3). Ships **OFF**; when switched on, the
+  first automatic run is N days later (press the button for an immediate one).
+- **What to update**: SFDA list pages (0-based, default 0–100), *Create new drugs* (on),
+  *Update sale price* (off — your own price stays; the SFDA price always goes to *SFDA public price*).
+- **Speed**: parallel requests (4) and pause per request (0.5 s) — keep it polite.
+
+Rules a run follows:
+- matches products on the SFDA registration number; new products get the same external ID as the
+  import file (`sfda.drug_<reg no>`), so the file import and Update List work on the same records;
+- updates SFDA fields that changed (logged as `CHANGED reg: field: old -> new`);
+- **ticks Scheduled** when SFDA marks a drug `مقيد` / `خاضعة للرقابة وفق أحكام وشروط خاصة`
+  (logged `SCHEDULED`) — but **never unticks** it: if SFDA relaxes a Scheduled drug, the run logs
+  `REVIEW …` and leaves it Scheduled until a person decides;
+- does not rename products or change your prices (unless *Update sale price* is on).
+
+Verified on a scratch database before going live: first sync created 80 drugs (18 Scheduled), a
+re-sync found 0 changes, a price change / a newly controlled drug / a relaxed control were each
+detected correctly, importing the file on top then syncing found **0 changes** (identical
+mapping), and the button ran through Odoo's background worker. On the live DB the feature is
+installed with **no SFDA data** — the file import is left to the owner.
+
+Engine: `odoo/addons/pharmacy_agent/models/sfda_sync.py` (scraper ported into the module; Odoo
+runs in its own container). Manual test script: `odoo/addons/pharmacy_agent/tests_manual/`.

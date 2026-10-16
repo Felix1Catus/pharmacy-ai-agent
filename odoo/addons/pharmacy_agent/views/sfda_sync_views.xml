@@ -1,0 +1,123 @@
+<odoo>
+  <!-- Update List screen -->
+  <record id="view_sfda_updater_form" model="ir.ui.view">
+    <field name="name">pharmacy.sfda.updater.form</field>
+    <field name="model">pharmacy.sfda.updater</field>
+    <field name="arch" type="xml">
+      <form string="Update List" create="false" delete="false">
+        <header>
+          <button name="action_run_now" type="object" string="Check for updates now"
+                  class="btn-primary" groups="stock.group_stock_manager"/>
+          <button name="action_open_runs" type="object" string="Run history"/>
+          <field name="last_run_state" widget="statusbar" statusbar_visible="queued,running,done"/>
+        </header>
+        <sheet>
+          <div class="oe_title"><h1>SFDA drugs registry — Update List</h1></div>
+          <p class="text-muted">
+            Checks the SFDA registered-drugs list for new drugs and changes, and updates your
+            products. Drugs marked <b>مقيد</b> or <b>خاضعة للرقابة وفق أحكام وشروط خاصة</b> are
+            ticked <b>Scheduled</b>. Scheduled is never unticked automatically: if SFDA relaxes a
+            drug's control status, it is listed "to review" in the run details.
+          </p>
+          <group>
+            <group string="Last run">
+              <field name="last_run_summary" readonly="1"/>
+              <field name="last_run_id" readonly="1"/>
+            </group>
+            <group string="Automatic updates">
+              <field name="auto_update" widget="boolean_toggle"/>
+              <field name="interval_days" invisible="not auto_update"/>
+              <field name="next_auto_run" invisible="not auto_update"/>
+            </group>
+            <group string="What to update">
+              <field name="first_page"/>
+              <field name="last_page"/>
+              <field name="create_new"/>
+              <field name="update_sale_price"/>
+            </group>
+            <group string="Speed (be polite to the SFDA site)">
+              <field name="workers"/>
+              <field name="delay"/>
+            </group>
+          </group>
+          <notebook>
+            <page string="Run history" name="runs">
+              <field name="run_ids" readonly="1">
+                <list>
+                  <field name="create_date" string="Requested"/>
+                  <field name="trigger"/>
+                  <field name="state" decoration-success="state == 'done'"
+                         decoration-danger="state == 'failed'" decoration-info="state == 'running'"/>
+                  <field name="new"/>
+                  <field name="changed"/>
+                  <field name="newly_scheduled"/>
+                  <field name="relaxed"/>
+                  <field name="errors"/>
+                  <field name="summary"/>
+                </list>
+              </field>
+            </page>
+          </notebook>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- run views -->
+  <record id="view_sfda_run_list" model="ir.ui.view">
+    <field name="name">pharmacy.sfda.run.list</field>
+    <field name="model">pharmacy.sfda.run</field>
+    <field name="arch" type="xml">
+      <list create="false">
+        <field name="create_date" string="Requested"/>
+        <field name="trigger"/>
+        <field name="state" decoration-success="state == 'done'" decoration-danger="state == 'failed'"/>
+        <field name="scanned"/>
+        <field name="new"/>
+        <field name="changed"/>
+        <field name="unchanged"/>
+        <field name="newly_scheduled"/>
+        <field name="relaxed"/>
+        <field name="errors"/>
+        <field name="finished"/>
+      </list>
+    </field>
+  </record>
+  <record id="view_sfda_run_form" model="ir.ui.view">
+    <field name="name">pharmacy.sfda.run.form</field>
+    <field name="model">pharmacy.sfda.run</field>
+    <field name="arch" type="xml">
+      <form create="false" edit="false">
+        <header><field name="state" widget="statusbar"/></header>
+        <sheet>
+          <group>
+            <group>
+              <field name="trigger"/><field name="started"/><field name="finished"/>
+              <field name="pages"/><field name="scanned"/>
+            </group>
+            <group>
+              <field name="new"/><field name="changed"/><field name="unchanged"/>
+              <field name="newly_scheduled"/><field name="relaxed"/><field name="errors"/>
+            </group>
+          </group>
+          <field name="summary"/>
+          <separator string="Details (new / changed / to review)"/>
+          <field name="notes"/>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- menu: Inventory > Products > Update List  and  Sales > Products > Update List -->
+  <record id="action_sfda_updater" model="ir.actions.act_window">
+    <field name="name">Update List</field>
+    <field name="res_model">pharmacy.sfda.updater</field>
+    <field name="view_mode">form</field>
+    <field name="res_id" ref="sfda_updater_singleton"/>
+    <field name="target">current</field>
+  </record>
+  <menuitem id="menu_sfda_update_list_stock" name="Update List" parent="stock.menu_stock_inventory_control"
+            action="action_sfda_updater" sequence="90" groups="stock.group_stock_user"/>
+  <menuitem id="menu_sfda_update_list_sale" name="Update List" parent="sale.product_menu_catalog"
+            action="action_sfda_updater" sequence="90" groups="stock.group_stock_user"/>
+</odoo>

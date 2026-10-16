@@ -1,3 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_pharmacy_prescription_user,pharmacy.prescription.user,model_pharmacy_prescription,base.group_user,1,1,1,0
 access_pharmacy_prescription_manager,pharmacy.prescription.manager,model_pharmacy_prescription,base.group_system,1,1,1,1
+access_pharmacy_sfda_updater_user,pharmacy.sfda.updater.user,model_pharmacy_sfda_updater,stock.group_stock_user,1,0,0,0
+access_pharmacy_sfda_updater_manager,pharmacy.sfda.updater.manager,model_pharmacy_sfda_updater,stock.group_stock_manager,1,1,0,0
+access_pharmacy_sfda_run_user,pharmacy.sfda.run.user,model_pharmacy_sfda_run,stock.group_stock_user,1,0,0,0
+access_pharmacy_sfda_run_manager,pharmacy.sfda.run.manager,model_pharmacy_sfda_run,stock.group_stock_manager,1,1,1,1
