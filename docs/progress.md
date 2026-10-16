@@ -60,3 +60,24 @@ try Qwen locally, no GPU). Sizes 0.6B/1.7B/4B/8B over the 106-item text set, thi
 
 Note on Gate A: the model-size recommendation is now evidence-backed on CPU. Whisper (T-A5) and
 TTS (T-A6) remain blocked on the GPU box + real voice notes, so Gate A is not fully closed.
+
+## 2026-10-16 — Sprint B T-B1/T-B2: agent loop on Qwen3-4B-Instruct-2507 (CPU)
+Implemented the text agent on the recommended model and cleaned up (removed unused Ollama
+models 0.6B/1.7B/8B + default qwen3:4b, freeing ~9 GB; re-pullable). Agent:
+- agent/llm.py: Ollama client for AGENT_MODEL (non-thinking).
+- agent/agent.py: conversation state, tool-calling loop over the 7 contract actions via the
+  Gateway, max tool calls/turn with escalate-on-overrun, customer_id injected by the agent,
+  append-only audit log (results/audit.jsonl). Guardrails: restricted refused by Gateway ->
+  escalate; medical -> escalate; unclear/abusive -> escalate.
+- agent/chat.py: REPL / one-shot driver for iteration.
+
+End-to-end smoke (3 scenarios) findings (ITERATION BACKLOG):
+1. Restricted (اوجمنتين) -> escalate_to_human. WORKS.
+2. Medical dosage -> model refuses in TEXT but does NOT call escalate_to_human (no handover).
+   Safe, but should escalate; tighten prompt / add a check.
+3. Order pickup BLOCKED: no way to map a branch NAME ("جدة") to a branch_id. The contract has
+   no branch-lookup; check_stock returns branch ids but the flow is unreliable. -> add a
+   list_branches tool (next iteration).
+
+Next: add list_branches to the contract+gateway so pickup orders resolve; then run the full
+text set through the agent (T-B4) for per-dialect end-to-end numbers (stub was prompt-only).
