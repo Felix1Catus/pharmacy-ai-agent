@@ -58,8 +58,12 @@ SYSTEM_PROMPT = (
     "with advice. For ANY such question you MUST call escalate_to_human with "
     "reason='medical_advice' — do not answer in plain text.\n"
     "5. Restricted or prescription medicines (antibiotics, controlled drugs, insulin, inhalers) "
-    "are NEVER ordered or held. If a tool returns a restricted_item error, or the customer asks "
-    "for such a medicine, call escalate_to_human with reason='restricted_item'.\n"
+    "are NEVER ordered or held. If a tool returns a restricted_item/scheduled_item error, or the "
+    "customer clearly asks for such a medicine, call escalate_to_human with "
+    "reason='restricted_item'. Do NOT assume a product is restricted from its name alone — "
+    "ordinary OTC items (pregnancy/ovulation tests, vitamins, supplements, first-aid, antiseptics, "
+    "hygiene, baby products, devices) are NOT restricted; serve them normally. Resolve the product "
+    "with search_product and let the tool result decide.\n"
     "6. If the message is vague/unintelligible or you cannot map it to a product, order or "
     "action, call escalate_to_human reason='unclear' — do NOT reply with a free-text question. "
     "If the message is insulting or abusive, call escalate_to_human reason='abusive'. Never try "
@@ -77,6 +81,9 @@ class Conversation:
         self.customer_id = customer_id
         self.conv_id = conv_id or f"conv-{int(time.time())}"
         self.messages: list[dict] = []
+        # consecutive turns where the agent could not act (pure clarifying reply).
+        # clarify-once-then-escalate: after 1 clarification, a still-unresolved turn escalates.
+        self.clarify_streak = 0
 
 
 class PharmacyAgent:
@@ -136,7 +143,29 @@ class PharmacyAgent:
             out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + conv.messages,
                                 tools=self.tools)
             if not out["tool_calls"]:
-                reply = out["content"].strip() or "عفواً، ممكن توضح طلبك؟ (Could you clarify?)"
+                # No tool was called this whole turn -> the agent could not act on the message.
+                if calls_made == 0:
+                    conv.clarify_streak += 1
+                    if conv.clarify_streak >= 2:
+                        # clarify-once-then-escalate: still unresolved after a clarification
+                        esc = self._escalate(conv, "unclear",
+                                             "clarify-once-then-escalate: unresolved after a clarification")
+                        reply = (esc.get("acknowledgement") if isinstance(esc, dict) else None) \
+                            or "تم تحويلك إلى موظف. (Handed over to a human.)"
+                        conv.clarify_streak = 0
+                        conv.messages.append({"role": "assistant", "content": reply})
+                        self._audit(conv.conv_id, "reply", {"text": reply, "escalated": True,
+                                                            "reason": "unclear_after_clarify"})
+                        return reply
+                    # first unclear turn: ask one clarifying question
+                    reply = out["content"].strip() or "عفواً، ممكن توضح طلبك؟ (Could you clarify?)"
+                    conv.messages.append({"role": "assistant", "content": reply})
+                    self._audit(conv.conv_id, "reply", {"text": reply, "clarify": True,
+                                                        "streak": conv.clarify_streak})
+                    return reply
+                # acted via tools this turn, then answered -> a resolved reply
+                conv.clarify_streak = 0
+                reply = out["content"].strip() or "تم. (Done.)"
                 conv.messages.append({"role": "assistant", "content": reply})
                 self._audit(conv.conv_id, "reply", {"text": reply})
                 return reply

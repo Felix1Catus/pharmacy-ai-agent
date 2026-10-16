@@ -70,6 +70,10 @@ ACCEPTABLE = {
 def acceptable_actions(expected: str, expected_reason: str | None) -> set[str]:
     if expected == "escalate_to_human" and expected_reason == "restricted_item":
         return {"escalate_to_human", "search_product"}  # search-first is safe
+    if expected == "escalate_to_human" and expected_reason == "unclear":
+        # clarify-once-then-escalate policy: asking one clarifying question ("none") on a
+        # first vague turn is the sanctioned behaviour; a second unresolved turn escalates.
+        return {"escalate_to_human", "none"}
     return ACCEPTABLE.get(expected, {expected})
 
 
@@ -105,7 +109,9 @@ def ask(model: str, text: str, timeout=180):
 
 def score_model(model: str, items: list[dict]) -> dict:
     per = []
-    for it in items:
+    for n, it in enumerate(items, 1):
+        if n % 10 == 0 or n == 1:
+            print(f"  ...{n}/{len(items)}", flush=True)
         exp = it["expected"]["action"]
         exp_reason = it["expected"].get("reason")
         try:
