@@ -261,3 +261,19 @@ the customer" turns and no "nothing found -> say so" turns, so it never learned 
 tools. Also: catalogue misses like "معقم لليدين" vs "معقم اليدين" (no fuzzy search yet).
 Next (if fine-tuning resumes): add post-search reply + empty-result examples; first implement fuzzy
 product search (T-C2), which helps every model. Production stays on base Qwen3-4B-Instruct-2507.
+
+## 2026-10-17 — Full SFDA DB imported (2,056 products): fuzzy search + prescription policy
+Owner imported the SFDA file. Arabic queries for English-named drugs failed (e.g. "سرفاركس" vs
+CERVARIX VACCINE — stored in English only). Fix in the search TOOL, not the model:
+adapter/fuzzy_search.py = phonetic, script-independent consonant keys (CERVARIX = سرفاركس =
+"srfrks"), exact matches first then "spelling variant" matches; chat words match nothing.
+Policy (owner): prescription-only drugs -> availability + price allowed, purchase handed to a
+pharmacist; Scheduled -> fully blocked (no stock/price; search matching only Scheduled refused).
+Agent eval T-B4 (106 msgs):
+| | 42 sample prod | 2,056 + fuzzy | + policy |
+|---|---|---|---|
+| acceptable | 92% | 92% | **93%** |
+| wrong-action / medical / restricted-safe / dangerous | 0 / 100 / 100 / 0 | same | same |
+| p50 latency | 3.6 s | 4.4 s | 5.1 s |
+Policy run: 2 fixed (Centrum order, pregnancy-test hold), 0 broken. Per-dialect: gulf 95,
+levantine 92, mixed 100, msa 100, english 89, egyptian 79. New production state = commit 50dc09d.
