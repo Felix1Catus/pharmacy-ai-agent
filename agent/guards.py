@@ -100,3 +100,10 @@ SCHEDULED_REFUSAL = (
     "— That medicine is scheduled/controlled and can't be ordered through the assistant; "
     "I'll refer you to a pharmacist. I can help with other medicines, prices and availability."
 )
+
+PRESCRIPTION_HANDOVER = (
+    "هذا الدواء يحتاج وصفة طبية، لذلك لا يمكن طلبه أو حجزه عبر المحادثة. سأحوّلك إلى الصيدلي "
+    "لإكمال الشراء بعد التحقق من الوصفة. "
+    "— This medicine needs a prescription, so it can't be ordered or held through the chat. "
+    "I'll pass you to a pharmacist to complete the purchase after checking the prescription."
+)

@@ -89,7 +89,7 @@ class Gateway:
         q, lim = query.strip(), max(1, min(limit, 20))
         fields = ["name", "x_name_ar", "x_brand", "x_is_restricted", "x_requires_prescription",
                   "sfda_requires_prescription", "is_scheduled", "schedule_class",
-                  "sfda_scientific_name", "product_variant_id"]
+                  "sfda_scientific_name", "list_price", "product_variant_id"]
         domain = ["|"] * (len(SEARCH_FIELDS) - 1) + [[f, "ilike", q] for f in SEARCH_FIELDS]
         found = [(t, "exact") for t in self.c.search_read("product.template", domain, fields, limit=lim)]
         if len(found) < lim:
@@ -99,7 +99,7 @@ class Gateway:
             if ranked:
                 rows = {r["id"]: r for r in self.c.search_read(
                     "product.template", [["id", "in", [tid for tid, _ in ranked]]], fields)}
-                found += [(rows[tid], "similar sound") for tid, _ in ranked if tid in rows]
+                found += [(rows[tid], "spelling variant") for tid, _ in ranked if tid in rows]
         candidates = []
         for t, how in found:
             vid = t["product_variant_id"][0]
@@ -113,6 +113,8 @@ class Gateway:
                 "name_ar": t.get("x_name_ar") or "",
                 "brand": t.get("x_brand") or "",
                 "scientific_name": t.get("sfda_scientific_name") or "",
+                # policy: price is shown for OTC and prescription-only drugs, never for Scheduled
+                "price_sar": None if t.get("is_scheduled") else t.get("list_price"),
                 "match": how,
                 "is_restricted": bool(t.get("x_is_restricted") or t.get("sfda_requires_prescription")),
                 "requires_prescription": bool(t.get("x_requires_prescription")
@@ -127,6 +129,10 @@ class Gateway:
         flags = self._product_flags(product_id)
         if not flags:
             return err("not_found", f"no product with id {product_id}")
+        if flags.get("is_scheduled"):    # policy: no availability for Scheduled medicines
+            return err("scheduled_item",
+                       f"{flags['name']} is a scheduled/controlled substance — availability is "
+                       f"not disclosed via the agent; refer to a pharmacist", product_id=product_id)
         branches = self.branches()
         if branch_id is not None:
             b = self._branch(branch_id)

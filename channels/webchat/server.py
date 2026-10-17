@@ -33,7 +33,7 @@ from odoo_client import load_env  # noqa: E402
 load_env()
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402
-from guards import MEDICAL_REFUSAL, SCHEDULED_REFUSAL  # noqa: E402
+from guards import MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, SCHEDULED_REFUSAL  # noqa: E402
 from llm import LLMClient  # noqa: E402
 
 USER = os.environ.get("WEBCHAT_USER", "pharmacy")
@@ -115,8 +115,8 @@ def chat(m: ChatIn):
         tools.append({"name": fn["name"], "args": fn.get("arguments") or {},
                       "result": res[:600] + ("..." if len(res) > 600 else "")})
     guard = ("medical-advice guard" if reply == MEDICAL_REFUSAL else
-             "scheduled-medicine guard" if reply == SCHEDULED_REFUSAL and not tools else
-             "restricted item (gateway)" if reply == SCHEDULED_REFUSAL else None)
+             "scheduled-medicine guard" if reply == SCHEDULED_REFUSAL else
+             "prescription -> pharmacist (gateway)" if reply == PRESCRIPTION_HANDOVER else None)
     return {"session_id": sid, "reply": reply, "model": model,
             "debug": {"tools": tools, "guard": guard, "seconds": round(time.time() - t0, 1)}}
 

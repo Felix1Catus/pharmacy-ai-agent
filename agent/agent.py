@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT / "agent"))
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
 from guards import (ScheduledDenylist, medical_advice_intent,  # noqa: E402
-                    MEDICAL_REFUSAL, SCHEDULED_REFUSAL)
+                    MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 
 AUDIT = ROOT / "results" / "audit.jsonl"
@@ -57,9 +57,17 @@ SYSTEM_PROMPT = (
     "4. NEVER give dosage, diagnosis, drug-interaction or any medical advice, not even to decline "
     "with advice. For ANY such question you MUST call escalate_to_human with "
     "reason='medical_advice' — do not answer in plain text.\n"
-    "5. Restricted or prescription medicines (antibiotics, controlled drugs, insulin, inhalers) "
-    "are NEVER ordered or held. If a tool returns a restricted_item error, or the customer asks "
-    "for such a medicine, call escalate_to_human with reason='restricted_item'.\n"
+    "4b. A search candidate with match='spelling variant' IS the product the customer meant, "
+    "written differently or in another language (e.g. 'سرفاركس' = CERVARIX VACCINE): confirm it "
+    "('تقصد CERVARIX VACCINE؟') and carry on - never call it a different or 'similar' product. "
+    "Never say a product is unavailable unless check_stock returned zero.\n"
+    "5. Prescription-only medicines (search result requires_prescription=true, not scheduled): "
+    "you MAY confirm availability (check_stock) and price (price_sar from search_product), and "
+    "tell the customer it needs a prescription (in Arabic say: 'يحتاج وصفة طبية ويُصرف عن طريق "
+    "الصيدلي') - never mix English words into Arabic replies. NEVER order "
+    "or hold them: as soon as the customer wants to buy, order or reserve one, call "
+    "escalate_to_human with reason='restricted_item' - do not refuse in plain text. Scheduled/controlled medicines (is_scheduled=true) are fully "
+    "blocked: give no availability or price, call escalate_to_human reason='restricted_item'.\n"
     "6. If the message is vague/unintelligible or you cannot map it to a product, order or "
     "action, call escalate_to_human reason='unclear' — do NOT reply with a free-text question. "
     "If the message is insulting or abusive, call escalate_to_human reason='abusive'. Never try "
@@ -163,11 +171,22 @@ class PharmacyAgent:
                     self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
                                                         "guard": "scheduled_tool"})
                     return SCHEDULED_REFUSAL
-                if code == "restricted_item":
+                if code == "restricted_item":       # prescription-only: purchase via pharmacist
                     self._escalate(conv, "restricted_item", f"tool returned restricted_item: {name}")
+                    conv.messages.append({"role": "assistant", "content": PRESCRIPTION_HANDOVER})
+                    self._audit(conv.conv_id, "reply", {"text": PRESCRIPTION_HANDOVER,
+                                                        "guard": "prescription_tool"})
+                    return PRESCRIPTION_HANDOVER
+
+            # deterministic: a search whose results are ALL Scheduled medicines (e.g. a misspelt
+            # controlled-drug name the pre-check list missed) is refused, not discussed.
+            if name == "search_product" and isinstance(result, dict):
+                cands = result.get("candidates") or []
+                if cands and all(c.get("is_scheduled") for c in cands):
+                    self._escalate(conv, "restricted_item", "search matched only scheduled medicines")
                     conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
                     self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
-                                                        "guard": "restricted_tool"})
+                                                        "guard": "scheduled_search"})
                     return SCHEDULED_REFUSAL
 
             # terminal: a completed handover ends the turn with its acknowledgement

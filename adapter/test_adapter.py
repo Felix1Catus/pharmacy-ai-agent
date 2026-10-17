@@ -224,7 +224,7 @@ def test_sound_keys_cross_script():
 
 def test_search_arabic_sound_finds_english_name():
     r = _call("search_product", {"query": "غافيسكون"}).json()["candidates"]   # stored as "Gaviscon"
-    assert r and r[0]["name_en"] == "Gaviscon" and r[0]["match"] == "similar sound"
+    assert r and r[0]["name_en"] == "Gaviscon" and r[0]["match"] == "spelling variant"
 
 
 def test_search_misspelling_finds_product():
@@ -235,3 +235,21 @@ def test_search_misspelling_finds_product():
 def test_search_chat_words_return_nothing():
     for q in ("السلام عليكم", "شكرا", "وين طلبي", "هاه"):
         assert _call("search_product", {"query": q}).json()["candidates"] == [], q
+
+
+# ---- policy: prescription-only = price + availability OK, never order; Scheduled = blocked ----
+def test_search_shows_price_but_hides_it_for_scheduled(gw):
+    otc = _call("search_product", {"query": "panadol"}).json()["candidates"][0]
+    assert otc["price_sar"] and otc["price_sar"] > 0
+    sched = _call("search_product", {"query": "tramadol"}).json()["candidates"][0]
+    assert sched["is_scheduled"] and sched["price_sar"] is None
+
+
+def test_check_stock_scheduled_refused(gw):
+    r = _call("check_stock", {"product_id": _variant(gw, "RX-0005")})          # Tramadol
+    assert r.status_code == 400 and r.json()["error"]["code"] == "scheduled_item"
+
+
+def test_check_stock_prescription_only_allowed(sfda_rx_product):
+    r = _call("check_stock", {"product_id": sfda_rx_product})
+    assert r.status_code == 200 and "stock" in r.json()
