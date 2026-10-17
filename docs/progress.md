@@ -213,22 +213,19 @@ on the small Qwen3-0.6B to prove the pipeline end-to-end (finetune/train_lora_cp
   prompt, longer max length. hold_item 0/6 for every model -> inspect those labels.
 Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).
 
-## TO-DO (backlog, in order agreed with the owner)
-1. **Fine-tune round 3** — finish (running: finetune/run_round3.sh), compare vs 92%, decide.
-1b. ✅ DONE 2026-10-16 — **Gateway: block SFDA prescription drugs** — make create_order/hold_item also refuse
-   `sfda_requires_prescription` (today only is_scheduled + x_ flags). Do right AFTER the
-   round-3 eval (keeps that eval on the exact 92% code), and BEFORE importing the SFDA file
-   into the live DB.
-2. **Owner / ops-manager assistant** (LATER — parked by owner) (internal, read-only Odoo analytics): seed dummy sales
-   history per branch; tools stock_by_branch / revenue / top_products / low_stock /
-   open_holds_and_deliveries; own prompt + allow-listed owner identities; CLI first, later the
-   owner's WhatsApp via the official Cloud API; small eval set. Never customer-facing.
-3. **Clarify-once-then-escalate + pregnancy-test fix** — edits sit uncommitted in
-   agent/agent.py and evals/runners/qwen_baseline.py; sanity-check, re-run T-B4, commit.
-4. **WhatsApp channel (T-B3)** — Meta Cloud API webhook + local simulator.
-5. **Voice (Sprint C)** — Whisper ingest + NAMAA-Saudi-TTS replies.
-6. **HTTPS for Odoo** — domain + reverse proxy, then bind Odoo back to localhost.
-7. **SSH hardening** — key-only login, disable password auth.
+## TO-DO (current — see docs/STATUS.md for the full picture)
+Done since the list was made: fine-tune round 3 (not adopted), gateway blocks SFDA prescription
+drugs, SFDA import into live (by owner), phonetic search, prescription policy, test chat page,
+GitHub repo + bootstrap.
+1. **Data fixes:** re-import the current SFDA import file (live has 48 Scheduled, should be 78 —
+   the 30 "خاضعة للرقابة…" drugs); Update List pages 0–458; decide on automatic updates.
+2. **Security:** HTTPS (needs a domain), SSH key-only login, review public ports 8069/8090.
+3. **WhatsApp channel (T-B3):** Cloud API webhook + signature check + local simulator.
+4. **Clarify-once branch** (`wip/clarify-once`): rebase on main, re-test, T-B4; merge if ≥ 93%.
+5. **Eval growth + native review:** more messages (Egyptian 79% weakest, multi-turn flows).
+6. **Voice (Sprint C):** Whisper ingest of voice notes (needs owner recordings), TTS later.
+7. Optional fine-tune round 4 (post-search reply + empty-result examples).
+8. Parked: owner / ops-manager assistant; prescription OCR; Odoo production integration.
 
 ## 2026-10-16 — SFDA drugs registry scraped + Odoo import file
 Scraped SFDA drugs-list pages 0-100 + all 2,020 details pages (4 parallel workers, 0 failures).

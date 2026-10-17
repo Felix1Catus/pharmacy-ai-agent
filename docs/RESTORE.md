@@ -36,17 +36,12 @@ Things that are deliberately NOT automatic (decide on the new server):
   *Update List → Automatic updates* (use pages 0–458 for the full registry).
 - SSH hardening (key-only login), WhatsApp credentials.
 
-## 2. Where we stopped (state at the time of the push)
-See **docs/progress.md** (full log + numbered TO-DO list) and **docs/decisions.md**. In short:
-- **Production agent model**: base `Qwen3-4B-Instruct-2507` (non-thinking) via Ollama — agent
-  end-to-end eval **92%** acceptable, 100% safety (`results/agent_text_eval.json`).
-- **Fine-tuning**: round 2 (`results/ft_4b/`) 88% in the agent (not adopted). Round 3
-  (`results/ft_4b_r3/`, agent-prompt + rebalanced data) — see its result files / progress.md.
-- **Safety**: deterministic guards (medical advice, Scheduled meds) + gateway blocks for Scheduled
-  and prescription items (incl. SFDA `sfda_requires_prescription`).
-- **Odoo**: `pharmacy_agent` module (Scheduled flag, Pharmacy tab, SFDA registry fields,
-  *Update List* SFDA sync with chunked background runs, Prescriptions model for future OCR).
-- **SFDA**: 2,014 drugs scraped (pages 0–100), import file ready (75 Scheduled), not imported.
+## 2. Where we stopped
+See **docs/STATUS.md** (summary, results, recommended next steps) and the TO-DO list in
+**docs/progress.md**. Production = base `Qwen3-4B-Instruct-2507` + phonetic search + prescription
+policy (agent eval **93%**, 100% safety). Fine-tune adapters (not adopted) are in Release
+`models-v1`. On the old server the full SFDA catalogue was imported into Odoo — on a new server
+import `data_sources/sfda/data/sfda_products_odoo_import.xlsx` again (or move the DB, §4).
 
 ## 3. Daily commands
 ```bash
