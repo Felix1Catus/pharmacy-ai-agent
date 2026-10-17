@@ -17,13 +17,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "odoo"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from odoo_client import OdooClient, OdooError  # noqa: E402
+from fuzzy_search import FuzzyIndex  # noqa: E402
 
 RESULTS = ROOT / "results"
 HANDOVER_LOG = RESULTS / "handovers.jsonl"
 
 SEARCH_FIELDS = ["name", "default_code", "x_name_ar", "x_brand",
-                 "x_ingredient_en", "x_ingredient_ar"]
+                 "x_ingredient_en", "x_ingredient_ar", "sfda_scientific_name"]
 
 
 def _needs_prescription(flags: dict) -> bool:
@@ -41,6 +43,7 @@ class Gateway:
     def __init__(self, client: OdooClient | None = None):
         self.c = client or OdooClient()
         self._branch_cache = None
+        self._fuzzy = FuzzyIndex(self.c)      # phonetic Arabic<->English name matching
 
     # ---- branches (warehouses, excluding the default 'WH') -------------------
     def branches(self) -> list[dict]:
@@ -78,19 +81,27 @@ class Gateway:
 
     # ---- 1. search_product ---------------------------------------------------
     def search_product(self, query: str, branch_id: int | None = None, limit: int = 5):
+        """Exact (case-insensitive substring) matches first; if fewer than `limit`, add products
+        whose names SOUND like the query across Arabic/English (fuzzy_search.py), so
+        "سرفاركس" finds CERVARIX and "بنتوفير" finds بانتوفير. Each candidate says how it matched."""
         if not query or not query.strip():
             return err("invalid_input", "query is required")
-        domain = ["|"] * (len(SEARCH_FIELDS) - 1)
-        for f in SEARCH_FIELDS:
-            domain.append([f, "ilike", query.strip()])
-        tmpls = self.c.search_read(
-            "product.template", domain,
-            ["name", "x_name_ar", "x_brand", "x_is_restricted",
-             "x_requires_prescription", "sfda_requires_prescription", "is_scheduled", "schedule_class",
-             "product_variant_id"],
-            limit=max(1, min(limit, 20)))
+        q, lim = query.strip(), max(1, min(limit, 20))
+        fields = ["name", "x_name_ar", "x_brand", "x_is_restricted", "x_requires_prescription",
+                  "sfda_requires_prescription", "is_scheduled", "schedule_class",
+                  "sfda_scientific_name", "product_variant_id"]
+        domain = ["|"] * (len(SEARCH_FIELDS) - 1) + [[f, "ilike", q] for f in SEARCH_FIELDS]
+        found = [(t, "exact") for t in self.c.search_read("product.template", domain, fields, limit=lim)]
+        if len(found) < lim:
+            seen = {t["id"] for t, _ in found}
+            ranked = [(tid, s) for tid, s in self._fuzzy.search(q, limit=lim * 3) if tid not in seen]
+            ranked = ranked[: lim - len(found)]
+            if ranked:
+                rows = {r["id"]: r for r in self.c.search_read(
+                    "product.template", [["id", "in", [tid for tid, _ in ranked]]], fields)}
+                found += [(rows[tid], "similar sound") for tid, _ in ranked if tid in rows]
         candidates = []
-        for t in tmpls:
+        for t, how in found:
             vid = t["product_variant_id"][0]
             if branch_id is not None:
                 b = self._branch(branch_id)
@@ -101,6 +112,8 @@ class Gateway:
                 "name_en": t["name"],
                 "name_ar": t.get("x_name_ar") or "",
                 "brand": t.get("x_brand") or "",
+                "scientific_name": t.get("sfda_scientific_name") or "",
+                "match": how,
                 "is_restricted": bool(t.get("x_is_restricted") or t.get("sfda_requires_prescription")),
                 "requires_prescription": bool(t.get("x_requires_prescription")
                                               or t.get("sfda_requires_prescription")),

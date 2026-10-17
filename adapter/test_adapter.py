@@ -211,3 +211,27 @@ def test_hold_sfda_prescription_refused(sfda_rx_product, customer_id):
 def test_search_reports_sfda_prescription(sfda_rx_product):
     c = _call("search_product", {"query": "TEST SFDA RX ONLY"}).json()["candidates"][0]
     assert c["requires_prescription"] and c["is_restricted"] and not c["is_scheduled"]
+
+
+# ---- phonetic cross-script search (fuzzy_search.py) ----
+def test_sound_keys_cross_script():
+    from fuzzy_search import sound_key
+    assert sound_key("CERVARIX") == sound_key("سرفاركس") == sound_key("سيرفاريكس") == sound_key("سرفركس")
+    assert sound_key("PANADOL") == sound_key("بنادول")
+    assert sound_key("PARACETAMOL") == sound_key("باراسيتامول")
+    assert sound_key("GAVISCON") == sound_key("جافيسكون") == sound_key("غافيسكون")
+
+
+def test_search_arabic_sound_finds_english_name():
+    r = _call("search_product", {"query": "غافيسكون"}).json()["candidates"]   # stored as "Gaviscon"
+    assert r and r[0]["name_en"] == "Gaviscon" and r[0]["match"] == "similar sound"
+
+
+def test_search_misspelling_finds_product():
+    r = _call("search_product", {"query": "بندول"}).json()["candidates"]      # typo of بنادول
+    assert any("Panadol" in c["name_en"] for c in r)
+
+
+def test_search_chat_words_return_nothing():
+    for q in ("السلام عليكم", "شكرا", "وين طلبي", "هاه"):
+        assert _call("search_product", {"query": q}).json()["candidates"] == [], q
