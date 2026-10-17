@@ -53,9 +53,8 @@ Per dialect (current): gulf 95 · levantine 92 · mixed 100 · msa 100 · englis
 4. **Domain name** — to put HTTPS in front of Odoo and the chat page.
 
 ## Recommended next steps (in order)
-1. **Quick data fixes (minutes):** re-import the current `sfda_products_odoo_import.xlsx` so the
-   30 "خاضعة للرقابة…" drugs become Scheduled too (live has 48 Scheduled, should be 78); set Update
-   List pages to **0–458**; then decide whether to switch on automatic updates.
+1. ✅ **Quick data fixes done (2026-10-17):** 78 Scheduled in live Odoo, Update List pages 0–458.
+   Remaining choice: switch on automatic updates (Update List → Automatic updates).
 2. **Security before any real customer traffic:** HTTPS (domain + reverse proxy), SSH key-only
    login, keep :8069/:8090 closed or behind the proxy.
 3. **WhatsApp channel (T-B3):** Meta Cloud API webhook with signature check + a local simulator

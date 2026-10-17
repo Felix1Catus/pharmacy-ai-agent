@@ -217,8 +217,8 @@ Production unchanged: AGENT_MODEL = Qwen3-4B-Instruct-2507 (base).
 Done since the list was made: fine-tune round 3 (not adopted), gateway blocks SFDA prescription
 drugs, SFDA import into live (by owner), phonetic search, prescription policy, test chat page,
 GitHub repo + bootstrap.
-1. **Data fixes:** re-import the current SFDA import file (live has 48 Scheduled, should be 78 —
-   the 30 "خاضعة للرقابة…" drugs); Update List pages 0–458; decide on automatic updates.
+1. ✅ 2026-10-17 **Data fixes:** live Odoo now 78 Scheduled (45 مقيد + 30 "خاضعة للرقابة…" +
+   3 sample); Update List pages 0–458. Still to decide: switch on automatic updates.
 2. **Security:** HTTPS (needs a domain), SSH key-only login, review public ports 8069/8090.
 3. **WhatsApp channel (T-B3):** Cloud API webhook + signature check + local simulator.
 4. **Clarify-once branch** (`wip/clarify-once`): rebase on main, re-test, T-B4; merge if ≥ 93%.
