@@ -228,9 +228,11 @@ class Gateway:
         return None
 
     # ---- 4. create_dispatch --------------------------------------------------
-    def create_dispatch(self, order_id, courier_note=None):
-        rows = self.c.search_read("sale.order", [["id", "=", order_id]],
-                                  ["picking_ids", "state"])
+    def create_dispatch(self, order_id, courier_note=None, customer_id=None):
+        domain = [["id", "=", order_id]]
+        if customer_id:                     # agent-injected: only the customer's own orders
+            domain.append(["partner_id", "=", customer_id])
+        rows = self.c.search_read("sale.order", domain, ["picking_ids", "state"])
         if not rows:
             return err("not_found", f"no order with id {order_id}")
         pickings = rows[0].get("picking_ids") or []
@@ -346,11 +348,14 @@ class Gateway:
 
     # ---- 6. track_order ------------------------------------------------------
     def track_order(self, order_id=None, customer_id=None):
+        # with both, the order must belong to that customer (the agent always passes its own
+        # customer, so a chat can never read someone else's order by guessing a number)
+        domain = []
         if order_id:
-            domain = [["id", "=", order_id]]
-        elif customer_id:
-            domain = [["partner_id", "=", customer_id]]
-        else:
+            domain.append(["id", "=", order_id])
+        if customer_id:
+            domain.append(["partner_id", "=", customer_id])
+        if not domain:
             return err("invalid_input", "order_id or customer_id is required")
         rows = self.c.search_read("sale.order", domain,
                                   ["name", "state", "amount_total", "delivery_status"],

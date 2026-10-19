@@ -35,8 +35,6 @@ from odoo_client import load_env  # noqa: E402
 load_env()
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402
-from guards import (MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER,  # noqa: E402
-                    PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 
 USER = os.environ.get("WEBCHAT_USER", "pharmacy")
@@ -101,6 +99,49 @@ def reset(body: dict):
     return {"ok": True}
 
 
+GUARD_LABELS = {
+    "menu": "menu (fixed reply)", "injection": "prompt-injection guard",
+    "off_topic": "off-topic guard", "output_filter": "output filter (leak blocked)",
+    "medical": "medical-advice guard", "scheduled": "scheduled-medicine guard",
+    "scheduled_tool": "scheduled-medicine guard", "scheduled_search": "scheduled-medicine guard",
+    "scheduled_prescription": "scheduled-medicine guard (prescription)",
+    "prescription_tool": "prescription needed -> asked for photo",
+    "prescription_check": "prescription photo rejected (checks)", "handover": "handed to pharmacist",
+}
+
+
+def _session(sid: str | None, model: str):
+    sid = sid or uuid.uuid4().hex
+    s = _sessions.get(sid)
+    if not s or s["model"] != model:                     # new chat (or model switched)
+        s = {"model": model, "conv": Conversation(customer_id=CUSTOMER, conv_id=f"web-{sid[:8]}",
+                                                  customer_facing=True)}
+        _sessions[sid] = s
+    return sid, s["conv"]
+
+
+def _out(sid, conv, reply, model, tools, t0):
+    return {"session_id": sid, "reply": reply, "model": model, "menu": conv.last_menu,
+            "lang": conv.lang,
+            "debug": {"tools": tools, "guard": GUARD_LABELS.get(conv.last_guard, conv.last_guard),
+                      "seconds": round(time.time() - t0, 1)}}
+
+
+class StartIn(BaseModel):
+    session_id: str | None = None
+    model: str | None = None
+
+
+@app.post("/api/start", dependencies=[Depends(auth)])
+def start(m: StartIn):
+    """Open a conversation: greeting + menu (instant, no model call)."""
+    model = m.model or DEFAULT_MODEL
+    sid, conv = _session(m.session_id, model)
+    t0 = time.time()
+    reply = agent_for(model).greet(conv)
+    return _out(sid, conv, reply, model, [], t0)
+
+
 @app.post("/api/chat", dependencies=[Depends(auth)])
 def chat(m: ChatIn):
     text = (m.text or "").strip()[:2000]
@@ -115,12 +156,7 @@ def chat(m: ChatIn):
     if not text and not image:
         raise HTTPException(400, "empty message")
     model = m.model or DEFAULT_MODEL
-    sid = m.session_id or uuid.uuid4().hex
-    s = _sessions.get(sid)
-    if not s or s["model"] != model:                     # new chat (or model switched)
-        s = {"model": model, "conv": Conversation(customer_id=CUSTOMER, conv_id=f"web-{sid[:8]}")}
-        _sessions[sid] = s
-    conv = s["conv"]
+    sid, conv = _session(m.session_id, model)
     before = len(conv.messages)
     t0 = time.time()
     with _lock:
@@ -132,17 +168,10 @@ def chat(m: ChatIn):
         res = results[i]["content"] if i < len(results) else ""
         tools.append({"name": fn["name"], "args": fn.get("arguments") or {},
                       "result": res[:600] + ("..." if len(res) > 600 else "")})
-    guard = ("medical-advice guard" if reply == MEDICAL_REFUSAL else
-             "scheduled-medicine guard" if reply == SCHEDULED_REFUSAL else
-             "prescription -> pharmacist (gateway)" if reply == PRESCRIPTION_HANDOVER else
-             "prescription needed -> asked for photo" if reply == PRESCRIPTION_NEEDED else
-             "prescription photo rejected (checks)" if reply.startswith("استلمت صورة الوصفة") else
-             None)
     if image and new and str(new[0].get("content", "")).startswith("[Prescription verified]"):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})
-    return {"session_id": sid, "reply": reply, "model": model,
-            "debug": {"tools": tools, "guard": guard, "seconds": round(time.time() - t0, 1)}}
+    return _out(sid, conv, reply, model, tools, t0)
 
 
 @app.get("/api/health")
