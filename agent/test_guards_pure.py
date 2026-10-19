@@ -115,3 +115,12 @@ def test_reply_filter_blocks_dosage():
     assert bad("Take 2 tablets every 6 hours")
     assert not bad("بنادول 500 ملغ متوفر بسعر 12 ريال، تبغى أطلبه لك؟")
     assert not bad("Panadol Extra is 15 SAR. Pickup or delivery?")
+
+
+def test_internal_ids_stripped_from_replies():
+    import re
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "adapter"))
+    from agent import _ID_MENTION
+    assert _ID_MENTION.sub("", "ميتفورمين 500 مغ – (رقم المنتج 2979) متوفر").strip() == "ميتفورمين 500 مغ – متوفر"
+    assert _ID_MENTION.sub("", "Augmentin 1g (product_id 36)") == "Augmentin 1g"
+    assert _ID_MENTION.sub("", "paid 50 riyals") == "paid 50 riyals"

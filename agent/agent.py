@@ -121,7 +121,8 @@ SESSION_GAP_S = 6 * 3600             # a WhatsApp chat idle this long starts ove
 _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:", "tool_call",
                  "<|im_", "search_product", "check_stock", "create_order", "create_dispatch",
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
-_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id)\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
+_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
+                         r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
 _ACK = {"ar": "حوّلت طلبك إلى صيدلي/موظف وسيتواصل معك قريبًا.",
         "en": "I've handed you over to a pharmacist; they'll follow up shortly."}
 
@@ -243,7 +244,8 @@ class PharmacyAgent:
         for m in res["medications"]:          # Scheduled ones were already removed by the gateway
             what = ("prescription-only - may now be ordered/held" if m["requires_prescription"]
                     else "over the counter")
-            lines.append(f"- {m['name_en']} / {m['name_ar']} (product_id {m['product_id']}): {what}")
+            name = f"{m['name_en']} / {m['name_ar']}" if m.get("name_ar") else m["name_en"]
+            lines.append(f"- {name}: {what}")
         if res.get("same_ingredient_count"):
             lines.append("Other brands with exactly the same active ingredient(s) are also allowed "
                          "on this prescription (search_product shows them as alternatives with "
@@ -252,8 +254,10 @@ class PharmacyAgent:
             lines.append("The prescription also lists controlled medicines: they cannot be ordered "
                          "through the chat - say only that a pharmacist handles those, give no "
                          "names, availability or price.")
-        lines.append("Tell the customer which medicines you found and help them order: check "
-                     "stock, ask pickup branch or delivery address, confirm, then create_order.")
+        lines.append("Tell the customer which medicines you found and help them order: call "
+                     "search_product with the medicine name and strength to show the brands we "
+                     "have, check stock, ask pickup branch or delivery address, confirm, then "
+                     "create_order. Never show product ids or numbers to the customer.")
         return "\n".join(lines)
 
     def _annotate_prescriptions(self, conv, result):
