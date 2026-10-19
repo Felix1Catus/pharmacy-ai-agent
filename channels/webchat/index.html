@@ -112,6 +112,9 @@ async function sendText(text, image, imageName) {
   send.disabled = true; $("#attach").disabled = true;
   statusEl.textContent = image ? "يقرأ الوصفة… · reading prescription…" : "يكتب… · typing…";
   const typing = bubble("bot typing", "…");
+  const t0 = Date.now(), tick = setInterval(() => {      // the CPU model can take a while
+    typing.querySelector(".bubble").firstChild.nodeValue = `… ${Math.round((Date.now() - t0) / 1000)}s`;
+  }, 1000);
   try {
     const res = await api("/api/chat", {session_id: sid, text, model: $("#model").value || null,
                                         image: image || null, image_name: imageName || null});
@@ -120,6 +123,7 @@ async function sendText(text, image, imageName) {
   } catch (e) {
     typing.remove(); bubble("bot", "⚠️ " + e.message);
   } finally {
+    clearInterval(tick);
     send.disabled = false; $("#attach").disabled = false; statusEl.textContent = "متصل · online"; msg.focus();
   }
 }

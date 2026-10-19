@@ -310,6 +310,13 @@ class Gateway:
             files = {"image": b64(image), "image_filename": filename or "prescription.jpg"}
         rows = self.c.search_read("product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS)
         res = rx.evaluate(text, rows)
+        # Scheduled (مقيد / controlled) medicines are never verified by OCR: they are dropped
+        # from what the prescription unlocks; one listing ONLY Scheduled medicines is refused.
+        res["scheduled_count"] = sum(m["is_scheduled"] for m in res["medications"])
+        res["medications"] = [m for m in res["medications"] if not m["is_scheduled"]]
+        if res["scheduled_count"] and not res["medications"]:
+            res["problems"].append("only_scheduled")
+            res["ok"] = False
         if res["invoice_number"]:
             reused = self.c.search_count("pharmacy.prescription", [
                 ["invoice_number", "=", res["invoice_number"]],

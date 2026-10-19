@@ -67,9 +67,15 @@ class ScheduledDenylist:
     def from_odoo(cls, client) -> "ScheduledDenylist":
         rows = client.search_read(
             "product.template", [["is_scheduled", "=", True]],
-            ["name", "x_name_ar", "x_brand", "x_ingredient_en", "x_ingredient_ar"])
+            ["name", "x_name_ar", "x_brand", "x_ingredient_en", "x_ingredient_ar",
+             "sfda_scientific_name"])
         terms: list[str] = []
         for r in rows:
+            # SFDA active ingredient ("PREGABALIN"), whole, single-ingredient only: a combination
+            # like "PARACETAMOL, CODEINE" must not block plain paracetamol
+            sci = (r.get("sfda_scientific_name") or "").strip()
+            if sci and not re.search(r"[,+/&]| and ", sci.lower()):
+                terms.append(sci)
             for k in ("name", "x_name_ar", "x_brand", "x_ingredient_en", "x_ingredient_ar"):
                 v = r.get(k)
                 if v:

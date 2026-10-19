@@ -130,11 +130,14 @@ class PharmacyAgent:
         lines = [f"[Prescription verified] The customer attached a prescription photo; it was "
                  f"verified automatically (invoice {res['invoice_number']}, dated {res['date']}). "
                  f"Medicines found on it:"]
-        for m in res["medications"]:
-            what = ("SCHEDULED - blocked, cannot be ordered" if m["is_scheduled"] else
-                    "prescription-only - may now be ordered/held" if m["requires_prescription"]
+        for m in res["medications"]:          # Scheduled ones were already removed by the gateway
+            what = ("prescription-only - may now be ordered/held" if m["requires_prescription"]
                     else "over the counter")
             lines.append(f"- {m['name_en']} / {m['name_ar']} (product_id {m['product_id']}): {what}")
+        if res.get("scheduled_count"):
+            lines.append("The prescription also lists controlled medicines: they cannot be ordered "
+                         "through the chat - say only that a pharmacist handles those, give no "
+                         "names, availability or price.")
         lines.append("Tell the customer which medicines you found and help them order: check "
                      "stock, ask pickup branch or delivery address, confirm, then create_order.")
         return "\n".join(lines)
@@ -175,6 +178,12 @@ class PharmacyAgent:
             except Exception as e:                   # OCR missing/failed: treat as unreadable
                 res = {"ok": False, "problems": ["unreadable"], "date": None, "error": str(e)}
             self._audit(conv.conv_id, "prescription", res)
+            if "only_scheduled" in res["problems"]:     # مقيد medicines: never via the photo route
+                self._escalate(conv, "restricted_item", "prescription photo lists only scheduled medicines")
+                conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
+                self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
+                                                    "guard": "scheduled_prescription"})
+                return SCHEDULED_REFUSAL
             if not res["ok"]:
                 reply = prescription_rejected(res["problems"], res.get("date"))
                 conv.messages.append({"role": "assistant", "content": reply})
@@ -202,7 +211,17 @@ class PharmacyAgent:
                                                                "arguments": args}}]})
             result = (dispatch(self.gw, name, args) if name in contract.ACTIONS
                       else err("invalid_input", f"unknown action {name!r}"))
-            if name == "search_product" and isinstance(result, dict):
+            sched_hit = False
+            if name == "search_product" and isinstance(result, dict) and "candidates" in result:
+                # Scheduled (مقيد / controlled) medicines are never shown to the model, so it can
+                # never discuss them or offer the prescription-photo route for them. If nothing
+                # else matched the customer's words EXACTLY (only loose spelling variants, e.g.
+                # an unrelated eye drop next to Pregabalin), the customer meant the Scheduled one.
+                cands = result["candidates"]
+                rest = [c for c in cands if not c.get("is_scheduled")]
+                if len(rest) < len(cands):
+                    result["candidates"] = rest
+                    sched_hit = not any(c.get("match") == "exact" for c in rest)
                 self._annotate_prescriptions(conv, result)
             calls_made += 1
             self._audit(conv.conv_id, "tool_call",
@@ -232,16 +251,14 @@ class PharmacyAgent:
                                                         "guard": "prescription_tool"})
                     return PRESCRIPTION_HANDOVER
 
-            # deterministic: a search whose results are ALL Scheduled medicines (e.g. a misspelt
-            # controlled-drug name the pre-check list missed) is refused, not discussed.
-            if name == "search_product" and isinstance(result, dict):
-                cands = result.get("candidates") or []
-                if cands and all(c.get("is_scheduled") for c in cands):
-                    self._escalate(conv, "restricted_item", "search matched only scheduled medicines")
-                    conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
-                    self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
-                                                        "guard": "scheduled_search"})
-                    return SCHEDULED_REFUSAL
+            # deterministic: a search that matched a Scheduled medicine and nothing else exactly
+            # (e.g. a misspelt controlled-drug name the pre-check list missed) is refused.
+            if sched_hit:
+                self._escalate(conv, "restricted_item", "search matched a scheduled medicine")
+                conv.messages.append({"role": "assistant", "content": SCHEDULED_REFUSAL})
+                self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
+                                                    "guard": "scheduled_search"})
+                return SCHEDULED_REFUSAL
 
             # terminal: a completed handover ends the turn with its acknowledgement
             if name == "escalate_to_human" and isinstance(result, dict) and "handover_id" in result:
