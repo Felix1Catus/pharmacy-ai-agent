@@ -7,9 +7,14 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from pathlib import Path
 
 import requests
+
+# One model call at a time (CPU box, one Ollama slot). Only the model call waits here, so
+# instant replies (menu, guards, tracking) never queue behind another customer's chat.
+_MODEL_LOCK = threading.Lock()
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "odoo"))
@@ -48,7 +53,8 @@ class LLMClient:
                    "keep_alive": int(KEEP_ALIVE) if KEEP_ALIVE.lstrip("-").isdigit() else KEEP_ALIVE}
         if tools:
             payload["tools"] = tools
-        r = requests.post(f"{self.url}/api/chat", json=payload, timeout=timeout)
+        with _MODEL_LOCK:
+            r = requests.post(f"{self.url}/api/chat", json=payload, timeout=timeout)
         r.raise_for_status()
         msg = r.json().get("message", {})
         calls = []

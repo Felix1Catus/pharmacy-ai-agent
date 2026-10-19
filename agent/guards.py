@@ -45,15 +45,38 @@ _MEDICAL_TERMS = [
 ]
 
 
+# "كم <unit> ... <take/per day>" in any dialect = dosage ("كم حباية بنادول باخد باليوم"), while
+# "كم حبة في العلبة" (pack size) is a product question and stays allowed.
+_DOSE_UNIT = r"(حبه|حبايه|حبات|حبوب|حباية|قرص|اقراص|ملعقه|معلقه|ملاعق|مره|مرات|نقطه|نقط|بخه|بخات|كبسوله|ml|مل)"
+_DOSE_CTX = (r"(باليوم|في اليوم|فاليوم|يوميا|اليوم|كل يوم|بالنهار|بالليل|كل \d+ ساع|اخذ|اخد|باخد|باخذ|"
+             r"بخد|ناخذ|ناخد|ياخذ|ياخد|تاخذ|تاخد|اشرب|بشرب|يشرب|اعطي|نعطي|للطفل|لطفل|لابني|لبنتي|"
+             r"عشان|علشان|مشان|لاجل|عمره|عمرها|سنه|سنين|كيلو)")
+_PACK = r"(علبه|العلبه|الباكيت|باكيت|الكرتون|كرتون|الشريط|شريط|العبوه|عبوه)"
+_EN_DOSE = (r"(how many|how much).{0,40}(take|give|per day|a day|daily|every|times)|"
+            r"(per day|a day|daily|every \d+ hours?)\b.{0,20}\?|how often|max(imum)? (dose|per day)")
+
+
 def medical_advice_intent(text: str) -> bool:
     n = normalize(text)
-    # English "how many/much ... take" guard so "how much is panadol" (a price q) doesn't trip
-    if ("how many" in n or "how much" in n) and "take" not in n and "give" not in n:
-        pass  # not a dosage question by itself
-    else:
-        if "how many" in n or "how much" in n or "how often" in n:
-            return True
+    if re.search(_EN_DOSE, n):
+        return True
+    if re.search(rf"كم\s.{{0,25}}{_DOSE_UNIT}", n) and re.search(_DOSE_CTX, n) \
+            and not re.search(_PACK, n):
+        return True
     return any(term in n for term in _MEDICAL_TERMS)
+
+
+# Safety net on the MODEL'S reply: dosage / frequency / treatment instructions are never sent,
+# whatever the model was talked into; the agent replaces them with the medical refusal.
+_REPLY_DOSE = re.compile(
+    r"(يوميا|يومياً|باليوم|في اليوم|كل \d+\s*(ساعه|ساعات)|مرتين|ثلاث مرات|مره واحده|كحد اقصي|"
+    r"الجرعه|جرعه|حسب توجيه الطبيب|قبل الاكل|بعد الاكل|على معده|"
+    r"\bdaily\b|per day|a day\b|every \d+ hours?|times a day|twice a day|\bdose\b|dosage|"
+    r"max(imum)? (of )?\d|before meals|after meals|empty stomach)", re.I)
+
+
+def reply_gives_medical_advice(reply: str) -> bool:
+    return bool(_REPLY_DOSE.search(normalize(reply)))
 
 
 # ---- 1b. prompt injection / manipulation ----------------------------------

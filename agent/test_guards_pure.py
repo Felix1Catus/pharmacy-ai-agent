@@ -90,3 +90,28 @@ def test_menu_text_and_language():
     assert detect_lang("Do you have Centrum?") == "en" and detect_lang("عندكم Centrum؟") == "ar"
     assert localize("عربي — English", "en") == "English" and localize("عربي — English", "ar") == "عربي"
     assert localize("عربي — English", None) == "عربي — English"
+
+
+@pytest.mark.parametrize("text", [
+    "كم حباية بنادول باخد باليوم مشان اتخلص من الصداع",   # the tester's message
+    "كم حبة اعطي ابني عمره ٥ سنين", "كم مره باخد البروفين في اليوم", "كم ملعقة شراب للطفل",
+    "how many panadol can I take per day", "how often should I use the inhaler",
+    "what's the maximum dose of ibuprofen"])
+def test_dosage_questions_caught(text):
+    from guards import medical_advice_intent
+    assert medical_advice_intent(text), text
+
+
+@pytest.mark.parametrize("text", ["كم حبة في العلبة؟", "كم سعر بنادول", "عندكم شي للصداع؟",
+                                  "how much is panadol", "how many boxes do you have"])
+def test_product_questions_not_dosage(text):
+    from guards import medical_advice_intent
+    assert not medical_advice_intent(text), text
+
+
+def test_reply_filter_blocks_dosage():
+    from guards import reply_gives_medical_advice as bad
+    assert bad("الكمية: 1 حبة يوميًا كحد أقصى (أو حسب توجيه الطبيب)")    # the reply the tester got
+    assert bad("Take 2 tablets every 6 hours")
+    assert not bad("بنادول 500 ملغ متوفر بسعر 12 ريال، تبغى أطلبه لك؟")
+    assert not bad("Panadol Extra is 15 SAR. Pickup or delivery?")

@@ -51,7 +51,6 @@ gw = Gateway()
 CUSTOMER = gw.c.search("res.partner", [["ref", "=", "CUST-DEMO-1"]])[0]
 _agents: dict[str, PharmacyAgent] = {}
 _sessions: dict[str, dict] = {}
-_lock = threading.Lock()          # one CPU: serve one model call at a time
 # load the model in the background at startup so the first message doesn't pay ~90 s
 threading.Thread(target=lambda: LLMClient(model=DEFAULT_MODEL).warm_up(), daemon=True).start()
 
@@ -159,8 +158,8 @@ def chat(m: ChatIn):
     sid, conv = _session(m.session_id, model)
     before = len(conv.messages)
     t0 = time.time()
-    with _lock:
-        reply = agent_for(model).respond(conv, text, image=image, image_name=m.image_name)
+    # model calls queue inside LLMClient; menu/guard replies are instant even while busy
+    reply = agent_for(model).respond(conv, text, image=image, image_name=m.image_name)
     new = conv.messages[before:]
     tools, results = [], [x for x in new if x.get("role") == "tool"]
     for i, call in enumerate([x for x in new if x.get("tool_calls")]):

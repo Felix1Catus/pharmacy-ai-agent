@@ -37,6 +37,7 @@ from gateway import Gateway, dispatch  # noqa: E402
 from gateway import err  # noqa: E402
 from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noqa: E402
                     looks_in_scope, medical_advice_intent, prescription_rejected,
+                    reply_gives_medical_advice,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 from menu import (TEXTS, detect_lang, format_orders, localize, match_menu,  # noqa: E402
@@ -98,8 +99,8 @@ SYSTEM_PROMPT = (
     "7. Reply with plain text (no tool call) ONLY to present results you already fetched or to "
     "ask a short clarifying question after you have already searched."
 )
-LANG_LINE = {"ar": "\n\nThe customer chose ARABIC: reply only in Arabic (Saudi dialect).",
-             "en": "\n\nThe customer chose ENGLISH: reply only in English."}
+LANG_HINT = {"ar": "\n\n(Reply only in Arabic, Saudi dialect.)",
+             "en": "\n\n(Reply only in English.)"}
 
 # tools that operate on behalf of a specific customer — agent injects the id.
 _NEEDS_CUSTOMER = {"create_order", "hold_item", "create_dispatch", "track_order", "escalate_to_human"}
@@ -301,17 +302,26 @@ class PharmacyAgent:
                 return self._say(conv, TEXTS[self._lang(conv)]["off_topic"], guard="off_topic",
                                  menu=True)
 
-        system = SYSTEM_PROMPT + LANG_LINE.get(conv.lang or "", "")
+        # The language hint rides on THIS turn's message, not the system prompt: the system prompt
+        # stays byte-identical for every customer, so Ollama reuses its cached ~1,800 tokens.
+        turn = len(conv.messages) - 1
+        hint = LANG_HINT.get(conv.lang or "", "")
         calls_made = 0
 
         while calls_made <= MAX_TOOL_CALLS:
-            out = self.llm.chat([{"role": "system", "content": system}] + conv.messages,
+            msgs = list(conv.messages)
+            if hint:
+                msgs[turn] = {**msgs[turn], "content": msgs[turn]["content"] + hint}
+            out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + msgs,
                                 tools=self.tools)
             if not out["tool_calls"]:
                 reply = self._clean_reply(out["content"].strip())
                 if reply is None:                    # leaked internals: never sent to the customer
                     return self._say(conv, TEXTS[self._lang(conv)]["off_topic"],
                                      guard="output_filter", menu=conv.customer_facing)
+                if reply_gives_medical_advice(reply):   # dosage/treatment slipped through: never sent
+                    self._escalate(conv, "medical_advice", f"model reply blocked: {reply[:200]}")
+                    return self._say(conv, MEDICAL_REFUSAL, guard="medical_output")
                 reply = reply or ("عفواً، ممكن توضح طلبك؟" if self._lang(conv) == "ar"
                                   else "Sorry, could you clarify your request?")
                 return self._say(conv, reply)
