@@ -156,6 +156,18 @@ def _terms(p: dict) -> set[str]:
     return out
 
 
+def _score(term: str, t: str) -> float:
+    """Match score of one product term in the OCR text, 0 if it does not count as a match.
+    A term that is mostly generic words ("vitamin c") must appear exactly as a whole word, so
+    "vitamin d3" never unlocks it; other terms match fuzzily, a little looser for long names
+    (one OCR slip such as m -> rn in "augmentin" costs more on a short word)."""
+    core = "".join(w for w in term.split() if w not in _GENERIC)
+    if len(core) < 4:
+        return 100.0 if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", t) else 0.0
+    s = fuzz.partial_ratio(term, t)
+    return s if s >= (MATCH_THRESHOLD - 6 if len(term) >= 8 else MATCH_THRESHOLD) else 0.0
+
+
 def match_medications(text: str, products: list[dict]) -> list[dict]:
     """Catalogue products whose name/brand/scientific name appears on the prescription
     (fuzzy, to survive OCR slips). `products` rows: product.template search_read with
@@ -167,10 +179,10 @@ def match_medications(text: str, products: list[dict]) -> list[dict]:
         for term_ in _terms(p):
             if term_[:4] not in t and term_[-4:] not in t:     # cheap pre-filter
                 continue
-            s = fuzz.partial_ratio(term_, t)
+            s = _score(term_, t)
             if s > best:
                 best, term = s, term_
-        if best >= MATCH_THRESHOLD:
+        if best:
             found.append({
                 "product_id": p["product_variant_id"][0],
                 "name_en": p.get("name") or "", "name_ar": p.get("x_name_ar") or "",
