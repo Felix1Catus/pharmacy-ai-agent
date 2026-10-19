@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Voice & Ordering Agent for Pharmacy Franchise: Initial Assessment</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16202a;--mute:#5b6773;--line:#d9dee4;--accent:#0f766e;--accent-soft:#e0f2f0;--warn:#b45309;--warn-soft:#fef3e2;--add:#1d4ed8;--add-soft:#e6eefc;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1418;--card:#171e24;--ink:#e8edf1;--mute:#97a3ae;--line:#2a343d;--accent:#2dd4bf;--accent-soft:#12312e;--warn:#fbbf24;--warn-soft:#33270e;--add:#8fb4ff;--add-soft:#1a2a4a}}
+:root[data-theme="dark"]{--bg:#0f1418;--card:#171e24;--ink:#e8edf1;--mute:#97a3ae;--line:#2a343d;--accent:#2dd4bf;--accent-soft:#12312e;--warn:#fbbf24;--warn-soft:#33270e;--add:#8fb4ff;--add-soft:#1a2a4a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:28px 18px 60px}
+header{border-bottom:3px solid var(--accent);padding-bottom:16px;margin-bottom:22px}
+.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+h1{font-size:26px;line-height:1.2;margin:6px 0 6px}
+.sub{color:var(--mute);margin:0}
+h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:10px}
+h2 .n{background:var(--accent);color:var(--bg);width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;font-size:13px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.item{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.item b{display:block;margin-bottom:2px}
+.item .k{color:var(--accent);font-weight:700;margin-right:6px}
+.item p,.item ul{margin:4px 0 0;color:var(--mute);font-size:14px}
+ul{padding-left:18px;margin:6px 0}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--add);background:var(--add-soft);border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.scroll{overflow-x:auto}
+svg{display:block;width:100%;min-width:720px;height:auto}
+svg text{font:13px -apple-system,"Segoe UI",Roboto,Arial,sans-serif;fill:var(--ink)}
+svg .s{font-size:11px;fill:var(--mute)}
+svg .box{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+svg .ai{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}
+svg .add{fill:var(--add-soft);stroke:var(--add);stroke-dasharray:5 4}
+svg .hum{fill:var(--warn-soft);stroke:var(--warn);stroke-dasharray:5 4;stroke-width:1.5}
+svg .ln{stroke:var(--mute);stroke-width:1.5;fill:none}
+svg .grp{font-weight:700;fill:var(--mute);font-size:11px;letter-spacing:.08em}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--mute);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1.5px solid}
+.phases{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));counter-reset:p}
+.ph{border-top:4px solid var(--accent);background:var(--bg);border-radius:8px;padding:12px}
+.ph b{display:block}.ph small{color:var(--mute)}
+.risk{border-left:4px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:10px 14px;margin-bottom:10px}
+.risk b{display:block}.risk span{color:var(--mute);font-size:14px}
+.two{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+footer{color:var(--mute);font-size:12.5px;text-align:center;margin-top:24px}
+@media print{body{background:#fff}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<div class="eyebrow">Initial Technical Assessment · Draft v1</div>
+<h1>AI Voice &amp; Ordering Agent for a Pharmacy Franchise</h1>
+<p class="sub">Replacing the manual cashier / order-desk workflow with an AI agent across in-branch voice, WhatsApp and online channels, integrated natively with Odoo.</p>
+</header>
+
+<section>
+<h2><span class="n">1</span>Solution at a glance</h2>
+<p style="margin:0">A single AI agent receives customer and staff requests (voice in branch, WhatsApp, online, third-party leads), understands them in Arabic and English, checks stock, and creates and tracks the order directly in Odoo. It routes pickup or delivery, takes payment, and hands over to a human whenever the counter is busy or a request needs pharmacist judgment.</p>
+</section>
+
+<section>
+<h2><span class="n">2</span>Operational workflow</h2>
+<div class="scroll">
+<svg viewBox="0 0 900 530" role="img" aria-label="Order workflow from customer request through AI agent to payment and Odoo">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--mute)"/></marker></defs>
+<text class="grp" x="20" y="22">REQUEST</text>
+<rect class="box" x="350" y="8" width="200" height="40" rx="8"/><text x="450" y="33" text-anchor="middle">Customer request</text>
+<path class="ln" d="M450 48V64M450 64H170V80M450 64V80M450 64H730V80" marker-end="url(#a)"/>
+<rect class="box" x="60" y="80" width="220" height="54" rx="8"/><text x="170" y="103" text-anchor="middle">In-store</text><text class="s" x="170" y="121" text-anchor="middle">voice at counter / kiosk</text>
+<rect class="box" x="340" y="80" width="220" height="54" rx="8"/><text x="450" y="103" text-anchor="middle">WhatsApp / Online</text><text class="s" x="450" y="121" text-anchor="middle">external leads, 3rd-party platforms</text>
+<rect class="box" x="620" y="80" width="220" height="54" rx="8"/><text x="730" y="103" text-anchor="middle">Driver / Pharmacist portal</text><text class="s" x="730" y="121" text-anchor="middle">staff-initiated requests</text>
+<path class="ln" d="M170 134V160H340V180M450 134V180M730 134V160H560V180" marker-end="url(#a)"/>
+<text class="grp" x="20" y="165">ORCHESTRATION</text>
+<rect class="ai" x="260" y="180" width="380" height="64" rx="10"/><text x="450" y="206" text-anchor="middle" style="font-weight:700">AI agent (Qwen + harness)</text><text class="s" x="450" y="226" text-anchor="middle">Whisper STT · Chatterbox TTS · tool calls into Odoo</text>
+<rect class="hum" x="20" y="184" width="190" height="56" rx="8"/><text x="115" y="208" text-anchor="middle">Human cashier</text><text class="s" x="115" y="226" text-anchor="middle">if counter busy / escalation</text>
+<path class="ln" d="M260 212H212" marker-start="url(#a)" marker-end="url(#a)"/>
+<rect class="add" x="690" y="184" width="190" height="56" rx="8"/><text x="785" y="208" text-anchor="middle">Pharmacist review</text><text class="s" x="785" y="226" text-anchor="middle">Rx / restricted items</text>
+<path class="ln" d="M640 212H688" marker-start="url(#a)" marker-end="url(#a)"/>
+<text class="grp" x="20" y="285">FULFILMENT</text>
+<path class="ln" d="M340 244L180 296M450 244V296M560 244L720 296" marker-end="url(#a)"/>
+<rect class="box" x="60" y="296" width="240" height="58" rx="8"/><text x="180" y="320" text-anchor="middle">Availability advice</text><text class="s" x="180" y="338" text-anchor="middle">same branch | supply chain</text>
+<rect class="box" x="330" y="296" width="240" height="58" rx="8"/><text x="450" y="320" text-anchor="middle">Same-branch retrieval</text><text class="s" x="450" y="338" text-anchor="middle">pick, reserve, hand over</text>
+<rect class="box" x="600" y="296" width="240" height="58" rx="8"/><text x="720" y="320" text-anchor="middle">Hold / shipping</text><text class="s" x="720" y="338" text-anchor="middle">reserve &amp; deliver via driver dispatch</text>
+<path class="ln" d="M300 325H330" marker-end="url(#a)"/>
+<path class="ln" d="M450 354V398" marker-end="url(#a)"/>
+<path class="ln" d="M720 354V423H570" marker-end="url(#a)"/>
+<text class="grp" x="20" y="418">CLOSE</text>
+<rect class="box" x="330" y="398" width="240" height="50" rx="8"/><text x="450" y="428" text-anchor="middle">Payment</text>
+<path class="ln" d="M450 448V478" marker-end="url(#a)"/>
+<rect class="add" x="60" y="478" width="780" height="44" rx="8"/><text x="450" y="505" text-anchor="middle">Odoo 18 write-back: order, stock, accounting, audit log</text>
+</svg>
+</div>
+<div class="legend"><span><i style="border-color:var(--accent);background:var(--accent-soft)"></i>AI-driven step</span><span><i style="border-color:var(--warn);background:var(--warn-soft);border-style:dashed"></i>Human intervention</span><span><i style="border-color:var(--add);background:var(--add-soft);border-style:dashed"></i>Added in this review</span></div>
+</section>
+
+<section>
+<h2><span class="n">3</span>System goals</h2>
+<div class="grid">
+<div class="item"><b><span class="k">A</span>POS automation</b><p>AI-assisted point of sale replacing the manual cashier.</p></div>
+<div class="item"><b><span class="k">B</span>Web &amp; messaging ordering</b><p>Automated ordering via WhatsApp and third-party platforms.</p></div>
+<div class="item"><b><span class="k">C</span>Delivery operations</b><p>Order distribution among drivers, time tracking and driver quotas.</p></div>
+<div class="item"><b><span class="k">D</span>Core AI agent</b><p>Manages, oversees and automates the end-to-end operational flow.</p></div>
+<div class="item"><b><span class="k">E</span>Safety &amp; compliance</b><p>Safeguards that keep human liability and intervention possible at every critical step.</p></div>
+<div class="item"><b><span class="k">F</span>Real-time intelligence</b><p>Customized financial and inventory reports.</p></div>
+</div>
+</section>
+
+<section>
+<h2><span class="n">4</span>System components</h2>
+<div class="grid">
+<div class="item"><b>A. AI &amp; voice layer</b>
+<ul><li>Qwen: installation and fine-tuning</li><li>NAMAA Arabic fine-tuning</li><li>Meta Whisper speech-to-text</li><li>Chatterbox text-to-speech</li></ul></div>
+<div class="item"><b>B. ERP foundation</b>
+<ul><li>Port existing Odoo 15 to Odoo 18</li><li>Native Odoo models, written for the AI harness</li></ul></div>
+<div class="item"><b>C. Custom Odoo modules</b>
+<ul><li>Driver dispatch</li><li>AI harness</li><li>Auto order creation</li><li>Hold / reserve</li><li>Shipping &amp; tracking</li><li>Order tracking &amp; confirmation</li></ul></div>
+<div class="item"><b>D. Integration &amp; infrastructure<span class="tag">Added</span></b>
+<ul><li>WhatsApp Business API connection</li><li>In-branch audio hardware (mics, speakers)</li><li>GPU hosting for Qwen / Whisper / TTS</li><li>Monitoring, logging, backups</li></ul></div>
+<div class="item"><b>E. Guardrails layer<span class="tag">Added</span></b>
+<ul><li>Agent limited to approved Odoo actions</li><li>No dosage or medical advice</li><li>Confidence thresholds trigger handover</li><li>Full conversation and action audit trail</li></ul></div>
+</div>
+</section>
+
+<section>
+<h2><span class="n">5</span>Proposed delivery sequence<span class="tag">Added</span></h2>
+<div class="phases">
+<div class="ph"><b>0 · Discovery</b><small>Audit Odoo 15 customizations, branch workflows, volumes, compliance rules.</small></div>
+<div class="ph"><b>1 · Foundation</b><small>Odoo 18 migration, data cleanup, infrastructure and model hosting.</small></div>
+<div class="ph"><b>2 · Pilot</b><small>AI harness plus WhatsApp ordering at one branch, humans reviewing.</small></div>
+<div class="ph"><b>3 · Voice &amp; dispatch</b><small>In-branch voice, driver portal, dispatch and payment flows.</small></div>
+<div class="ph"><b>4 · Rollout</b><small>Franchise-wide deployment, reporting, tuning, staff training.</small></div>
+</div>
+<p class="sub" style="margin-top:10px;font-size:13px">Durations to be set after discovery, once the Odoo customization scope is known.</p>
+</section>
+
+<div class="two">
+<section style="margin:0">
+<h2><span class="n">6</span>Key risks<span class="tag">Added</span></h2>
+<div class="risk"><b>Odoo 15 → 18 migration</b><span>Largest unknown. Custom modules may need rewriting, not just upgrading.</span></div>
+<div class="risk"><b>Pharmacy regulation</b><span>Controlled or prescription items need pharmacist sign-off. Rules depend on jurisdiction.</span></div>
+<div class="risk"><b>Arabic dialect accuracy</b><span>Speech recognition in noisy branches needs real-world testing and tuning.</span></div>
+<div class="risk"><b>Customer data privacy</b><span>Health-related orders require clear data handling, retention and hosting decisions.</span></div>
+<div class="risk"><b>Hardware &amp; latency</b><span>Self-hosted models need GPU capacity sized for peak voice load.</span></div>
+</section>
+<section style="margin:0">
+<h2><span class="n">7</span>Questions for discovery<span class="tag">Added</span></h2>
+<ul>
+<li>How many branches, and what is daily order volume per branch?</li>
+<li>What is customized in the current Odoo 15, and where is it hosted?</li>
+<li>Is delivery in-house, third-party, or both?</li>
+<li>Which payment methods must be supported?</li>
+<li>Which dialects and languages must the agent handle?</li>
+<li>How are prescriptions handled today?</li>
+<li>Must models run on-premise, or is cloud acceptable?</li>
+<li>What hardware exists in branches today?</li>
+</ul>
+</section>
+</div>
+
+<footer>Draft for discussion · scope, timeline and pricing to follow after discovery</footer>
+</div>
+</body>
+</html>
