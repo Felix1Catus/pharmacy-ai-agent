@@ -38,6 +38,19 @@ def customer_id(gw):
     return gw.c.search("res.partner", [["ref", "=", "CUST-DEMO-1"]])[0]
 
 
+@pytest.fixture(scope="module")
+def no_rx_customer(gw):
+    """A customer with no usable prescription, so prescription-only items are always refused
+    (the demo customer may hold real auto-verified prescriptions from trying the chat page)."""
+    ids = gw.c.search("res.partner", [["ref", "=", "CUST-NORX"]])
+    cid = ids[0] if ids else gw.c.create("res.partner", {"name": "No Prescription Customer",
+                                                         "ref": "CUST-NORX"})
+    left = gw.c.search("pharmacy.prescription", [["partner_id", "=", cid]])
+    if left:
+        gw.c.write("pharmacy.prescription", left, {"state": "rejected"})
+    return cid
+
+
 def _call(action, body):
     return client.post(f"/tool/{action}", json=body)
 
@@ -102,9 +115,9 @@ def test_create_order_pickup_success(gw, customer_id):
     assert r.json()["state"] == "sale"
 
 
-def test_create_order_restricted_refused(gw, customer_id):
+def test_create_order_restricted_refused(gw, no_rx_customer):
     pid = _variant(gw, "RX-0001")  # Augmentin
-    r = _call("create_order", {"customer_id": customer_id,
+    r = _call("create_order", {"customer_id": no_rx_customer,
                                "items": [{"product_id": pid, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
     assert r.status_code == 400
@@ -147,10 +160,10 @@ def test_hold_scheduled_refused(gw, customer_id):
     assert r.json()["error"]["code"] == "scheduled_item"
 
 
-def test_hold_restricted_refused(gw, customer_id):
+def test_hold_restricted_refused(gw, no_rx_customer):
     pid = _variant(gw, "RX-0003")  # Ventolin — prescription, not scheduled
     r = _call("hold_item", {"product_id": pid, "branch_id": 2,
-                            "qty": 1, "customer_id": customer_id})
+                            "qty": 1, "customer_id": no_rx_customer})
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "prescription_required"
 
@@ -193,17 +206,17 @@ def sfda_rx_product(gw):
     gw.c.execute_kw("product.template", "unlink", [[tmpl]])
 
 
-def test_create_order_sfda_prescription_refused(sfda_rx_product, customer_id):
-    r = _call("create_order", {"customer_id": customer_id,
+def test_create_order_sfda_prescription_refused(sfda_rx_product, no_rx_customer):
+    r = _call("create_order", {"customer_id": no_rx_customer,
                                "items": [{"product_id": sfda_rx_product, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "prescription_required"
 
 
-def test_hold_sfda_prescription_refused(sfda_rx_product, customer_id):
+def test_hold_sfda_prescription_refused(sfda_rx_product, no_rx_customer):
     r = _call("hold_item", {"product_id": sfda_rx_product, "branch_id": 2,
-                            "qty": 1, "customer_id": customer_id})
+                            "qty": 1, "customer_id": no_rx_customer})
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "prescription_required"
 
