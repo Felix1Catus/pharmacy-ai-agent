@@ -7,6 +7,7 @@ Run:  pytest adapter/test_prescription.py -q
 from __future__ import annotations
 
 import shutil
+import time
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -209,7 +210,7 @@ def test_hold_with_verified_prescription(ctx):
 @pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
 def test_submit_generated_prescription_photo(ctx):
     from make_prescription import make_prescription_png
-    inv = f"INV-TEST-{date.today():%m%d}{id(ctx) % 10000:04d}"
+    inv = f"INV-TEST-{time.time_ns() % 10**10}"
     res = GW.submit_prescription(ctx["cust"], make_prescription_png(["Augmentin 1g"], 0, inv))
     try:
         assert res["ok"], res
@@ -245,7 +246,7 @@ def test_read_text_pdf_uses_text_layer():
                     reason="poppler-utils / tesseract not installed")
 def test_submit_scanned_pdf_is_ocrd_and_stored(ctx):
     from make_prescription import make_prescription_pdf
-    inv = f"INV-PDF-{id(ctx) % 100000:05d}"
+    inv = f"INV-PDF-{time.time_ns() % 10**10}"
     res = GW.submit_prescription(ctx["cust"], make_prescription_pdf(["Augmentin 1g"], 0, inv,
                                                                      scanned=True), "rx.pdf")
     try:
