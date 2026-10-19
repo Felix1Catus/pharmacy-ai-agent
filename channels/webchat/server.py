@@ -11,6 +11,8 @@ Run:  .venv/bin/uvicorn --app-dir channels/webchat server:app --host 0.0.0.0 --p
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import secrets
@@ -33,7 +35,8 @@ from odoo_client import load_env  # noqa: E402
 load_env()
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402
-from guards import MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, SCHEDULED_REFUSAL  # noqa: E402
+from guards import (MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER,  # noqa: E402
+                    PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 
 USER = os.environ.get("WEBCHAT_USER", "pharmacy")
@@ -67,10 +70,15 @@ def agent_for(model: str) -> PharmacyAgent:
     return _agents[model]
 
 
+MAX_IMAGE = 8 * 1024 * 1024
+
+
 class ChatIn(BaseModel):
     session_id: str | None = None
-    text: str
+    text: str = ""
     model: str | None = None
+    image: str | None = None          # prescription photo: base64 or data: URL
+    image_name: str | None = None
 
 
 @app.get("/", response_class=HTMLResponse, dependencies=[Depends(auth)])
@@ -94,7 +102,15 @@ def reset(body: dict):
 @app.post("/api/chat", dependencies=[Depends(auth)])
 def chat(m: ChatIn):
     text = (m.text or "").strip()[:2000]
-    if not text:
+    image = None
+    if m.image:
+        try:
+            image = base64.b64decode(m.image.split(",", 1)[-1], validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(400, "bad image data")
+        if len(image) > MAX_IMAGE:
+            raise HTTPException(413, "image too large (max 8 MB)")
+    if not text and not image:
         raise HTTPException(400, "empty message")
     model = m.model or DEFAULT_MODEL
     sid = m.session_id or uuid.uuid4().hex
@@ -106,7 +122,7 @@ def chat(m: ChatIn):
     before = len(conv.messages)
     t0 = time.time()
     with _lock:
-        reply = agent_for(model).respond(conv, text)
+        reply = agent_for(model).respond(conv, text, image=image, image_name=m.image_name)
     new = conv.messages[before:]
     tools, results = [], [x for x in new if x.get("role") == "tool"]
     for i, call in enumerate([x for x in new if x.get("tool_calls")]):
@@ -116,7 +132,13 @@ def chat(m: ChatIn):
                       "result": res[:600] + ("..." if len(res) > 600 else "")})
     guard = ("medical-advice guard" if reply == MEDICAL_REFUSAL else
              "scheduled-medicine guard" if reply == SCHEDULED_REFUSAL else
-             "prescription -> pharmacist (gateway)" if reply == PRESCRIPTION_HANDOVER else None)
+             "prescription -> pharmacist (gateway)" if reply == PRESCRIPTION_HANDOVER else
+             "prescription needed -> asked for photo" if reply == PRESCRIPTION_NEEDED else
+             "prescription photo rejected (checks)" if reply.startswith("استلمت صورة الوصفة") else
+             None)
+    if image and new and str(new[0].get("content", "")).startswith("[Prescription verified]"):
+        tools.insert(0, {"name": "prescription_check", "args": {},
+                         "result": new[0]["content"][:600]})
     return {"session_id": sid, "reply": reply, "model": model,
             "debug": {"tools": tools, "guard": guard, "seconds": round(time.time() - t0, 1)}}
 

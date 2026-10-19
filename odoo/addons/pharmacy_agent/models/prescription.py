@@ -27,12 +27,22 @@ class PharmacyPrescription(models.Model):
     extracted_drug = fields.Char()
     extracted_dosage = fields.Char()
     extracted_quantity = fields.Char()
+    # automatic checks (adapter/prescription.py): computerised prescriptions with an invoice
+    # number, dated within the last 5 days, naming a catalogue medicine -> auto_verified
+    invoice_number = fields.Char(index=True, help="Invoice / prescription number read by OCR.")
+    prescription_date = fields.Date(help="Date printed on the prescription (read by OCR).")
+    matched_product_ids = fields.Many2many(
+        "product.product", string="Medicines found",
+        help="Catalogue medicines named on the prescription. Once auto-verified, the agent may "
+             "order/hold these (never Scheduled ones) for this customer, for one order.")
 
     # Human-in-the-loop: a pharmacist ALWAYS verifies before anything is acted on.
     state = fields.Selection([
         ("draft", "Draft"),
         ("submitted", "Submitted"),
+        ("auto_verified", "Auto-verified (OCR)"),
         ("verified", "Pharmacist-verified"),
+        ("used", "Used (order placed)"),
         ("rejected", "Rejected"),
     ], default="draft", index=True)
     verified_by = fields.Many2one("res.users", string="Verified by (pharmacist)")

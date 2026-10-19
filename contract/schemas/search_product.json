@@ -28,7 +28,7 @@
   },
   "returns": {
     "type": "object",
-    "description": "candidates: list of {product_id, name_ar, name_en, brand, is_restricted, requires_prescription}. May be empty.",
+    "description": "candidates: list of {product_id, name_ar, name_en, brand, is_restricted, requires_prescription, prescription_on_file (prescription-only items: whether this customer has a verified prescription photo for it)}. May be empty.",
     "properties": {
       "candidates": {
         "type": "array"

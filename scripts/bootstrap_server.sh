@@ -21,7 +21,8 @@ rnd() { python3 -c "import secrets;print(secrets.token_urlsafe($1))"; }
 
 log "1/8 system packages"
 apt-get update -q
-apt-get install -y -q ca-certificates curl git python3.12-venv ffmpeg cmake build-essential jq
+apt-get install -y -q ca-certificates curl git python3.12-venv ffmpeg cmake build-essential jq \
+  tesseract-ocr tesseract-ocr-ara tesseract-ocr-eng fonts-dejavu-core   # prescription OCR
 
 log "2/8 Docker"
 if ! command -v docker >/dev/null; then

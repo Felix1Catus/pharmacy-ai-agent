@@ -6,6 +6,8 @@
       <list>
         <field name="name"/>
         <field name="partner_id"/>
+        <field name="invoice_number"/>
+        <field name="prescription_date"/>
         <field name="extracted_drug"/>
         <field name="ocr_status"/>
         <field name="state"/>
@@ -31,11 +33,14 @@
               <field name="ocr_status"/>
               <field name="ocr_engine"/>
               <field name="ocr_confidence"/>
+              <field name="invoice_number"/>
+              <field name="prescription_date"/>
               <field name="extracted_drug"/>
               <field name="extracted_dosage"/>
               <field name="extracted_quantity"/>
             </group>
           </group>
+          <field name="matched_product_ids" widget="many2many_tags"/>
           <field name="image" widget="image"/>
           <field name="ocr_text"/>
           <field name="notes"/>

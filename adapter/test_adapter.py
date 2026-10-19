@@ -108,7 +108,7 @@ def test_create_order_restricted_refused(gw, customer_id):
                                "items": [{"product_id": pid, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
     assert r.status_code == 400
-    assert r.json()["error"]["code"] == "restricted_item"
+    assert r.json()["error"]["code"] == "prescription_required"
 
 
 def test_create_order_pickup_requires_branch(gw, customer_id):
@@ -152,7 +152,7 @@ def test_hold_restricted_refused(gw, customer_id):
     r = _call("hold_item", {"product_id": pid, "branch_id": 2,
                             "qty": 1, "customer_id": customer_id})
     assert r.status_code == 400
-    assert r.json()["error"]["code"] == "restricted_item"
+    assert r.json()["error"]["code"] == "prescription_required"
 
 
 # ---- track ---------------------------------------------------------------
@@ -198,14 +198,14 @@ def test_create_order_sfda_prescription_refused(sfda_rx_product, customer_id):
                                "items": [{"product_id": sfda_rx_product, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
     assert r.status_code == 400
-    assert r.json()["error"]["code"] == "restricted_item"
+    assert r.json()["error"]["code"] == "prescription_required"
 
 
 def test_hold_sfda_prescription_refused(sfda_rx_product, customer_id):
     r = _call("hold_item", {"product_id": sfda_rx_product, "branch_id": 2,
                             "qty": 1, "customer_id": customer_id})
     assert r.status_code == 400
-    assert r.json()["error"]["code"] == "restricted_item"
+    assert r.json()["error"]["code"] == "prescription_required"
 
 
 def test_search_reports_sfda_prescription(sfda_rx_product):

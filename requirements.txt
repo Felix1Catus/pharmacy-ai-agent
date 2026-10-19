@@ -10,3 +10,4 @@ rapidfuzz==3.11.0
 openpyxl==3.1.5
 pyarrow==26.0.0
 huggingface_hub==2.2.0
+Pillow==11.1.0        # prescription photos (OCR pre-processing; Tesseract via apt)

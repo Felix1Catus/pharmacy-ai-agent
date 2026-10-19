@@ -9,6 +9,7 @@ The agent and the FastAPI app call these functions; tests call them directly.
 """
 from __future__ import annotations
 
+import base64
 import json
 import sys
 import time
@@ -20,6 +21,7 @@ sys.path.insert(0, str(ROOT / "odoo"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from odoo_client import OdooClient, OdooError  # noqa: E402
 from fuzzy_search import FuzzyIndex  # noqa: E402
+import prescription as rx  # noqa: E402
 
 RESULTS = ROOT / "results"
 HANDOVER_LOG = RESULTS / "handovers.jsonl"
@@ -33,6 +35,13 @@ def _needs_prescription(flags: dict) -> bool:
     (sfda_requires_prescription, set from SFDA "طريقة الصرف = يحتاج الى وصفة طبية")."""
     return bool(flags.get("x_is_restricted") or flags.get("x_requires_prescription")
                 or flags.get("sfda_requires_prescription"))
+
+
+# prescription states that let the agent order/hold the medicines found on it
+RX_OK_STATES = ["auto_verified", "verified"]
+RX_PRODUCT_FIELDS = ["name", "x_name_ar", "x_brand", "sfda_scientific_name", "product_variant_id",
+                     "x_is_restricted", "x_requires_prescription", "sfda_requires_prescription",
+                     "is_scheduled"]
 
 
 def err(code: str, message: str, **details) -> dict:
@@ -152,6 +161,7 @@ class Gateway:
         if not items:
             return err("invalid_input", "items is required")
         # resolve + guardrail restricted
+        rx_used: set[int] = set()
         for it in items:
             flags = self._product_flags(it["product_id"])
             if not flags:
@@ -162,9 +172,10 @@ class Gateway:
                            f"never dispensed via the agent; refer to a human",
                            product_id=it["product_id"])
             if _needs_prescription(flags):
-                return err("restricted_item",
-                           f"{flags['name']} is restricted/prescription — escalate to a human",
-                           product_id=it["product_id"])
+                rid = self.valid_prescription(customer_id, it["product_id"])
+                if not rid:
+                    return self._rx_required(flags, it["product_id"])
+                rx_used.add(rid)
         # choose branch
         if fulfillment == "pickup":
             if not branch_id:
@@ -192,11 +203,19 @@ class Gateway:
         vals = {"partner_id": customer_id, "warehouse_id": chosen, "order_line": lines}
         if fulfillment == "delivery":
             vals["note"] = f"Delivery to: {delivery_address}"
+        if rx_used:
+            refs = self.c.search_read("pharmacy.prescription", [["id", "in", list(rx_used)]],
+                                      ["name", "invoice_number"])
+            vals["note"] = ((vals.get("note") or "") + " | Prescription(s): " + ", ".join(
+                f"{r['name']} (invoice {r['invoice_number']})" for r in refs)).strip(" |")
         try:
             oid = self.c.create("sale.order", vals)
             self.c.execute_kw("sale.order", "action_confirm", [[oid]])
         except OdooError as e:
             return err("invalid_input", str(e))
+        if rx_used:      # one prescription = one order: it cannot be used again
+            self.c.write("pharmacy.prescription", list(rx_used),
+                         {"sale_order_id": oid, "state": "used"})
         o = self.c.read("sale.order", oid, ["state", "amount_total"])[0]
         return {"order_id": oid, "state": o["state"], "total": o["amount_total"],
                 "branch_id": chosen}
@@ -235,10 +254,8 @@ class Gateway:
             return err("scheduled_item",
                        f"{flags['name']} is a scheduled/controlled substance — "
                        f"never held via the agent; refer to a human", product_id=product_id)
-        if _needs_prescription(flags):
-            return err("restricted_item",
-                       f"{flags['name']} is restricted/prescription — escalate",
-                       product_id=product_id)
+        if _needs_prescription(flags) and not self.valid_prescription(customer_id, product_id):
+            return self._rx_required(flags, product_id)
         b = self._branch(branch_id)
         if not b:
             return err("not_found", f"no branch with id {branch_id}")
@@ -257,6 +274,61 @@ class Gateway:
         })
         return {"hold_id": oid, "expires_at": expires.isoformat(),
                 "branch_id": branch_id, "ref": ref}
+
+    # ---- prescriptions (not an LLM tool: the chat channel calls these) --------
+    def _rx_required(self, flags, product_id):
+        return err("prescription_required",
+                   f"{flags['name']} needs a prescription: ask the customer to attach a photo of a "
+                   f"computerised prescription dated within the last "
+                   f"{rx.PRESCRIPTION_MAX_AGE_DAYS} days that shows this medicine and an invoice "
+                   f"number", product_id=product_id)
+
+    def valid_prescription(self, customer_id, product_id) -> int | None:
+        """Id of an unused, verified prescription of this customer, dated within the allowed
+        window, that lists this product — or None."""
+        if not customer_id:
+            return None
+        oldest = (rx.today_ksa() - timedelta(days=rx.PRESCRIPTION_MAX_AGE_DAYS)).isoformat()
+        ids = self.c.search("pharmacy.prescription", [
+            ["partner_id", "=", customer_id], ["state", "in", RX_OK_STATES],
+            ["sale_order_id", "=", False], ["prescription_date", ">=", oldest],
+            ["matched_product_ids", "in", [product_id]]], order="id desc", limit=1)
+        return ids[0] if ids else None
+
+    def submit_prescription(self, customer_id, image: bytes, filename: str | None = None):
+        """OCR a prescription photo, run the checks, store it in Odoo (Pharmacy → Prescriptions)
+        and return the outcome. Auto-verified only if date + invoice number + a medicine pass,
+        and the invoice number was not already used by another customer or another order."""
+        text = rx.ocr_image(image)
+        rows = self.c.search_read("product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS)
+        res = rx.evaluate(text, rows)
+        if res["invoice_number"]:
+            reused = self.c.search_count("pharmacy.prescription", [
+                ["invoice_number", "=", res["invoice_number"]],
+                "|", ["sale_order_id", "!=", False], ["partner_id", "!=", customer_id]])
+            if reused:
+                res["problems"].append("invoice_already_used")
+                res["ok"] = False
+        meds = res["medications"]
+        rid = self.c.create("pharmacy.prescription", {
+            "name": f"RX-{datetime.now(rx.KSA):%Y%m%d-%H%M%S}",
+            "partner_id": customer_id,
+            "image": base64.b64encode(image).decode(),
+            "image_filename": filename or "prescription.jpg",
+            "ocr_engine": rx.OCR_ENGINE,
+            "ocr_text": text,
+            "ocr_status": "ocr_done" if res["ok"] else
+                          ("unreadable" if "unreadable" in res["problems"] else "needs_review"),
+            "ocr_confidence": 1.0 if res["ok"] else 0.0,
+            "invoice_number": res["invoice_number"] or False,
+            "prescription_date": res["date"] or False,
+            "matched_product_ids": [(6, 0, [m["product_id"] for m in meds])],
+            "extracted_drug": ", ".join(m["name_en"] for m in meds)[:250] or False,
+            "state": "auto_verified" if res["ok"] else "submitted",
+            "notes": ("checks failed: " + ", ".join(res["problems"])) if res["problems"]
+                     else "auto-verified: date, invoice number and medicine(s) found",
+        })
+        return {"prescription_id": rid, **res}
 
     # ---- 6. track_order ------------------------------------------------------
     def track_order(self, order_id=None, customer_id=None):

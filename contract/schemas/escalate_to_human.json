@@ -1,6 +1,6 @@
 {
   "name": "escalate_to_human",
-  "description": "Hand the conversation to a human pharmacist/agent. ALWAYS use this for: any request for dosage, diagnosis or medical advice; restricted or prescription items; low confidence in the right action; abusive input; or anything the contract cannot serve. This is a terminal action for the turn.",
+  "description": "Hand the conversation to a human pharmacist/agent. ALWAYS use this for: any request for dosage, diagnosis or medical advice; scheduled/controlled medicines; a customer who asks for a pharmacist; low confidence in the right action; abusive input; or anything the contract cannot serve. This is a terminal action for the turn.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",

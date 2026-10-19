@@ -107,3 +107,34 @@ PRESCRIPTION_HANDOVER = (
     "— This medicine needs a prescription, so it can't be ordered or held through the chat. "
     "I'll pass you to a pharmacist to complete the purchase after checking the prescription."
 )
+
+PRESCRIPTION_NEEDED = (
+    "هذا الدواء يحتاج وصفة طبية. أرسل صورة الوصفة الإلكترونية من زر المرفقات 📎 (بتاريخ آخر 5 أيام "
+    "وفيها رقم الفاتورة واسم الدواء) وأكمل لك الطلب مباشرة، أو أحوّلك إلى الصيدلي إذا تفضّل. "
+    "— This medicine needs a prescription. Attach a photo of your computerised prescription with "
+    "the 📎 button (dated within the last 5 days, showing the invoice number and the medicine) and "
+    "I'll complete the order right away — or I can pass you to a pharmacist."
+)
+
+# why an attached prescription was not accepted (codes from adapter/prescription.py)
+_RX_PROBLEMS = {
+    "unreadable": ("الصورة غير واضحة ولم أستطع قراءتها", "the photo couldn't be read"),
+    "no_date": ("لم أجد تاريخ الوصفة", "I couldn't find the prescription date"),
+    "date_too_old": ("تاريخ الوصفة أقدم من 5 أيام", "the prescription is older than 5 days"),
+    "date_in_future": ("تاريخ الوصفة غير صحيح", "the prescription date isn't valid"),
+    "no_invoice": ("لم أجد رقم الفاتورة/الوصفة", "I couldn't find the invoice/prescription number"),
+    "no_medication": ("لم أجد في الوصفة دواءً من أدويتنا", "I couldn't find one of our medicines on it"),
+    "invoice_already_used": ("هذه الوصفة مستخدمة من قبل", "this prescription was already used"),
+}
+
+
+def prescription_rejected(problems: list[str], rx_date: str | None = None) -> str:
+    ar = [_RX_PROBLEMS.get(p, (p, p))[0] for p in problems]
+    en = [_RX_PROBLEMS.get(p, (p, p))[1] for p in problems]
+    when = f" ({rx_date})" if rx_date and "date_too_old" in problems else ""
+    return ("استلمت صورة الوصفة لكن لم أستطع اعتمادها: " + "، ".join(ar) + when + ". "
+            "أرسل صورة أوضح لوصفة إلكترونية حديثة (آخر 5 أيام) فيها رقم الفاتورة واسم الدواء، "
+            "أو أحوّلك إلى الصيدلي. "
+            "— I received the prescription photo but couldn't accept it: " + "; ".join(en) + when +
+            ". Send a clearer photo of a recent computerised prescription (last 5 days) showing the "
+            "invoice number and the medicine, or I can pass you to a pharmacist.")

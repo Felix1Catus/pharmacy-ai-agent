@@ -5,8 +5,10 @@ adapter Gateway (adapter/gateway.py) over the real Odoo 18 instance. The model o
 the 7-action contract; it never touches Odoo directly.
 
 Guardrails:
-- restricted/prescription items can never be ordered/held — the Gateway refuses and returns
-  {"error":{"code":"restricted_item"}}, and the loop then escalates.
+- prescription-only items can be ordered/held only with an auto-verified prescription photo of
+  this customer (adapter/prescription.py: dated within 5 days + invoice number + the medicine on
+  it); otherwise the Gateway returns {"error":{"code":"prescription_required"}} and the agent asks
+  for the photo. Scheduled/controlled items are never ordered/held (scheduled_item -> escalate).
 - medical/dosage questions must escalate (system prompt + a terminal escalate action).
 - a max number of tool calls per turn (prevents loops); on overrun the agent escalates
   (reason=low_confidence) rather than guessing.
@@ -31,8 +33,10 @@ sys.path.insert(0, str(ROOT / "agent"))
 
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
+from gateway import err  # noqa: E402
 from guards import (ScheduledDenylist, medical_advice_intent,  # noqa: E402
-                    MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, SCHEDULED_REFUSAL)
+                    prescription_rejected, MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER,
+                    PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from llm import LLMClient  # noqa: E402
 
 AUDIT = ROOT / "results" / "audit.jsonl"
@@ -62,11 +66,14 @@ SYSTEM_PROMPT = (
     "('تقصد CERVARIX VACCINE؟') and carry on - never call it a different or 'similar' product. "
     "Never say a product is unavailable unless check_stock returned zero.\n"
     "5. Prescription-only medicines (search result requires_prescription=true, not scheduled): "
-    "you MAY confirm availability (check_stock) and price (price_sar from search_product), and "
-    "tell the customer it needs a prescription (in Arabic say: 'يحتاج وصفة طبية ويُصرف عن طريق "
-    "الصيدلي') - never mix English words into Arabic replies. NEVER order "
-    "or hold them: as soon as the customer wants to buy, order or reserve one, call "
-    "escalate_to_human with reason='restricted_item' - do not refuse in plain text. Scheduled/controlled medicines (is_scheduled=true) are fully "
+    "you MAY confirm availability (check_stock) and price (price_sar from search_product). Each "
+    "such result has prescription_on_file. If prescription_on_file=true, handle it like any other "
+    "medicine (confirm, then create_order / hold_item). If it is false and the customer wants to "
+    "buy, order or reserve it, do NOT call create_order or escalate: reply asking them to attach "
+    "a photo of their prescription with the 📎 button (in Arabic say: 'يحتاج وصفة طبية، أرسل "
+    "صورة الوصفة من زر المرفقات 📎 وأكمل لك الطلب') - never mix English words into Arabic "
+    "replies. A message starting with [Prescription verified] lists the medicines the customer "
+    "may now order. Scheduled/controlled medicines (is_scheduled=true) are fully "
     "blocked: give no availability or price, call escalate_to_human reason='restricted_item'.\n"
     "6. If the message is vague/unintelligible or you cannot map it to a product, order or "
     "action, call escalate_to_human reason='unclear' — do NOT reply with a free-text question. "
@@ -119,9 +126,32 @@ class PharmacyAgent:
             args["customer_id"] = conv.customer_id
         return args
 
-    def respond(self, conv: Conversation, user_text: str) -> str:
+    def _prescription_note(self, res: dict) -> str:
+        lines = [f"[Prescription verified] The customer attached a prescription photo; it was "
+                 f"verified automatically (invoice {res['invoice_number']}, dated {res['date']}). "
+                 f"Medicines found on it:"]
+        for m in res["medications"]:
+            what = ("SCHEDULED - blocked, cannot be ordered" if m["is_scheduled"] else
+                    "prescription-only - may now be ordered/held" if m["requires_prescription"]
+                    else "over the counter")
+            lines.append(f"- {m['name_en']} / {m['name_ar']} (product_id {m['product_id']}): {what}")
+        lines.append("Tell the customer which medicines you found and help them order: check "
+                     "stock, ask pickup branch or delivery address, confirm, then create_order.")
+        return "\n".join(lines)
+
+    def _annotate_prescriptions(self, conv, result):
+        """Tell the model, per prescription-only search result, whether THIS customer has a
+        valid prescription for it (the gateway enforces the same rule on create_order)."""
+        for c in result.get("candidates") or []:
+            if c.get("requires_prescription") and not c.get("is_scheduled"):
+                c["prescription_on_file"] = bool(
+                    self.gw.valid_prescription(conv.customer_id, c["product_id"]))
+
+    def respond(self, conv: Conversation, user_text: str, image: bytes | None = None,
+                image_name: str | None = None) -> str:
+        user_text = user_text or ""
         conv.messages.append({"role": "user", "content": user_text})
-        self._audit(conv.conv_id, "user", {"text": user_text})
+        self._audit(conv.conv_id, "user", {"text": user_text, "image": bool(image)})
 
         # --- deterministic guards BEFORE the LLM (do not depend on the model) ---
         if medical_advice_intent(user_text):
@@ -137,6 +167,22 @@ class PharmacyAgent:
             self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
                                                 "guard": "scheduled", "matched": hit})
             return SCHEDULED_REFUSAL
+
+        # --- attached prescription photo: OCR + deterministic checks (not the model) ---
+        if image:
+            try:
+                res = self.gw.submit_prescription(conv.customer_id, image, image_name)
+            except Exception as e:                   # OCR missing/failed: treat as unreadable
+                res = {"ok": False, "problems": ["unreadable"], "date": None, "error": str(e)}
+            self._audit(conv.conv_id, "prescription", res)
+            if not res["ok"]:
+                reply = prescription_rejected(res["problems"], res.get("date"))
+                conv.messages.append({"role": "assistant", "content": reply})
+                self._audit(conv.conv_id, "reply", {"text": reply, "guard": "prescription_check"})
+                return reply
+            note = self._prescription_note(res)
+            conv.messages[-1]["content"] = note + ("\n\nCustomer message: " + user_text
+                                                   if user_text.strip() else "")
 
         calls_made = 0
 
@@ -154,7 +200,10 @@ class PharmacyAgent:
             conv.messages.append({"role": "assistant", "content": out["content"],
                                   "tool_calls": [{"function": {"name": name,
                                                                "arguments": args}}]})
-            result = dispatch(self.gw, name, args)
+            result = (dispatch(self.gw, name, args) if name in contract.ACTIONS
+                      else err("invalid_input", f"unknown action {name!r}"))
+            if name == "search_product" and isinstance(result, dict):
+                self._annotate_prescriptions(conv, result)
             calls_made += 1
             self._audit(conv.conv_id, "tool_call",
                         {"action": name, "args": args, "result": result})
@@ -171,7 +220,12 @@ class PharmacyAgent:
                     self._audit(conv.conv_id, "reply", {"text": SCHEDULED_REFUSAL,
                                                         "guard": "scheduled_tool"})
                     return SCHEDULED_REFUSAL
-                if code == "restricted_item":       # prescription-only: purchase via pharmacist
+                if code == "prescription_required":  # no valid prescription: ask for the photo
+                    conv.messages.append({"role": "assistant", "content": PRESCRIPTION_NEEDED})
+                    self._audit(conv.conv_id, "reply", {"text": PRESCRIPTION_NEEDED,
+                                                        "guard": "prescription_tool"})
+                    return PRESCRIPTION_NEEDED
+                if code == "restricted_item":       # legacy code: purchase via pharmacist
                     self._escalate(conv, "restricted_item", f"tool returned restricted_item: {name}")
                     conv.messages.append({"role": "assistant", "content": PRESCRIPTION_HANDOVER})
                     self._audit(conv.conv_id, "reply", {"text": PRESCRIPTION_HANDOVER,

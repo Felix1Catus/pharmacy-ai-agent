@@ -1,4 +1,29 @@
-# Prescription OCR pipeline — design (FUTURE phase, not built)
+# Prescription OCR pipeline
+
+## Implemented now (2026-10-19): auto-verification of computerised prescriptions
+Owner decision: for **prescription-only, non-Scheduled** medicines the agent no longer hands the
+purchase to a pharmacist when the customer attaches a valid prescription photo in the chat (📎).
+- `adapter/prescription.py` — Tesseract OCR (ara+eng, CPU) + three deterministic checks:
+  **date** within the last 5 days (Saudi time, not in the future; DOB / "valid until" ignored),
+  an **invoice/prescription number** next to a label (Invoice No, رقم الفاتورة, Rx No…), and at
+  least one **catalogue medicine** named on it (fuzzy, survives OCR slips).
+- `Gateway.submit_prescription` stores every photo in Odoo (Pharmacy → Prescriptions) with the OCR
+  text, invoice number, date, medicines found and state `auto_verified` or `submitted` (+ why).
+  An invoice number already used for an order, or sent by another customer, is refused.
+- `create_order` / `hold_item` allow a prescription-only item only if this customer has an unused
+  `auto_verified` (or pharmacist-`verified`) prescription, within 5 days, listing that product;
+  the order consumes it (`state=used`, linked order). Otherwise → `prescription_required` and the
+  agent asks for the photo. **Scheduled medicines stay fully blocked** regardless.
+- Known limits: handwritten scripts are not supported; quantities on the prescription are not
+  enforced; OCR cannot detect a forged/edited image — pharmacists can review the Prescriptions list.
+- Sample image for testing: `python evals/datasets/make_prescription.py rx.png [--days-ago 9]`.
+
+The original design below (pharmacist verifies everything) still applies to Scheduled medicines
+and to anything the automatic checks reject.
+
+---
+
+# Original design (pharmacist-verified pipeline)
 
 Goal: let a customer send a photo of a prescription over WhatsApp; the system reads the drug,
 dosage and quantity, and uses that to help — **without the AI giving medical advice** and

@@ -1,6 +1,6 @@
 {
   "name": "create_order",
-  "description": "Create a sales order for a customer. ONLY call after the customer has explicitly confirmed the items and quantities. Restricted / prescription items must NOT be ordered here — escalate_to_human instead. For pickup, branch_id is required and must have stock; for delivery, the system picks a branch with stock.",
+  "description": "Create a sales order for a customer. ONLY call after the customer has explicitly confirmed the items and quantities. Scheduled/controlled items are never ordered. Prescription-only items may be ordered only when search_product showed prescription_on_file=true (the customer sent a verified prescription photo); otherwise ask the customer to attach the prescription photo. For pickup, branch_id is required and must have stock; for delivery, the system picks a branch with stock.",
   "requires_confirmed_intent": true,
   "parameters": {
     "type": "object",
@@ -36,7 +36,8 @@
     "properties": {"order_id": {"type": "integer"}, "state": {"type": "string"}}
   },
   "errors": [
-    {"code": "restricted_item", "when": "any item is restricted/prescription — must escalate instead"},
+    {"code": "scheduled_item", "when": "any item is a scheduled/controlled medicine — never ordered via the agent"},
+    {"code": "prescription_required", "when": "a prescription-only item has no verified prescription photo for this customer — ask for the photo"},
     {"code": "out_of_stock", "when": "requested qty unavailable at the required/only branch"},
     {"code": "not_found", "when": "customer_id or a product_id does not exist"},
     {"code": "invalid_input", "when": "missing branch_id for pickup or delivery_address for delivery"}

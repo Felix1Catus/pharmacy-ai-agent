@@ -1,6 +1,6 @@
 {
   "name": "hold_item",
-  "description": "Reserve (hold) a quantity of a product at a branch for a customer to collect later, without creating a full order. Restricted / prescription items must NOT be held — escalate instead.",
+  "description": "Reserve (hold) a quantity of a product at a branch for a customer to collect later, without creating a full order. Scheduled/controlled items are never held. Prescription-only items may be held only when search_product showed prescription_on_file=true; otherwise ask for the prescription photo.",
   "requires_confirmed_intent": true,
   "parameters": {
     "type": "object",
@@ -20,7 +20,8 @@
     "properties": {"hold_id": {"type": "integer"}, "expires_at": {"type": "string"}}
   },
   "errors": [
-    {"code": "restricted_item", "when": "product is restricted/prescription — escalate instead"},
+    {"code": "scheduled_item", "when": "product is a scheduled/controlled medicine — never held via the agent"},
+    {"code": "prescription_required", "when": "prescription-only product without a verified prescription photo — ask for the photo"},
     {"code": "out_of_stock", "when": "qty unavailable at branch"},
     {"code": "not_found", "when": "product/branch/customer not found"}
   ]
