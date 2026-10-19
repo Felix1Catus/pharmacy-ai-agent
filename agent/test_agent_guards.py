@@ -174,3 +174,21 @@ def test_track_other_customers_order_is_not_found():
         pytest.skip("no order of another customer")
     cust = GW.c.search("res.partner", [["ref", "=", "CUST-DEMO-1"]])[0]
     assert "error" in GW.track_order(order_id=other[0], customer_id=cust)
+
+
+def test_model_guessed_ingredient_is_dropped(monkeypatch):
+    seen = []
+    monkeypatch.setattr(GW, "search_product", lambda **kw: seen.append(kw) or {"candidates": []})
+    guess = {"content": "", "tool_calls": [{"name": "search_product", "arguments": {
+        "query": "Hibiotic", "active_ingredient": "ribavirin"}}]}
+    a, llm, conv = _cf([guess])
+    a.greet(conv)
+    a.respond(conv, "Do you have Hibiotic 1g?")
+    assert seen and "active_ingredient" not in seen[0]          # the made-up ingredient never ran
+
+
+def test_customer_stated_ingredient_is_used():
+    conv = Conversation(1, customer_facing=True)
+    conv.messages.append({"role": "user", "content": "عندكم اموكسيسيلين مع كلافولانيك؟"})
+    assert PharmacyAgent._grounded(conv, "amoxicillin, clavulanic acid")
+    assert not PharmacyAgent._grounded(conv, "ribavirin")

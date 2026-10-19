@@ -223,9 +223,10 @@ class Gateway:
                     out["note"] = (f"{ingr.fmt_mg(strength)} is not available for this active "
                                    f"ingredient; available strengths: {', '.join(have)}")
         if not cands and not out.get("alternatives"):
-            out["hint"] = ("No product matched. If the customer gave a brand name, call "
-                           "search_product again with active_ingredient set to that brand's "
-                           "generic active ingredient to find the same medicine under other brands.")
+            out["hint"] = ("Not in our catalogue. Tell the customer, and ask them for the active "
+                           "ingredient written on the box or prescription (or a photo of the "
+                           "prescription) so you can find the same medicine under another brand. "
+                           "Never guess the active ingredient yourself.")
         return out
 
     # ---- 2. check_stock ------------------------------------------------------

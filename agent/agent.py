@@ -39,7 +39,9 @@ from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noq
                     looks_in_scope, medical_advice_intent, prescription_rejected,
                     reply_gives_medical_advice,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
+from fuzzy_search import normalize, sound_key  # noqa: E402
 from llm import LLMClient  # noqa: E402
+from rapidfuzz import fuzz  # noqa: E402
 from menu import (TEXTS, detect_lang, format_orders, localize, match_menu,  # noqa: E402
                   menu_items, menu_text, wants_menu)
 
@@ -85,11 +87,11 @@ SYSTEM_PROMPT = (
     "4c. Same active ingredient: search results may include alternatives (other brands with the "
     "same active ingredient). When the product the customer asked for is not found or out of "
     "stock, offer those alternatives, saying they have the same active ingredient (name it) and "
-    "stating each one's strength - never claim more than that. If search_product finds nothing "
-    "for a brand name, call search_product again with active_ingredient set to that brand's "
-    "generic active ingredient (e.g. Augmentin -> 'amoxicillin, clavulanic acid'). If the result "
-    "has a note that the requested strength is not available, tell the customer the strengths "
-    "we do have.\n"
+    "stating each one's strength - never claim more than that. NEVER guess a brand's active "
+    "ingredient from memory: pass active_ingredient only with an ingredient the customer wrote "
+    "or that is on their verified prescription; if a brand is not found, tell the customer and "
+    "ask for the active ingredient written on the box or prescription. If the result has a note "
+    "that the requested strength is not available, tell the customer the strengths we do have.\n"
     "5.Prescription-only medicines (search result requires_prescription=true, not scheduled): "
     "you MAY confirm availability (check_stock) and price (price_sar from search_product). Each "
     "such result has prescription_on_file. If prescription_on_file=true, handle it like any other "
@@ -194,12 +196,32 @@ class PharmacyAgent:
                        "Not placed. First summarise the exact items, quantities and the pickup "
                        "branch or delivery address, and ask the customer to confirm. Call this "
                        "again only after the customer replies yes.")
+        if name == "search_product" and args.get("active_ingredient") \
+                and not self._grounded(conv, args["active_ingredient"]):
+            # the model's own drug knowledge is not trusted (it once mapped Hibiotic to
+            # ribavirin): an ingredient must come from the customer or their prescription
+            self._audit(conv.conv_id, "ungrounded_ingredient_dropped",
+                        {"active_ingredient": args.pop("active_ingredient")})
+            if not args.get("query"):
+                return {"candidates": [], "hint": "Ask the customer for the active ingredient "
+                        "written on the box or prescription. Never guess it yourself."}
         qtys = [it.get("qty", 0) for it in args.get("items") or []] + \
                ([args["qty"]] if "qty" in args else [])
         if any((q or 0) > MAX_QTY for q in qtys):
             return err("quantity_limit", f"At most {MAX_QTY} of an item per chat order; tell the "
                        f"customer larger quantities are arranged at a branch.")
         return None
+
+    @staticmethod
+    def _grounded(conv, ingredient: str) -> bool:
+        """True if every word of `ingredient` was written by the customer (any script, compared
+        by sound: 'اموكسيسيلين' = 'amoxicillin') or appears in their verified prescription note."""
+        said = " ".join(m["content"] for m in conv.messages if m["role"] == "user")
+        keys = {sound_key(w) for w in re.findall(r"[a-z؀-ۿ]+", normalize(said)) if len(w) >= 4}
+        need = [sound_key(w) for w in re.findall(r"[a-z؀-ۿ]+", normalize(ingredient))
+                if len(w) >= 5 and w not in ("acid", "sodium", "potassium")]
+        return bool(need) and all(
+            any(k == h or (len(k) >= 4 and fuzz.ratio(k, h) >= 85) for h in keys) for k in need)
 
     def _clean_reply(self, text: str) -> str | None:
         """Strip internal ids from a model reply; None if it leaks prompt/tool internals."""
