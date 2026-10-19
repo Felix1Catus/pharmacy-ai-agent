@@ -117,9 +117,9 @@ class PharmacyAgent:
 
     def _fill_defaults(self, name, args, conv):
         args = dict(args or {})
-        if name in _NEEDS_CUSTOMER and "customer_id" not in args:
-            args["customer_id"] = conv.customer_id
-        if name == "escalate_to_human" and "customer_id" not in args:
+        # always THIS conversation's customer: the model sometimes invents an id, which would
+        # act on another customer's account (and miss their prescriptions)
+        if name in _NEEDS_CUSTOMER or name == "escalate_to_human":
             args["customer_id"] = conv.customer_id
         # track_order: "where is my order" with no order number -> look up THIS customer
         if name == "track_order" and not args.get("order_id") and not args.get("customer_id"):
