@@ -156,6 +156,16 @@ def _terms(p: dict) -> set[str]:
     return out
 
 
+_OCR_CONFUSIONS = [("rn", "m"), ("vv", "w"), ("cl", "d")]
+
+
+def _fold(s: str) -> str:
+    """Collapse letter pairs Tesseract commonly confuses, applied to BOTH sides of a match."""
+    for a, b in _OCR_CONFUSIONS:
+        s = s.replace(a, b)
+    return s
+
+
 def _score(term: str, t: str) -> float:
     """Match score of one product term in the OCR text, 0 if it does not count as a match.
     A term that is mostly generic words ("vitamin c") must appear exactly as a whole word, so
@@ -164,7 +174,7 @@ def _score(term: str, t: str) -> float:
     core = "".join(w for w in term.split() if w not in _GENERIC)
     if len(core) < 4:
         return 100.0 if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", t) else 0.0
-    s = fuzz.partial_ratio(term, t)
+    s = fuzz.partial_ratio(_fold(term), _fold(t))
     return s if s >= (MATCH_THRESHOLD - 6 if len(term) >= 8 else MATCH_THRESHOLD) else 0.0
 
 
