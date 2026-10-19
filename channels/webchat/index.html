@@ -47,6 +47,7 @@
   #send:disabled { opacity: .5; cursor: default; }
   #attach { width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent; font-size: 22px; cursor: pointer; flex: none; color: var(--muted); }
   #attach:disabled { opacity: .5; cursor: default; }
+  .bubble .file { padding: 8px 10px; margin-bottom: 4px; background: rgba(0,0,0,.05); border-radius: 6px; direction: ltr; }
   .bubble img { display: block; max-width: 260px; max-height: 320px; border-radius: 6px; margin-bottom: 4px; }
   @media (max-width: 560px) { #chat { padding: 12px 10px 6px; } .bubble { max-width: 88%; } .tools label span { display: none; } }
 </style>
@@ -65,8 +66,8 @@
   <div id="chat"><div class="day"><span>اليوم · Today — test chat (sample data only)</span></div></div>
   <div class="chips" id="chips"></div>
   <footer>
-    <button id="attach" title="إرفاق صورة الوصفة · attach prescription photo">📎</button>
-    <input type="file" id="file" accept="image/*" hidden>
+    <button id="attach" title="إرفاق صورة أو PDF للوصفة · attach prescription photo or PDF">📎</button>
+    <input type="file" id="file" accept="image/*,application/pdf,.pdf" hidden>
     <textarea id="msg" rows="1" dir="auto" placeholder="اكتب رسالة · Type a message"></textarea>
     <button id="send" title="send">➤</button>
   </footer>
@@ -82,10 +83,10 @@ try { sid = localStorage.getItem("pharmacy_chat_sid"); } catch (e) {}
 const now = () => new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function bubble(who, text, debug, img) {
+function bubble(who, text, debug, img, imgName) {
   const row = document.createElement("div");
   row.className = "row " + who;
-  let html = `<div class="bubble" dir="auto">${img ? `<img src="${img}" alt="prescription">` : ""}${esc(text)}<span class="meta">${now()}${who === "me" ? '<span class="tick">✓✓</span>' : ""}</span>`;
+  let html = `<div class="bubble" dir="auto">${img ? (img.startsWith("data:application/pdf") ? `<div class="file">📄 ${esc(imgName || "prescription.pdf")}</div>` : `<img src="${img}" alt="prescription">`) : ""}${esc(text)}<span class="meta">${now()}${who === "me" ? '<span class="tick">✓✓</span>' : ""}</span>`;
   if (debug) html += `<div class="debug">${debug}</div>`;
   row.innerHTML = html + "</div>";
   chat.appendChild(row); chat.scrollTop = chat.scrollHeight;
@@ -107,7 +108,7 @@ async function api(path, body) {
 }
 async function sendText(text, image, imageName) {
   text = text.trim(); if ((!text && !image) || send.disabled) return;
-  bubble("me", text, null, image); msg.value = ""; msg.style.height = "auto";
+  bubble("me", text, null, image, imageName); msg.value = ""; msg.style.height = "auto";
   send.disabled = true; $("#attach").disabled = true;
   statusEl.textContent = image ? "يقرأ الوصفة… · reading prescription…" : "يكتب… · typing…";
   const typing = bubble("bot typing", "…");
@@ -127,7 +128,7 @@ $("#attach").onclick = () => $("#file").click();
 $("#file").onchange = e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
-  if (f.size > 8 * 1024 * 1024) { bubble("bot", "⚠️ الصورة كبيرة جداً (الحد 8MB) · image too large (max 8 MB)"); return; }
+  if (f.size > 8 * 1024 * 1024) { bubble("bot", "⚠️ الملف كبير جداً (الحد 8MB) · file too large (max 8 MB)"); return; }
   const r = new FileReader();
   r.onload = () => sendText(msg.value, r.result, f.name);   // any typed text goes with the photo
   r.readAsDataURL(f);

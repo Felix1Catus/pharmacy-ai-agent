@@ -213,3 +213,39 @@ def test_submit_generated_prescription_photo(ctx):
     finally:
         ids = [i for i in (res.get("prescription_id"), locals().get("old", {}).get("prescription_id")) if i]
         GW.c.execute_kw("pharmacy.prescription", "unlink", [ids])
+
+
+# ---- PDFs ---------------------------------------------------------------------
+def test_is_pdf():
+    from make_prescription import make_prescription_pdf
+    assert rx.is_pdf(make_prescription_pdf())
+    assert not rx.is_pdf(b"\x89PNG\r\n\x1a\n")
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext"), reason="poppler-utils not installed")
+def test_read_text_pdf_uses_text_layer():
+    from make_prescription import make_prescription_pdf
+    doc = rx.read_document(make_prescription_pdf(["Augmentin 1g"], 0, "INV-2026-123456"))
+    assert doc["kind"] == "pdf" and "text layer" in doc["engine"]
+    assert doc["preview"] and doc["preview"][:4] == b"\x89PNG"
+    r = rx.evaluate(doc["text"], PRODUCTS, rx.today_ksa())
+    assert r["ok"], r["problems"]
+    assert r["invoice_number"] == "INV-2026-123456"
+
+
+@odoo
+@pytest.mark.skipif(not (shutil.which("pdftotext") and shutil.which("tesseract")),
+                    reason="poppler-utils / tesseract not installed")
+def test_submit_scanned_pdf_is_ocrd_and_stored(ctx):
+    from make_prescription import make_prescription_pdf
+    inv = f"INV-PDF-{id(ctx) % 100000:05d}"
+    res = GW.submit_prescription(ctx["cust"], make_prescription_pdf(["Augmentin 1g"], 0, inv,
+                                                                     scanned=True), "rx.pdf")
+    try:
+        assert res["ok"], res
+        p = GW.c.read("pharmacy.prescription", res["prescription_id"],
+                      ["ocr_engine", "document_filename", "image_filename", "state"])[0]
+        assert "scanned pdf" in p["ocr_engine"] and p["state"] == "auto_verified"
+        assert p["document_filename"] == "rx.pdf" and p["image_filename"] == "page1.png"
+    finally:
+        GW.c.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])

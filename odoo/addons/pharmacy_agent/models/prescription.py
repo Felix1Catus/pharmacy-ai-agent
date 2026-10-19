@@ -13,6 +13,9 @@ class PharmacyPrescription(models.Model):
     # The captured image (from WhatsApp). Stored as an attachment-backed image.
     image = fields.Image(string="Prescription image", max_width=2000, max_height=2000)
     image_filename = fields.Char()
+    # original file when the customer sent a PDF (image then holds a PNG of its first page)
+    document = fields.Binary(string="Prescription PDF", attachment=True)
+    document_filename = fields.Char()
 
     # OCR pipeline results (populated by the future OCR service — see docs/prescription-ocr-design.md).
     ocr_status = fields.Selection([

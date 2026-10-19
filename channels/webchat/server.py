@@ -77,7 +77,7 @@ class ChatIn(BaseModel):
     session_id: str | None = None
     text: str = ""
     model: str | None = None
-    image: str | None = None          # prescription photo: base64 or data: URL
+    image: str | None = None          # prescription photo or PDF: base64 or data: URL
     image_name: str | None = None
 
 

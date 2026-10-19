@@ -296,10 +296,18 @@ class Gateway:
         return ids[0] if ids else None
 
     def submit_prescription(self, customer_id, image: bytes, filename: str | None = None):
-        """OCR a prescription photo, run the checks, store it in Odoo (Pharmacy → Prescriptions)
-        and return the outcome. Auto-verified only if date + invoice number + a medicine pass,
-        and the invoice number was not already used by another customer or another order."""
-        text = rx.ocr_image(image)
+        """Read a prescription photo or PDF, run the checks, store it in Odoo (Pharmacy →
+        Prescriptions) and return the outcome. Auto-verified only if date + invoice number + a
+        medicine pass, and the invoice number was not already used by another customer or
+        another order. A PDF is kept as the original file plus a PNG of its first page."""
+        doc = rx.read_document(image)
+        text = doc["text"]
+        b64 = lambda b: base64.b64encode(b).decode() if b else False  # noqa: E731
+        if doc["kind"] == "pdf":
+            files = {"image": b64(doc["preview"]), "image_filename": "page1.png",
+                     "document": b64(image), "document_filename": filename or "prescription.pdf"}
+        else:
+            files = {"image": b64(image), "image_filename": filename or "prescription.jpg"}
         rows = self.c.search_read("product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS)
         res = rx.evaluate(text, rows)
         if res["invoice_number"]:
@@ -313,9 +321,8 @@ class Gateway:
         rid = self.c.create("pharmacy.prescription", {
             "name": f"RX-{datetime.now(rx.KSA):%Y%m%d-%H%M%S}",
             "partner_id": customer_id,
-            "image": base64.b64encode(image).decode(),
-            "image_filename": filename or "prescription.jpg",
-            "ocr_engine": rx.OCR_ENGINE,
+            **files,
+            "ocr_engine": doc["engine"],
             "ocr_text": text,
             "ocr_status": "ocr_done" if res["ok"] else
                           ("unreadable" if "unreadable" in res["problems"] else "needs_review"),

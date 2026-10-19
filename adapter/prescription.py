@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Prescription photo -> OCR -> automatic checks (computerised/printed prescriptions only).
+"""Prescription photo/PDF -> text -> automatic checks (computerised/printed prescriptions only).
 
-A customer attaches a photo of a prescription in the chat. We read it with Tesseract (Arabic +
-English, CPU) and check three things:
+A customer attaches a photo or PDF of a prescription in the chat. We read photos with Tesseract
+(Arabic + English, CPU), PDFs from their text layer (or OCR if scanned), and check three things:
   1. a date within the last PRESCRIPTION_MAX_AGE_DAYS days (Saudi time, not in the future),
   2. an invoice / prescription number next to a label ("Invoice No", "رقم الفاتورة", "Rx No"...),
   3. at least one catalogue medicine named on it.
@@ -67,6 +67,41 @@ def ocr_image(data: bytes) -> str:
             if r.returncode == 0:
                 texts.append(r.stdout)
     return "\n".join(texts)
+
+
+PDF_MAX_PAGES = 3
+
+
+def is_pdf(data: bytes) -> bool:
+    return data[:1024].lstrip().startswith(b"%PDF-")
+
+
+def read_document(data: bytes) -> dict:
+    """Text of a prescription photo or PDF, plus a PNG preview for Odoo when it was a PDF.
+    Computerised PDFs carry their own text layer, which is read directly (exact, instant);
+    a scanned PDF without one is rendered page by page and OCR'd. Needs poppler-utils
+    (pdftotext / pdftoppm) for PDFs and Tesseract for images.
+    Returns {"text", "engine", "preview" (PNG bytes or None), "kind": "pdf"|"image"}."""
+    if not is_pdf(data):
+        return {"text": ocr_image(data), "engine": OCR_ENGINE, "preview": None, "kind": "image"}
+    with tempfile.TemporaryDirectory() as d:
+        pdf = Path(d) / "rx.pdf"
+        pdf.write_bytes(data)
+        last = ["-f", "1", "-l", str(PDF_MAX_PAGES)]
+        r = subprocess.run(["pdftotext", "-layout", *last, str(pdf), "-"],
+                           capture_output=True, text=True, timeout=60)
+        text = r.stdout if r.returncode == 0 else ""
+        subprocess.run(["pdftoppm", "-png", "-r", "200", *last, str(pdf), str(Path(d) / "p")],
+                       capture_output=True, timeout=120)
+        pages = sorted(Path(d).glob("p*.png"))
+        preview = pages[0].read_bytes() if pages else None
+        if len(clean(text)) >= 20:
+            return {"text": text, "engine": "pdf text layer (pdftotext)", "preview": preview,
+                    "kind": "pdf"}
+        # scanned PDF: no usable text layer -> OCR each rendered page
+        text = "\n".join(ocr_image(p.read_bytes()) for p in pages)
+        return {"text": text, "engine": f"{OCR_ENGINE} on scanned pdf", "preview": preview,
+                "kind": "pdf"}
 
 
 # ---- 2. dates -------------------------------------------------------------

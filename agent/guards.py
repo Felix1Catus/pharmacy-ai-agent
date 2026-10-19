@@ -109,9 +109,9 @@ PRESCRIPTION_HANDOVER = (
 )
 
 PRESCRIPTION_NEEDED = (
-    "هذا الدواء يحتاج وصفة طبية. أرسل صورة الوصفة الإلكترونية من زر المرفقات 📎 (بتاريخ آخر 5 أيام "
+    "هذا الدواء يحتاج وصفة طبية. أرسل صورة أو ملف PDF للوصفة الإلكترونية من زر المرفقات 📎 (بتاريخ آخر 5 أيام "
     "وفيها رقم الفاتورة واسم الدواء) وأكمل لك الطلب مباشرة، أو أحوّلك إلى الصيدلي إذا تفضّل. "
-    "— This medicine needs a prescription. Attach a photo of your computerised prescription with "
+    "— This medicine needs a prescription. Attach a photo or PDF of your computerised prescription with "
     "the 📎 button (dated within the last 5 days, showing the invoice number and the medicine) and "
     "I'll complete the order right away — or I can pass you to a pharmacist."
 )

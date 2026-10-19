@@ -70,7 +70,7 @@ SYSTEM_PROMPT = (
     "such result has prescription_on_file. If prescription_on_file=true, handle it like any other "
     "medicine (confirm, then create_order / hold_item). If it is false and the customer wants to "
     "buy, order or reserve it, do NOT call create_order or escalate: reply asking them to attach "
-    "a photo of their prescription with the 📎 button (in Arabic say: 'يحتاج وصفة طبية، أرسل "
+    "a photo or PDF of their prescription with the 📎 button (in Arabic say: 'يحتاج وصفة طبية، أرسل "
     "صورة الوصفة من زر المرفقات 📎 وأكمل لك الطلب') - never mix English words into Arabic "
     "replies. A message starting with [Prescription verified] lists the medicines the customer "
     "may now order. Scheduled/controlled medicines (is_scheduled=true) are fully "
