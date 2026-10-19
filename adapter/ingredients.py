@@ -46,6 +46,10 @@ _UNIT_MG = {"mg": 1, "ملجم": 1, "ملغ": 1, "مجم": 1, "ملغم": 1, "g"
             "جم": 1000, "جرام": 1000, "غ": 1000, "mcg": 0.001, "ميكروجرام": 0.001}
 _STRENGTH = re.compile(r"(\d+(?:[.,]\d+)?)\s*(mg|mcg|gm|gram|g|ملجم|ملغم|ملغ|مجم|ميكروجرام|جرام|جم|غ)(?![a-z])")
 _DIG = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+# first words shared by many ingredients: never an ingredient on their own
+_GENERIC_FIRST = {"sodium", "potassium", "calcium", "magnesium", "vitamin", "ferrous", "zinc",
+                  "hydrochloride", "sulfate", "sulphate", "chloride", "acetate", "citrate", "purified",
+                  "human", "insulin", "liquid", "light", "white", "yellow", "hydrogen", "dried"}
 
 
 def ingredient_set(raw: str | None) -> frozenset[str]:
@@ -116,6 +120,9 @@ class IngredientIndex:
             for ing in s:
                 keys = names.setdefault(ing, set())
                 keys.add(sound_key(ing.replace(" ", "")))
+                first = ing.split(" ")[0]          # "clavulanic acid" also answers to "clavulanic"
+                if " " in ing and len(first) >= 6 and first not in _GENERIC_FIRST:
+                    keys.add(sound_key(first))
             # Arabic ingredient names from our own data ("اموكسيسيلين") -> same ingredient keys
             ar = r.get("x_ingredient_ar")
             if ar and len(s) == 1:

@@ -172,17 +172,14 @@ class Gateway:
 
         out: dict = {}
         if named_ingredient:
-            pool = self._ingr.rank(self._ingr.same_ingredients(ing, include_combos=True),
+            # everything containing the ingredient, ranked by the ingredient rules: exactly this
+            # ingredient set first (plain amoxicillin before amoxicillin+clavulanate), then the
+            # requested dosage form, then the closest strength
+            direct = {t["id"] for t, how in found if how == "exact"}
+            pool = self._ingr.rank(set(self._ingr.same_ingredients(ing, include_combos=True)) | direct,
                                    ing, strength, form)
-            rows = [(r, "active ingredient") for r in self._rows(pool[: lim * 3])]
-            # keep any direct name hits (e.g. our own brand "Amoxil") ahead of the generic list
-            direct = [(t, how) for t, how in found if how == "exact"]
-            seen, picked = set(), []
-            for t, how in direct + rows:
-                if t["id"] in seen:
-                    continue
-                seen.add(t["id"])
-                picked.append((t, how))
+            picked = [(r, "exact" if r["id"] in direct else "active ingredient")
+                      for r in self._rows(pool[: lim * 3])]
         else:
             ranked = self._ingr.rank([t["id"] for t, _ in found], ing, strength, form) \
                 if (strength or form) and ing else [t["id"] for t, _ in found]

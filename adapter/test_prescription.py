@@ -128,8 +128,15 @@ def ctx():
         c.write("pharmacy.prescription", left, {"state": "rejected"})
     var = lambda code: c.search_read("product.template", [["default_code", "=", code]],  # noqa: E731
                                      ["product_variant_id"])[0]["product_variant_id"][0]
-    branch = next(b["branch_id"] for b in GW.branches()
-                  if GW._avail_at(var("RX-0001"), b["loc_id"]) >= 1)
+    # test orders use up stock: top the first branch up to 20 of each product the tests order
+    b0 = GW.branches()[0]
+    for code in ("RX-0001", "RX-0003"):
+        vid = var(code)
+        if GW._avail_at(vid, b0["loc_id"]) < 5:
+            q = c.create("stock.quant", {"product_id": vid, "location_id": b0["loc_id"],
+                                         "inventory_quantity": 20})
+            c.execute_kw("stock.quant", "action_apply_inventory", [[q]])
+    branch = b0["branch_id"]
     made = []
 
     def make(products, days_ago=0, state="auto_verified", invoice="TEST-INV-0001"):
@@ -192,7 +199,7 @@ def test_scheduled_stays_blocked_even_with_prescription(ctx):
 def test_hold_with_verified_prescription(ctx):
     ven = ctx["var"]("RX-0003")
     ctx["make"]([ven])
-    b = next(b["branch_id"] for b in GW.branches() if GW._avail_at(ven, b["loc_id"]) >= 1)
+    b = ctx["branch"]
     r = GW.hold_item(ven, b, 1, ctx["cust"])
     assert "hold_id" in r, r
 
