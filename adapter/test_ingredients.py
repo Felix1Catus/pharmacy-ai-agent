@@ -84,7 +84,7 @@ def test_unknown_brand_by_active_ingredient():
 @live
 def test_nothing_found_gives_hint():
     r = GW.search_product("zzqxvbrandname")
-    assert not r["candidates"] and "active_ingredient" in r["hint"]
+    assert not r["candidates"] and "active ingredient" in r["hint"]
 
 
 @live
