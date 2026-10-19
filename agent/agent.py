@@ -196,6 +196,13 @@ class PharmacyAgent:
                        "Not placed. First summarise the exact items, quantities and the pickup "
                        "branch or delivery address, and ask the customer to confirm. Call this "
                        "again only after the customer replies yes.")
+        if name == "search_product":
+            # the customer's own words win: "amoxicillin and clavulanic acid" must not be
+            # searched as plain amoxicillin because the model passed only one of them
+            said = self.gw._ingr.resolve_name(conv.last_user_text)
+            asked = self.gw._ingr.resolve_name(args.get("active_ingredient") or args.get("query") or "")
+            if said and len(said) > len(asked):
+                args["active_ingredient"] = ", ".join(sorted(said))
         if name == "search_product" and args.get("active_ingredient") \
                 and not self._grounded(conv, args["active_ingredient"]):
             # the model's own drug knowledge is not trusted (it once mapped Hibiotic to

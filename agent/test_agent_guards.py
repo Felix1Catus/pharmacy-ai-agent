@@ -192,3 +192,14 @@ def test_customer_stated_ingredient_is_used():
     conv.messages.append({"role": "user", "content": "عندكم اموكسيسيلين مع كلافولانيك؟"})
     assert PharmacyAgent._grounded(conv, "amoxicillin, clavulanic acid")
     assert not PharmacyAgent._grounded(conv, "ribavirin")
+
+
+def test_customer_named_ingredients_override_partial_model_search(monkeypatch):
+    seen = []
+    monkeypatch.setattr(GW, "search_product", lambda **kw: seen.append(kw) or {"candidates": []})
+    partial = {"content": "", "tool_calls": [{"name": "search_product", "arguments": {
+        "query": "amoxicillin", "active_ingredient": "amoxicillin"}}]}
+    a, llm, conv = _cf([partial])
+    a.greet(conv)
+    a.respond(conv, "the box says amoxicillin and clavulanic acid")
+    assert seen[0]["active_ingredient"] == "amoxicillin, clavulanic acid"
