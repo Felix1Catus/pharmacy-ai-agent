@@ -229,7 +229,7 @@ def match_medications(text: str, products: list[dict]) -> list[dict]:
                 best, term = s, term_
         if best:
             found.append({
-                "product_id": p["product_variant_id"][0],
+                "product_id": p["product_variant_id"][0], "template_id": p.get("id"),
                 "name_en": p.get("name") or "", "name_ar": p.get("x_name_ar") or "",
                 "is_scheduled": bool(p.get("is_scheduled")),
                 "requires_prescription": bool(p.get("x_is_restricted")

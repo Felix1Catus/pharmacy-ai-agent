@@ -1,6 +1,6 @@
 {
   "name": "search_product",
-  "description": "Search the catalogue for products by name (Arabic, English, or brand) or active ingredient. Use this before any stock/order/hold action to resolve what the customer means. Returns candidate products; if more than one plausibly matches, do NOT guess — ask the customer or, if still unclear, escalate.",
+  "description": "Search the catalogue by product name (Arabic, English, brand) or active ingredient. Use this before any stock/order/hold action. Returns candidates and, for a brand, alternatives (other brands with the same active ingredient). If a brand is not found, call it again with active_ingredient set to that brand's generic active ingredient.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
@@ -19,16 +19,30 @@
         "minimum": 1,
         "maximum": 20,
         "default": 5
+      },
+      "active_ingredient": {
+        "type": "string",
+        "description": "Optional. Generic active ingredient (e.g. 'amoxicillin', 'paracetamol') to find the same medicine under any brand - use when the customer's brand is not found."
       }
     },
-    "required": [
-      "query"
-    ],
-    "additionalProperties": false
+    "required": [],
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": [
+          "query"
+        ]
+      },
+      {
+        "required": [
+          "active_ingredient"
+        ]
+      }
+    ]
   },
   "returns": {
     "type": "object",
-    "description": "candidates: list of {product_id, name_ar, name_en, brand, is_restricted, requires_prescription, prescription_on_file (prescription-only items: whether this customer has a verified prescription photo for it)}. May be empty.",
+    "description": "candidates: list of {product_id, name_ar, name_en, brand, scientific_name, price_sar, match, requires_prescription, prescription_on_file}; alternatives: same active ingredient, other brands; active_ingredient; note (e.g. requested strength not available); hint when nothing matched. Lists may be empty.",
     "properties": {
       "candidates": {
         "type": "array"

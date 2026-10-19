@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "odoo"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from odoo_client import OdooClient, OdooError  # noqa: E402
-from fuzzy_search import FuzzyIndex  # noqa: E402
+from fuzzy_search import FuzzyIndex, normalize  # noqa: E402
+import ingredients as ingr  # noqa: E402
 import prescription as rx  # noqa: E402
 
 RESULTS = ROOT / "results"
@@ -44,6 +45,10 @@ RX_PRODUCT_FIELDS = ["name", "x_name_ar", "x_brand", "sfda_scientific_name", "pr
                      "is_scheduled"]
 
 
+def normalize_name(name: str) -> str:
+    return " ".join(normalize(name or "").split())
+
+
 def err(code: str, message: str, **details) -> dict:
     return {"error": {"code": code, "message": message, "details": details}}
 
@@ -53,6 +58,7 @@ class Gateway:
         self.c = client or OdooClient()
         self._branch_cache = None
         self._fuzzy = FuzzyIndex(self.c)      # phonetic Arabic<->English name matching
+        self._ingr = ingr.IngredientIndex(self.c)   # same active ingredient, other brands
 
     # ---- branches (warehouses, excluding the default 'WH') -------------------
     def branches(self) -> list[dict]:
@@ -89,49 +95,141 @@ class Gateway:
         return rows[0] if rows else None
 
     # ---- 1. search_product ---------------------------------------------------
-    def search_product(self, query: str, branch_id: int | None = None, limit: int = 5):
-        """Exact (case-insensitive substring) matches first; if fewer than `limit`, add products
-        whose names SOUND like the query across Arabic/English (fuzzy_search.py), so
-        "سرفاركس" finds CERVARIX and "بنتوفير" finds بانتوفير. Each candidate says how it matched."""
-        if not query or not query.strip():
-            return err("invalid_input", "query is required")
-        q, lim = query.strip(), max(1, min(limit, 20))
-        fields = ["name", "x_name_ar", "x_brand", "x_is_restricted", "x_requires_prescription",
-                  "sfda_requires_prescription", "is_scheduled", "schedule_class",
-                  "sfda_scientific_name", "list_price", "product_variant_id"]
+    _CAND_FIELDS = ["name", "x_name_ar", "x_brand", "x_is_restricted", "x_requires_prescription",
+                    "sfda_requires_prescription", "is_scheduled", "schedule_class",
+                    "sfda_scientific_name", "x_ingredient_en", "list_price", "product_variant_id"]
+
+    def _name_matches(self, q: str, lim: int) -> list[tuple[dict, str]]:
+        """Exact (case-insensitive substring) matches first, then products whose names SOUND
+        like the query across Arabic/English (fuzzy_search.py: "سرفاركس" -> CERVARIX)."""
         domain = ["|"] * (len(SEARCH_FIELDS) - 1) + [[f, "ilike", q] for f in SEARCH_FIELDS]
-        found = [(t, "exact") for t in self.c.search_read("product.template", domain, fields, limit=lim)]
+        found = [(t, "exact") for t in self.c.search_read("product.template", domain,
+                                                          self._CAND_FIELDS, limit=lim)]
         if len(found) < lim:
             seen = {t["id"] for t, _ in found}
             ranked = [(tid, s) for tid, s in self._fuzzy.search(q, limit=lim * 3) if tid not in seen]
             ranked = ranked[: lim - len(found)]
             if ranked:
                 rows = {r["id"]: r for r in self.c.search_read(
-                    "product.template", [["id", "in", [tid for tid, _ in ranked]]], fields)}
+                    "product.template", [["id", "in", [tid for tid, _ in ranked]]], self._CAND_FIELDS)}
                 found += [(rows[tid], "spelling variant") for tid, _ in ranked if tid in rows]
-        candidates = []
-        for t, how in found:
-            vid = t["product_variant_id"][0]
-            if branch_id is not None:
-                b = self._branch(branch_id)
-                if not b or self._avail_at(vid, b["loc_id"]) <= 0:
+        return found
+
+    def _candidate(self, t: dict, how: str, branch_id=None) -> dict | None:
+        vid = t["product_variant_id"][0]
+        if branch_id is not None:
+            b = self._branch(branch_id)
+            if not b or self._avail_at(vid, b["loc_id"]) <= 0:
+                return None
+        return {
+            "product_id": vid,
+            "name_en": t["name"],
+            "name_ar": t.get("x_name_ar") or "",
+            "brand": t.get("x_brand") or "",
+            "scientific_name": t.get("sfda_scientific_name") or t.get("x_ingredient_en") or "",
+            # policy: price is shown for OTC and prescription-only drugs, never for Scheduled
+            "price_sar": None if t.get("is_scheduled") else t.get("list_price"),
+            "match": how,
+            "is_restricted": bool(t.get("x_is_restricted") or t.get("sfda_requires_prescription")),
+            "requires_prescription": bool(t.get("x_requires_prescription")
+                                          or t.get("sfda_requires_prescription")),
+            "is_scheduled": bool(t.get("is_scheduled")),
+            "schedule_class": t.get("schedule_class") or "",
+        }
+
+    def _rows(self, ids: list[int]) -> list[dict]:
+        if not ids:
+            return []
+        rows = {r["id"]: r for r in self.c.search_read("product.template", [["id", "in", ids]],
+                                                       self._CAND_FIELDS)}
+        return [rows[i] for i in ids if i in rows]
+
+    def search_product(self, query: str = "", branch_id: int | None = None, limit: int = 5,
+                       active_ingredient: str | None = None):
+        """Find what the customer means, by name OR by active ingredient.
+
+        - A brand/name query ("augmentin", "بندول") returns name matches (exact, then sound-alike)
+          plus `alternatives`: other brands with exactly the same active ingredient(s).
+        - An ingredient query ("amoxicillin", "اموكسيسيلين 500 ملجم كبسول") or `active_ingredient`
+          (the model's knowledge of a brand we don't carry) lists products containing it:
+          single-ingredient first, then the requested dosage form and closest strength.
+        - A requested strength that we don't have is reported with the strengths we do have."""
+        if not (query and query.strip()) and not active_ingredient:
+            return err("invalid_input", "query is required")
+        q, lim = (query or "").strip(), max(1, min(limit, 20))
+        pq = ingr.parse_query(q)
+        core = pq["core"] or q
+        strength, form = pq["strength_mg"], pq["form"]
+
+        ing = self._ingr.resolve_name(active_ingredient or core)
+        named_ingredient = bool(ing)
+        found = [] if active_ingredient else self._name_matches(q, lim * 2)
+        if found is not None and core and core != normalize(q) and not active_ingredient \
+                and not any(how == "exact" for _, how in found):
+            found = self._name_matches(core, lim * 2) or found     # "augmentin 625" -> "augmentin"
+        if not ing and found:                    # brand query: its own active ingredient(s)
+            ing = self._ingr.set_of(found[0][0]["id"])
+
+        out: dict = {}
+        if named_ingredient:
+            pool = self._ingr.rank(self._ingr.same_ingredients(ing, include_combos=True),
+                                   ing, strength, form)
+            rows = [(r, "active ingredient") for r in self._rows(pool[: lim * 3])]
+            # keep any direct name hits (e.g. our own brand "Amoxil") ahead of the generic list
+            direct = [(t, how) for t, how in found if how == "exact"]
+            seen, picked = set(), []
+            for t, how in direct + rows:
+                if t["id"] in seen:
                     continue
-            candidates.append({
-                "product_id": vid,
-                "name_en": t["name"],
-                "name_ar": t.get("x_name_ar") or "",
-                "brand": t.get("x_brand") or "",
-                "scientific_name": t.get("sfda_scientific_name") or "",
-                # policy: price is shown for OTC and prescription-only drugs, never for Scheduled
-                "price_sar": None if t.get("is_scheduled") else t.get("list_price"),
-                "match": how,
-                "is_restricted": bool(t.get("x_is_restricted") or t.get("sfda_requires_prescription")),
-                "requires_prescription": bool(t.get("x_requires_prescription")
-                                              or t.get("sfda_requires_prescription")),
-                "is_scheduled": bool(t.get("is_scheduled")),
-                "schedule_class": t.get("schedule_class") or "",
-            })
-        return {"candidates": candidates}
+                seen.add(t["id"])
+                picked.append((t, how))
+        else:
+            ranked = self._ingr.rank([t["id"] for t, _ in found], ing, strength, form) \
+                if (strength or form) and ing else [t["id"] for t, _ in found]
+            by_id = {t["id"]: (t, how) for t, how in found}
+            picked = [by_id[i] for i in ranked if i in by_id] + \
+                     [x for x in found if x[0]["id"] not in ranked]
+        cands, names = [], set()
+        for t, how in picked:
+            key = normalize_name(t["name"])
+            if key in names:                     # SFDA lists some products twice
+                continue
+            c = self._candidate(t, how, branch_id)
+            if c:
+                names.add(key)
+                cands.append(c)
+            if len(cands) >= lim:
+                break
+        out["candidates"] = cands
+
+        if ing:
+            out["active_ingredient"] = " + ".join(sorted(ing)).upper()
+            if not named_ingredient:             # brand query: same ingredient, other brands
+                shown = {c["product_id"] for c in cands}
+                alt_ids = self._ingr.rank(self._ingr.same_ingredients(ing), ing, strength, form)
+                alts = []
+                for t in self._rows(alt_ids[: lim * 4]):
+                    key = normalize_name(t["name"])
+                    if t["product_variant_id"][0] in shown or key in names:
+                        continue
+                    c = self._candidate(t, "same active ingredient, other brand", branch_id)
+                    if c:
+                        names.add(key)
+                        alts.append(c)
+                    if len(alts) >= lim:
+                        break
+                out["alternatives"] = alts
+            if strength:
+                pool = self._ingr.same_ingredients(ing)
+                have = self._ingr.strengths(pool, form) or self._ingr.strengths(pool)
+                if have and ingr.fmt_mg(strength) not in have:
+                    out["note"] = (f"{ingr.fmt_mg(strength)} is not available for this active "
+                                   f"ingredient; available strengths: {', '.join(have)}")
+        if not cands and not out.get("alternatives"):
+            out["hint"] = ("No product matched. If the customer gave a brand name, call "
+                           "search_product again with active_ingredient set to that brand's "
+                           "generic active ingredient to find the same medicine under other brands.")
+        return out
 
     # ---- 2. check_stock ------------------------------------------------------
     def check_stock(self, product_id: int, branch_id: int | None = None):
@@ -327,6 +425,17 @@ class Gateway:
                 res["problems"].append("invoice_already_used")
                 res["ok"] = False
         meds = res["medications"]
+        # generic substitution: the prescription also unlocks other brands with EXACTLY the same
+        # active ingredient(s) (Augmentin -> أوجمنتين / JULMENTIN / أموكلان), never Scheduled ones
+        unlocked = {m["product_id"] for m in meds}
+        variant_of = {r["id"]: r for r in rows}
+        for m in meds:
+            s = self._ingr.set_of(m.get("template_id"))
+            for tid in self._ingr.same_ingredients(s) if s else []:
+                r = variant_of.get(tid)
+                if r and not r.get("is_scheduled"):
+                    unlocked.add(r["product_variant_id"][0])
+        res["same_ingredient_count"] = len(unlocked) - len({m["product_id"] for m in meds})
         rid = self.c.create("pharmacy.prescription", {
             "name": f"RX-{datetime.now(rx.KSA):%Y%m%d-%H%M%S}",
             "partner_id": customer_id,
@@ -338,7 +447,7 @@ class Gateway:
             "ocr_confidence": 1.0 if res["ok"] else 0.0,
             "invoice_number": res["invoice_number"] or False,
             "prescription_date": res["date"] or False,
-            "matched_product_ids": [(6, 0, [m["product_id"] for m in meds])],
+            "matched_product_ids": [(6, 0, sorted(unlocked))],
             "extracted_drug": ", ".join(m["name_en"] for m in meds)[:250] or False,
             "state": "auto_verified" if res["ok"] else "submitted",
             "notes": ("checks failed: " + ", ".join(res["problems"])) if res["problems"]

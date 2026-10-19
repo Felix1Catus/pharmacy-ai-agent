@@ -82,7 +82,15 @@ SYSTEM_PROMPT = (
     "written differently or in another language (e.g. 'سرفاركس' = CERVARIX VACCINE): confirm it "
     "('تقصد CERVARIX VACCINE؟') and carry on - never call it a different or 'similar' product. "
     "Never say a product is unavailable unless check_stock returned zero.\n"
-    "5. Prescription-only medicines (search result requires_prescription=true, not scheduled): "
+    "4c. Same active ingredient: search results may include alternatives (other brands with the "
+    "same active ingredient). When the product the customer asked for is not found or out of "
+    "stock, offer those alternatives, saying they have the same active ingredient (name it) and "
+    "stating each one's strength - never claim more than that. If search_product finds nothing "
+    "for a brand name, call search_product again with active_ingredient set to that brand's "
+    "generic active ingredient (e.g. Augmentin -> 'amoxicillin, clavulanic acid'). If the result "
+    "has a note that the requested strength is not available, tell the customer the strengths "
+    "we do have.\n"
+    "5.Prescription-only medicines (search result requires_prescription=true, not scheduled): "
     "you MAY confirm availability (check_stock) and price (price_sar from search_product). Each "
     "such result has prescription_on_file. If prescription_on_file=true, handle it like any other "
     "medicine (confirm, then create_order / hold_item). If it is false and the customer wants to "
@@ -207,6 +215,10 @@ class PharmacyAgent:
             what = ("prescription-only - may now be ordered/held" if m["requires_prescription"]
                     else "over the counter")
             lines.append(f"- {m['name_en']} / {m['name_ar']} (product_id {m['product_id']}): {what}")
+        if res.get("same_ingredient_count"):
+            lines.append("Other brands with exactly the same active ingredient(s) are also allowed "
+                         "on this prescription (search_product shows them as alternatives with "
+                         "prescription_on_file=true).")
         if res.get("scheduled_count"):
             lines.append("The prescription also lists controlled medicines: they cannot be ordered "
                          "through the chat - say only that a pharmacist handles those, give no "
@@ -218,7 +230,7 @@ class PharmacyAgent:
     def _annotate_prescriptions(self, conv, result):
         """Tell the model, per prescription-only search result, whether THIS customer has a
         valid prescription for it (the gateway enforces the same rule on create_order)."""
-        for c in result.get("candidates") or []:
+        for c in (result.get("candidates") or []) + (result.get("alternatives") or []):
             if c.get("requires_prescription") and not c.get("is_scheduled"):
                 c["prescription_on_file"] = bool(
                     self.gw.valid_prescription(conv.customer_id, c["product_id"]))
@@ -342,7 +354,11 @@ class PharmacyAgent:
                 rest = [c for c in cands if not c.get("is_scheduled")]
                 if len(rest) < len(cands):
                     result["candidates"] = rest
-                    sched_hit = not any(c.get("match") == "exact" for c in rest)
+                    sched_hit = not any(c.get("match") in ("exact", "active ingredient")
+                                        for c in rest)
+                if "alternatives" in result:
+                    result["alternatives"] = [c for c in result["alternatives"]
+                                              if not c.get("is_scheduled")]
                 self._annotate_prescriptions(conv, result)
             calls_made += 1
             self._audit(conv.conv_id, "tool_call",
