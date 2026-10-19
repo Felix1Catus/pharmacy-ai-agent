@@ -91,3 +91,40 @@ def test_nothing_found_gives_hint():
 def test_plain_brand_search_still_works():
     r = GW.search_product("panadol")
     assert any("panadol" in c["name_en"].lower() for c in r["candidates"])
+
+
+def test_salt_forms_are_the_same_ingredient():
+    assert ingr.ingredient_set("METFORMIN HYDROCHLORIDE") == {"metformin"}
+    assert ingr.ingredient_set("ATORVASTATIN CALCIUM,EZETIMIBE") == {"atorvastatin", "ezetimibe"}
+    assert ingr.ingredient_set("CALCIUM") == {"calcium"}                 # a salt word alone stays
+
+
+@live
+def test_prescription_lines_matched_by_ingredient_and_strength():
+    import prescription as rx
+    text = ("Patient: Test Patient B\nDiagnosis: Type 2 diabetes / dyslipidemia\n"
+            "1. Metformin - 500 mg tablet\nSig: 1 tab twice daily with meals\n"
+            "2. Atorvastatin - 20 mg tablet\nSig: 1 tab at night\n")
+    items = ingr.prescription_items(text, GW._ingr)
+    assert [(set(i["set"]), i["strength_mg"]) for i in items] == [({"metformin"}, 500), ({"atorvastatin"}, 20)]
+
+
+@live
+@pytest.mark.skipif(not __import__("shutil").which("tesseract"), reason="tesseract not installed")
+def test_user_sample_prescription_is_accepted():
+    """The prescription a tester sent (Metformin 500 mg + Atorvastatin 20 mg, 18/10/2026)."""
+    from datetime import date, timedelta
+    import prescription as rx
+    img = (ROOT / "evals" / "datasets" / "sample_rx_metformin_atorvastatin.png").read_bytes()
+    text = rx.ocr_image(img)
+    items = ingr.prescription_items(text, GW._ingr)
+    assert {frozenset(i["set"]) for i in items} == {frozenset({"metformin"}), frozenset({"atorvastatin"})}
+    cust = GW.c.search("res.partner", [["ref", "=", "CUST-RXTEST"]]) or [None]
+    if cust[0] and rx.today_ksa() - date(2026, 10, 18) <= timedelta(days=5):
+        res = GW.submit_prescription(cust[0], img, "rx.png")
+        try:
+            assert "no_medication" not in res["problems"], res
+            names = " ".join(m["name_en"] for m in res["medications"])
+            assert "METFORMIN 500 mg" in names and "ATORVASTATIN 20 mg" in names
+        finally:
+            GW.c.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])

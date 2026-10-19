@@ -52,8 +52,24 @@ _GENERIC_FIRST = {"sodium", "potassium", "calcium", "magnesium", "vitamin", "fer
                   "human", "insulin", "liquid", "light", "white", "yellow", "hydrogen", "dried"}
 
 
+# salt / hydrate words: "METFORMIN HYDROCHLORIDE" and "ATORVASTATIN CALCIUM" are what a
+# prescription calls "Metformin" and "Atorvastatin" (only stripped when a name remains)
+_SALTS = {"hydrochloride", "hcl", "hydrobromide", "sodium", "potassium", "calcium", "magnesium",
+          "trihydrate", "dihydrate", "monohydrate", "hemihydrate", "anhydrous", "sulfate",
+          "sulphate", "maleate", "besylate", "besilate", "mesylate", "mesilate", "succinate",
+          "tartrate", "fumarate", "citrate", "acetate", "phosphate", "dipropionate", "propionate",
+          "hyclate", "bitartrate", "disodium", "dihydrochloride", "medoxomil", "base", "as"}
+
+
+def _base_name(p: str) -> str:
+    words = p.split()
+    core = [w for w in words if w not in _SALTS]
+    return " ".join(core) if core else p
+
+
 def ingredient_set(raw: str | None) -> frozenset[str]:
-    """'AMOXICILLIN,CLAVULANIC ACID' / 'Amoxicillin+Clavulanate' -> {'amoxicillin','clavulanic acid'}."""
+    """'AMOXICILLIN,CLAVULANIC ACID' / 'Amoxicillin+Clavulanate' -> {'amoxicillin','clavulanic acid'};
+    'METFORMIN HYDROCHLORIDE' -> {'metformin'}."""
     if not raw:
         return frozenset()
     parts = re.split(r"\s*(?:,|\+|/|;|&|\band\b|\bwith\b)\s*", raw.lower())
@@ -62,8 +78,32 @@ def ingredient_set(raw: str | None) -> frozenset[str]:
         p = re.sub(r"\(.*?\)", "", p)                       # "(as trihydrate)"
         p = re.sub(r"\s+", " ", p).strip(" .-\"'")
         if p:
-            out.add(_SYNONYMS.get(p, p))
+            p = _SYNONYMS.get(p, p)
+            out.add(_SYNONYMS.get(_base_name(p), _base_name(p)))
     return frozenset(out)
+
+
+_RX_ITEM_LINE = re.compile(r"^\s*(\d+\s*[.)\-]|[-•*▪])")
+
+
+def prescription_items(text: str, index: "IngredientIndex") -> list[dict]:
+    """Medicine lines of a prescription -> [{"set", "strength_mg", "line"}]. Only lines that
+    look like an Rx item (a list number/bullet or a strength) are read, so headers such as
+    'Physician' or 'Diagnosis' can never be mistaken for an ingredient."""
+    items, seen = [], set()
+    for line in (text or "").splitlines():
+        if not (_RX_ITEM_LINE.match(line) or _STRENGTH.search(normalize(line).translate(_DIG))):
+            continue
+        if re.match(r"\s*(sig|qty|quantity|instructions?)\b", line, re.I):
+            continue
+        s = index.resolve_name(line)
+        if not s:
+            continue
+        key = (s, strength_mg(line))
+        if key not in seen:
+            seen.add(key)
+            items.append({"set": s, "strength_mg": key[1], "line": line.strip()})
+    return items
 
 
 def strength_mg(text: str) -> float | None:

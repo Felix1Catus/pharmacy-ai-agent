@@ -408,6 +408,32 @@ class Gateway:
             files = {"image": b64(image), "image_filename": filename or "prescription.jpg"}
         rows = self.c.search_read("product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS)
         res = rx.evaluate(text, rows)
+        # Prescriptions name the ACTIVE INGREDIENT ("Metformin - 500 mg tablet") while our
+        # catalogue lists brands ("DIALON 500 MG", "METFORMIN HYDROCHLORIDE"): match each Rx line
+        # by ingredient set, narrowed to the prescribed strength when we stock it.
+        variant_of = {r["id"]: r for r in rows}
+        named = {m.get("template_id") for m in res["medications"]}
+        for item in ingr.prescription_items(text, self._ingr):
+            pool = self._ingr.same_ingredients(item["set"])
+            if item["strength_mg"]:
+                pool = [t for t in pool if self._ingr.products[t]["strength_mg"] == item["strength_mg"]] or pool
+            found = [variant_of[t] for t in pool if t in variant_of]
+            allowed = [r for r in found if not r.get("is_scheduled")]
+            if not found or any(r["id"] in named for r in allowed):
+                continue
+            label = " + ".join(sorted(item["set"])).upper() + \
+                (f" {ingr.fmt_mg(item['strength_mg'])}" if item["strength_mg"] else "")
+            res["medications"].append({
+                "product_id": (allowed or found)[0]["product_variant_id"][0],
+                "template_id": (allowed or found)[0]["id"],
+                "name_en": f"{label} ({len(allowed)} product(s) in our catalogue)",
+                "name_ar": "", "is_scheduled": not allowed,
+                "requires_prescription": any(_needs_prescription(r) for r in allowed),
+                "matched": "active ingredient", "score": 100.0,
+                "pool": [r["product_variant_id"][0] for r in allowed]})
+        if res["medications"] and "no_medication" in res["problems"]:
+            res["problems"].remove("no_medication")
+        res["ok"] = not res["problems"]
         # Scheduled (مقيد / controlled) medicines are never verified by OCR: they are dropped
         # from what the prescription unlocks; one listing ONLY Scheduled medicines is refused.
         res["scheduled_count"] = sum(m["is_scheduled"] for m in res["medications"])
@@ -426,8 +452,10 @@ class Gateway:
         # generic substitution: the prescription also unlocks other brands with EXACTLY the same
         # active ingredient(s) (Augmentin -> أوجمنتين / JULMENTIN / أموكلان), never Scheduled ones
         unlocked = {m["product_id"] for m in meds}
-        variant_of = {r["id"]: r for r in rows}
         for m in meds:
+            if m.get("pool"):              # ingredient match: already the prescribed strength's products
+                unlocked.update(m["pool"])
+                continue
             s = self._ingr.set_of(m.get("template_id"))
             for tid in self._ingr.same_ingredients(s) if s else []:
                 r = variant_of.get(tid)
