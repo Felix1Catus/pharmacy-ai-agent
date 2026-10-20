@@ -10,6 +10,7 @@ The agent and the FastAPI app call these functions; tests call them directly.
 from __future__ import annotations
 
 import base64
+import re
 import json
 import sys
 import time
@@ -51,6 +52,7 @@ _CITIES = {"الرياض": "Riyadh", "جده": "Jeddah", "جدة": "Jeddah", "ا
            "الخبر": "Khobar", "الطايف": "Taif", "الطائف": "Taif", "ابها": "Abha", "أبها": "Abha",
            "تبوك": "Tabuk", "بريده": "Buraydah", "بريدة": "Buraydah", "الاحساء": "Al Ahsa",
            "الأحساء": "Al Ahsa", "حايل": "Hail", "حائل": "Hail", "جازان": "Jazan", "نجران": "Najran",
+           "دمام": "Dammam", "رياض": "Riyadh", "خبر": "Khobar", "مدينه": "Madinah",
            "riyadh": "Riyadh", "jeddah": "Jeddah", "dammam": "Dammam", "makkah": "Makkah",
            "mecca": "Makkah", "madinah": "Madinah", "medina": "Madinah", "khobar": "Khobar"}
 
@@ -69,12 +71,18 @@ def normalize_phone(raw) -> str | None:
         d = "966" + d
     elif d.startswith("9660"):
         d = "966" + d[4:]
+    elif len(d) == 11 and d.startswith("01"):     # Egyptian mobile 01XXXXXXXXX -> 201XXXXXXXXX
+        d = "20" + d[1:]
     return d if 9 <= len(d) <= 15 else None
 
 
 def guess_city(address: str) -> str | None:
+    """City named in a free-text address: the FIRST city word, so "6 دمام شارع جدة الجديد"
+    is Dammam (the street is named after Jeddah)."""
     low = (address or "").lower()
-    return next((en for k, en in _CITIES.items() if k in low), None)
+    hits = [(m.start(), en) for k, en in _CITIES.items()
+            for m in re.finditer(rf"(?<!\w){re.escape(k)}(?!\w)", low)]
+    return min(hits)[1] if hits else None
 
 
 def normalize_name(name: str) -> str:
@@ -188,6 +196,26 @@ class Gateway:
         - A requested strength that we don't have is reported with the strengths we do have."""
         if not (query and query.strip()) and not active_ingredient:
             return err("invalid_input", "query is required")
+        if branch_id is not None:
+            # a branch filter must never turn "in our catalogue" into "not found": an unknown
+            # branch id (the model guessed one) is ignored, and if nothing is in stock at a real
+            # branch the products are still returned with a note
+            b = self._branch(branch_id)
+            unfiltered = self.search_product(query, None, limit, active_ingredient)
+            if not b:
+                unfiltered["note_branch"] = (f"branch_id {branch_id} does not exist - call "
+                                             f"list_branches; results are for all branches")
+                return unfiltered
+            filtered = self._search(query, branch_id, limit, active_ingredient)
+            if filtered.get("candidates") or filtered.get("alternatives"):
+                return filtered
+            if unfiltered.get("candidates") or unfiltered.get("alternatives"):
+                unfiltered["note_branch"] = (f"none of these is in stock at {b['name']}; they are "
+                                             f"in our catalogue - check_stock shows other branches")
+            return unfiltered
+        return self._search(query, None, limit, active_ingredient)
+
+    def _search(self, query, branch_id, limit, active_ingredient):
         q, lim = (query or "").strip(), max(1, min(limit, 20))
         pq = ingr.parse_query(q)
         core = pq["core"] or q

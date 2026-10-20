@@ -122,7 +122,7 @@ def ctx():
     c = GW.c
     # dedicated customer, so prescriptions sent while trying the chat page never interfere
     ids = c.search("res.partner", [["ref", "=", "CUST-RXTEST"]])
-    cust = ids[0] if ids else c.create("res.partner", {"name": "RX Test Customer",
+    cust = ids[0] if ids else c.create("res.partner", {"name": "ZZ Test RX Customer",
                                                        "ref": "CUST-RXTEST"})
     left = c.search("pharmacy.prescription", [["partner_id", "=", cust]])
     if left:

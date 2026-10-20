@@ -61,7 +61,7 @@ def test_bad_signature_rejected():
 
 def test_known_number_greeted_by_name_with_menu_list():
     gw = webhook.agent().gw
-    prof = gw.register_customer("Webhook Known Customer", "0500000101", "Riyadh, Al Olaya, King Fahd Rd 1")
+    prof = gw.register_customer("ZZ Test Webhook Known", "0500000101", "Riyadh, Al Olaya, King Fahd Rd 1")
     wa = "966500000101"
     webhook._convs.pop(wa, None)
     assert _post(wa, "السلام عليكم").status_code == 200
@@ -79,7 +79,7 @@ def test_unknown_number_registers_through_buttons():
     _post(wa, None, kind="interactive", extra={"interactive": {
         "type": "list_reply", "list_reply": {"id": "customer", "title": "👤 عميل حالي / جديد"}}})
     assert "اسمك" in _last_out(wa)["text"]["body"]       # not found -> asks for the name
-    _post(wa, "Test Registrant")
+    _post(wa, "ZZ Test Registrant")
     _post(wa, "الرياض، حي النرجس، شارع الامير سعود 12")
     out = _last_out(wa)
     assert out["type"] == "interactive" and out["interactive"]["type"] == "button"   # ⏭️ تخطي
@@ -88,5 +88,5 @@ def test_unknown_number_registers_through_buttons():
     _post(wa, None, kind="interactive", extra={"interactive": {
         "type": "button_reply", "button_reply": {"id": "save", "title": "✅ حفظ"}}})
     prof = webhook.agent().gw.find_customer(wa)
-    assert prof and prof["name"] == "Test Registrant" and "النرجس" in prof["address"]
+    assert prof and prof["name"] == "ZZ Test Registrant" and "النرجس" in prof["address"]
     assert webhook._convs[wa].customer_id == prof["customer_id"]

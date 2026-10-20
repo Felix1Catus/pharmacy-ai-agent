@@ -43,7 +43,7 @@ def no_rx_customer(gw):
     """A customer with no usable prescription, so prescription-only items are always refused
     (the demo customer may hold real auto-verified prescriptions from trying the chat page)."""
     ids = gw.c.search("res.partner", [["ref", "=", "CUST-NORX"]])
-    cid = ids[0] if ids else gw.c.create("res.partner", {"name": "No Prescription Customer",
+    cid = ids[0] if ids else gw.c.create("res.partner", {"name": "ZZ Test No Prescription",
                                                          "ref": "CUST-NORX"})
     left = gw.c.search("pharmacy.prescription", [["partner_id", "=", cid]])
     if left:

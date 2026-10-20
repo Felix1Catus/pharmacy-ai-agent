@@ -212,6 +212,12 @@ class CustomerFlow:
                 return self.a._tool_error_reply(conv, name, code)
             return self.a._say(conv, head + t["order_failed"].format(why=result["error"].get("message", code)),
                                guard="order")
+        return self.confirmation(conv, name, args, result, head)
+
+    def confirmation(self, conv, name, args, result, head=""):
+        """Fixed order confirmation (never model text): order number, total, how it is
+        fulfilled, and that the pharmacy confirms it - no invented tracking links or times."""
+        t = T[conv.lang or "ar"]
         if name == "hold_item":
             ref, total, how = result.get("ref", ""), 0.0, ""
         else:
@@ -219,5 +225,6 @@ class CustomerFlow:
             how = (t["how_delivery"].format(addr=args.get("delivery_address", ""))
                    if result.get("fulfillment") == "delivery"
                    else t["how_pickup"].format(branch=result.get("branch_name", "")))
-        return self.a._say(conv, head + t["order_done"].format(ref=ref, total=total or 0.0, how=how),
-                           guard="order")
+        name_line = f"👤 {conv.customer_name}\n" if conv.customer_name else ""
+        return self.a._say(conv, head + name_line + t["order_done"].format(
+            ref=ref, total=total or 0.0, how=how), guard="order")

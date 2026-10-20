@@ -52,14 +52,14 @@ def test_phone_normalisation():
 
 
 def test_known_whatsapp_number_greeted_by_name():
-    prof = GW.register_customer("Known Flow Customer", "0500000202", "Jeddah, Al Rawdah, St 5")
+    prof = GW.register_customer("ZZ Test Known", "0500000202", "Jeddah, Al Rawdah, St 5")
     a, llm, conv = _guest(wa_phone="966500000202")
     reply = a.greet(conv)
     assert prof["name"] in reply and conv.customer_id == prof["customer_id"]
 
 
 def test_existing_customer_button_confirms_saved_profile():
-    prof = GW.register_customer("Existing Button Customer", "0500000303", "Dammam, Al Faisaliyah, St 9")
+    prof = GW.register_customer("ZZ Test Existing", "0500000303", "Dammam, Al Faisaliyah, St 9")
     a, llm, conv = _guest()
     a.greet(conv)
     reply = a.respond(conv, "4")                          # 👤 عميل حالي / جديد
@@ -72,7 +72,7 @@ def test_existing_customer_button_confirms_saved_profile():
 
 
 def test_edit_address_updates_contact():
-    prof = GW.register_customer("Edit Address Customer", "0500000404", "Riyadh, Old Street 1")
+    prof = GW.register_customer("ZZ Test Edit Address", "0500000404", "Riyadh, Old Street 1")
     a, llm, conv = _guest(wa_phone="966500000404")
     a.greet(conv)
     a.respond(conv, "4")
@@ -87,13 +87,13 @@ def test_new_customer_registration_creates_contact():
     a.greet(conv)
     a.respond(conv, "عميل جديد")
     assert "اسمك" in a.respond(conv, phone)
-    a.respond(conv, "Registration Flow Test")
+    a.respond(conv, "ZZ Test Registration")
     a.respond(conv, "الرياض، حي العليا، شارع التحلية 7")
     a.respond(conv, "0559999999")
     reply = a.respond(conv, "✅ حفظ")
     prof = GW.find_customer(phone)
     assert prof and prof["alt_phone"].endswith("559999999") and conv.customer_id == prof["customer_id"]
-    assert "Registration Flow Test" in reply and llm.seen == []
+    assert "ZZ Test Registration" in reply and llm.seen == []
 
 
 def test_injection_inside_the_flow_is_still_caught():
@@ -117,7 +117,7 @@ def test_confirmed_order_from_guest_registers_then_places_quotation(monkeypatch)
     reply = a.respond(conv, "نعم اكد الطلب")              # confirmed, but nobody to bill yet
     assert placed == [] and "بياناتك" in reply and conv.flow["pending"]["kind"] == "tool"
     a.respond(conv, _new_number())
-    a.respond(conv, "Checkout Guest")
+    a.respond(conv, "ZZ Test Checkout")
     a.respond(conv, "الرياض، حي النرجس، شارع 15")
     a.respond(conv, "تخطي")
     reply = a.respond(conv, "حفظ")
@@ -135,7 +135,7 @@ def test_guest_cannot_track_or_read_orders():
 
 
 def test_real_order_is_a_whatsapp_quotation():
-    prof = GW.register_customer("Quotation Customer", "0500000505", "Riyadh, Al Yasmin, St 3")
+    prof = GW.register_customer("ZZ Test Quotation", "0500000505", "Riyadh, Al Yasmin, St 3")
     vid = GW.c.search_read("product.template", [["default_code", "=", "PH-0001"]],
                            ["product_variant_id"])[0]["product_variant_id"][0]
     b = next((b for b in GW.branches() if GW._avail_at(vid, b["loc_id"]) >= 1), None)
@@ -149,3 +149,55 @@ def test_real_order_is_a_whatsapp_quotation():
     assert o["state"] == "draft" and o["partner_id"][0] == prof["customer_id"] and o["wa_order"]
     assert o["fulfillment_type"] == "delivery" and o["dispatch_status"] == "awaiting_approval"
     assert o["delivery_address_text"] == "Riyadh, Al Yasmin, St 3"
+
+
+def test_identity_kept_and_given_to_the_model():
+    prof = GW.register_customer("ZZ Test Memory", "0500000606", "الدمام، حي الفيصلية، شارع 9")
+    llm = ScriptLLM([{"content": "تمام", "tool_calls": []}])
+    a = PharmacyAgent(llm=llm, gateway=GW)
+    conv = Conversation(None, customer_facing=True)
+    a.greet(conv)
+    a.respond(conv, "4")
+    a.respond(conv, "0500000606")
+    a.respond(conv, "✅ نعم، اعتمدها")
+    a.respond(conv, "ابغى بنادول")                      # several turns later, still identified
+    assert conv.customer_id == prof["customer_id"]
+    last_user = [m for m in llm.seen[-1] if m["role"] == "user"][-1]["content"]
+    assert "ZZ Test Memory" in last_user and "الفيصلية" in last_user
+
+
+def test_identified_order_goes_to_that_customer_with_fixed_confirmation(monkeypatch):
+    prof = GW.register_customer("ZZ Test Order Owner", "0500000707", "Riyadh, Al Malqa, St 4")
+    placed = []
+    monkeypatch.setattr(GW, "create_order", lambda **kw: placed.append(kw) or {
+        "order_id": 1, "order_ref": "S01234", "state": "draft", "total": 120.0,
+        "branch_id": 1, "branch_name": "Riyadh", "fulfillment": "delivery"})
+    order = {"content": "", "tool_calls": [{"name": "create_order", "arguments": {
+        "items": [{"product_id": 1, "qty": 2}], "fulfillment": "delivery", "customer_id": 7}}]}
+    a = PharmacyAgent(llm=ScriptLLM([order]), gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500000707")
+    a.greet(conv)
+    reply = a.respond(conv, "نعم اكد الطلب")
+    assert placed[0]["customer_id"] == prof["customer_id"]          # never Demo Customer (7)
+    assert placed[0]["delivery_address"] == "Riyadh, Al Malqa, St 4"
+    assert "S01234" in reply and "ZZ Test Order Owner" in reply and "رابط" not in reply
+
+
+def test_city_detection_and_egyptian_numbers():
+    from gateway import guess_city, normalize_phone
+    assert guess_city("6 دمام شارع جدة الجديد") == "Dammam"
+    assert guess_city("الرياض، حي النرجس") == "Riyadh"
+    assert normalize_phone("01030235110") == "201030235110"
+
+
+def test_promises_removed_from_replies():
+    from agent import _strip_promises
+    text = "تم الطلب ✅
+سأُرسل لك رابط التتبع بعد التوصيل. شكراً لك!"
+    out = _strip_promises(text)
+    assert "رابط" not in out and "تم الطلب" in out and "شكراً" in out
+
+
+def test_search_with_wrong_branch_still_finds_product():
+    r = GW.search_product("بنادول", branch_id=999999)
+    assert r["candidates"] and "does not exist" in r["note_branch"]

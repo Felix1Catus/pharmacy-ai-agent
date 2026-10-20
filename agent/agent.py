@@ -108,7 +108,13 @@ SYSTEM_PROMPT = (
     "If the message is insulting or abusive, call escalate_to_human reason='abusive'. Never try "
     "to handle unclear or abusive messages with plain text.\n"
     "7. Reply with plain text (no tool call) ONLY to present results you already fetched or to "
-    "ask a short clarifying question after you have already searched."
+    "ask a short clarifying question after you have already searched.\n"
+    "8. Customer identity: if the message says the customer is identified, NEVER ask for their "
+    "name, phone number or address - for delivery use their saved address (create_order without "
+    "delivery_address uses it) unless they give a different one. Orders become a quotation the "
+    "pharmacy confirms: after create_order succeeds, give the order number and total and say the "
+    "pharmacy will confirm it and they can follow it from 'Track order' in the menu. NEVER "
+    "promise a tracking link, SMS, notification, delivery time or anything not in a tool result."
 )
 LANG_HINT = {"ar": "\n\n(Reply only in Arabic, Saudi dialect.)",
              "en": "\n\n(Reply only in English.)"}
@@ -124,6 +130,22 @@ _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
 _ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
+# promises the pharmacy cannot keep (no tracking links / SMS exist): such sentences are removed
+_PROMISE = re.compile(r"(رابط\s*(ال)?تتبع|رابط\s*للتتبع|رسال[ةه]\s*نصي[ةه]|SMS|tracking\s*link|"
+                      r"track(ing)?\s*(url|number)|link to track|will (text|sms|email) you)", re.I)
+
+
+def _strip_promises(text: str) -> str:
+    if not _PROMISE.search(text):
+        return text
+    out = []
+    for line in text.split("\n"):
+        kept = [s for s in re.split(r"(?<=[.!؟?])\s+", line) if not _PROMISE.search(s)]
+        if kept or not line.strip():
+            out.append(" ".join(kept))
+    return "\n".join(out).strip()
+
+
 _ACK = {"ar": "حوّلت طلبك إلى صيدلي/موظف وسيتواصل معك قريبًا.",
         "en": "I've handed you over to a pharmacist; they'll follow up shortly."}
 
@@ -285,6 +307,19 @@ class PharmacyAgent:
         return bool(need) and all(
             any(k == h or (len(k) >= 4 and fuzz.ratio(k, h) >= 85) for h in keys) for k in need)
 
+    @staticmethod
+    def _customer_hint(conv) -> str:
+        """Who the customer is, on every turn: once identified by phone the model must not ask
+        for name / phone / address again, and deliveries go to the saved address."""
+        if not conv.customer_facing:
+            return ""
+        if conv.customer_id and conv.profile:
+            addr = conv.profile.get("address") or "none saved"
+            return (f"\n(Customer identified: {conv.customer_name}. Saved delivery address: {addr}. "
+                    f"Do not ask for their name, phone or address.)")
+        return ("\n(Customer not identified yet: do not ask for their phone or address - the "
+                "system collects them when the order is confirmed.)")
+
     def _clean_reply(self, text: str) -> str | None:
         """Strip internal ids from a model reply; None if it leaks prompt/tool internals."""
         if any(m in text.lower() for m in _LEAK_MARKERS):
@@ -430,7 +465,7 @@ class PharmacyAgent:
         # The language hint rides on THIS turn's message, not the system prompt: the system prompt
         # stays byte-identical for every customer, so Ollama reuses its cached ~1,800 tokens.
         turn = len(conv.messages) - 1
-        hint = LANG_HINT.get(conv.lang or "", "")
+        hint = LANG_HINT.get(conv.lang or "", "") + self._customer_hint(conv)
         calls_made = 0
 
         while calls_made <= MAX_TOOL_CALLS:
@@ -447,6 +482,7 @@ class PharmacyAgent:
                 if reply_gives_medical_advice(reply):   # dosage/treatment slipped through: never sent
                     self._escalate(conv, "medical_advice", f"model reply blocked: {reply[:200]}")
                     return self._say(conv, MEDICAL_REFUSAL, guard="medical_output")
+                reply = _strip_promises(reply)
                 reply = reply or ("عفواً، ممكن توضح طلبك؟" if self._lang(conv) == "ar"
                                   else "Sorry, could you clarify your request?")
                 return self._say(conv, reply)
@@ -507,6 +543,11 @@ class PharmacyAgent:
                 return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled_search")
 
             # terminal: a completed handover ends the turn with its acknowledgement
+            # terminal: a placed order / hold gets the fixed confirmation (number, total,
+            # address or branch, "the pharmacy confirms it"), never a model-written promise
+            if name in ("create_order", "hold_item") and isinstance(result, dict) \
+                    and ("order_id" in result or "hold_id" in result):
+                return self.customer.confirmation(conv, name, args, result)
             if name == "escalate_to_human" and isinstance(result, dict) and "handover_id" in result:
                 reply = (_ACK[conv.lang] if conv.lang else
                          result.get("acknowledgement", "تم تحويلك إلى موظف."))
