@@ -124,6 +124,9 @@ def localize(text: str, lang: str | None) -> str:
     if not lang or " — " not in text:
         return text
     ar, en = text.split(" — ", 1)
+    # only a real "Arabic — English" pair; an English sentence with a dash stays whole
+    if not (re.search(r"[؀-ۿ]", ar) and re.search(r"[A-Za-z]", en) and not re.search(r"[؀-ۿ]", en)):
+        return text
     return ar.strip() if lang == "ar" else en.strip()
 
 

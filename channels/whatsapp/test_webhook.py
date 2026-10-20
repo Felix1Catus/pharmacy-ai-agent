@@ -75,7 +75,7 @@ def test_known_number_greeted_by_name_with_menu_list():
 def test_unknown_number_registers_through_buttons():
     wa = f"9665{time.time_ns() % 10**8:08d}"
     webhook._convs.pop(wa, None)
-    _post(wa, "hi")                                       # greeting + menu
+    _post(wa, "مرحبا")                                    # greeting + menu (Arabic)
     _post(wa, None, kind="interactive", extra={"interactive": {
         "type": "list_reply", "list_reply": {"id": "customer", "title": "👤 عميل حالي / جديد"}}})
     assert "اسمك" in _last_out(wa)["text"]["body"]       # not found -> asks for the name

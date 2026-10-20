@@ -126,3 +126,8 @@ def test_internal_ids_stripped_from_replies():
     assert _ID_MENTION.sub("", "ميتفورمين 500 مغ – (رقم المنتج 2979) متوفر").strip() == "ميتفورمين 500 مغ – متوفر"
     assert _ID_MENTION.sub("", "Augmentin 1g (product_id 36)") == "Augmentin 1g"
     assert _ID_MENTION.sub("", "paid 50 riyals") == "paid 50 riyals"
+
+
+def test_localize_keeps_english_sentences_with_dashes():
+    en = "We couldn't find an account with this number — let's register you 🙂"
+    assert localize(en, "en") == en and localize("Go ahead — ask about our products", "en").startswith("Go ahead")
