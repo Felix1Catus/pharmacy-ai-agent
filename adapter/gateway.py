@@ -444,7 +444,9 @@ class Gateway:
     _PARTNER_FIELDS = ["name", "phone", "mobile", "whatsapp_number", "street", "street2", "city"]
 
     def _profile(self, p: dict) -> dict:
-        addr = ", ".join(x for x in (p.get("street"), p.get("street2"), p.get("city")) if x)
+        street = ", ".join(x for x in (p.get("street"), p.get("street2")) if x)
+        # the city is only added when the address text doesn't already name one
+        addr = street if guess_city(street) else ", ".join(x for x in (street, p.get("city")) if x)
         return {"customer_id": p["id"], "name": p["name"], "phone": p.get("phone") or "",
                 "alt_phone": p.get("mobile") or "", "address": addr,
                 "city": p.get("city") or "", "whatsapp_number": p.get("whatsapp_number") or ""}
