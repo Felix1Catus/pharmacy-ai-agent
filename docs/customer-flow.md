@@ -52,8 +52,13 @@ address (`street`; city detected from the text), country Saudi Arabia, customer 
    customer contact · lines · branch · `wa_order` ✔ · fulfilment (pickup / delivery) ·
    delivery address as given · `dispatch_status` = *Awaiting pharmacy approval* for deliveries.
    Prescriptions used are noted on it and marked *Used*.
-4. The customer gets the order number and total, and can follow it from «📦 تتبع طلب»
-   (state shows as «بانتظار تأكيد الصيدلية» until a human confirms it).
+4. The customer gets a **fixed confirmation** (never model-written): their name, order number,
+   total, delivery address or pickup branch, and that the pharmacy will confirm it. They follow
+   it from «📦 تتبع طلب» (shown as «بانتظار تأكيد الصيدلية» until a human confirms it). The
+   assistant never promises tracking links, SMS or delivery times (a filter removes them).
+5. Once identified, the customer stays identified for the whole chat: the model is told their
+   name and saved address every turn, never asks for them again, and every quotation is
+   created under that contact (the model cannot choose another customer).
 
 ## 5. In Odoo (staff)
 - **Pharmacy → WhatsApp orders:** all quotations from the assistant (customer, fulfilment,

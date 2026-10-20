@@ -105,7 +105,7 @@ GUARD_LABELS = {
     "scheduled_prescription": "scheduled-medicine guard (prescription)",
     "prescription_tool": "prescription needed -> asked for photo",
     "prescription_check": "prescription photo rejected (checks)", "handover": "handed to pharmacist",
-    "customer": "customer identify/register flow", "order": "order placed after registration",
+    "customer": "customer identify/register flow", "order": "order placed (fixed confirmation)",
 }
 
 
