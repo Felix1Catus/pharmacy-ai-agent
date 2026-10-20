@@ -1,6 +1,6 @@
 {
     "name": "Pharmacy AI Agent",
-    "version": "18.0.1.6.0",
+    "version": "18.0.1.7.0",
     "summary": "Scheduled-medication flags + customer prescription (image/OCR) model for the AI ordering agent",
     "description": "Adds controlled/scheduled-substance classification to products and a "
                    "pharmacy.prescription model (image + OCR extraction + pharmacist "
@@ -9,7 +9,7 @@
     "author": "Pharmacy AI Agent project",
     "license": "LGPL-3",
     "category": "Inventory/Pharmacy",
-    "depends": ["product", "stock", "sale_management"],
+    "depends": ["product", "stock", "sale_management", "contacts"],
     "external_dependencies": {"python": ["requests"]},
     "data": [
         "security/ir.model.access.csv",
@@ -17,6 +17,7 @@
         "views/product_views.xml",
         "data/sfda_sync_data.xml",
         "views/sfda_sync_views.xml",
+        "views/customer_order_views.xml",
     ],
     "application": True,
     "installable": True,

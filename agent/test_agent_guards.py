@@ -103,7 +103,7 @@ def _cf(outputs=()):
 def test_first_message_gets_greeting_and_menu():
     a, llm, conv = _cf()
     reply = a.respond(conv, "السلام عليكم")
-    assert "طلب جديد" in reply and conv.last_menu and len(conv.last_menu) == 4
+    assert "طلب جديد" in reply and conv.last_menu and len(conv.last_menu) == 5
     assert llm.seen == []
 
 
@@ -112,7 +112,7 @@ def test_menu_choices_and_language_switch():
     a.greet(conv)
     assert "اكتب اسم الدواء" in a.respond(conv, "1")
     a.respond(conv, "القائمة")
-    reply = a.respond(conv, "4")                       # switch to English
+    reply = a.respond(conv, "5")                       # switch to English
     assert conv.lang == "en" and "New order" in reply
     assert "Type the name" in a.respond(conv, "🛒 New order")
     assert llm.seen == []

@@ -45,6 +45,38 @@ RX_PRODUCT_FIELDS = ["name", "x_name_ar", "x_brand", "sfda_scientific_name", "pr
                      "is_scheduled"]
 
 
+_PHONE_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+_CITIES = {"الرياض": "Riyadh", "جده": "Jeddah", "جدة": "Jeddah", "الدمام": "Dammam",
+           "مكه": "Makkah", "مكة": "Makkah", "المدينه": "Madinah", "المدينة": "Madinah",
+           "الخبر": "Khobar", "الطايف": "Taif", "الطائف": "Taif", "ابها": "Abha", "أبها": "Abha",
+           "تبوك": "Tabuk", "بريده": "Buraydah", "بريدة": "Buraydah", "الاحساء": "Al Ahsa",
+           "الأحساء": "Al Ahsa", "حايل": "Hail", "حائل": "Hail", "جازان": "Jazan", "نجران": "Najran",
+           "riyadh": "Riyadh", "jeddah": "Jeddah", "dammam": "Dammam", "makkah": "Makkah",
+           "mecca": "Makkah", "madinah": "Madinah", "medina": "Madinah", "khobar": "Khobar"}
+
+
+def normalize_phone(raw) -> str | None:
+    """Phone number -> international digits without '+', the WhatsApp wa_id format.
+    Saudi mobiles in any local form (05XXXXXXXX, 5XXXXXXXX, +966..., 00966...) -> 9665XXXXXXXX."""
+    if not raw:
+        return None
+    d = "".join(ch for ch in str(raw).translate(_PHONE_DIGITS) if ch.isdigit())
+    if d.startswith("00"):
+        d = d[2:]
+    if len(d) == 10 and d.startswith("05"):
+        d = "966" + d[1:]
+    elif len(d) == 9 and d.startswith("5"):
+        d = "966" + d
+    elif d.startswith("9660"):
+        d = "966" + d[4:]
+    return d if 9 <= len(d) <= 15 else None
+
+
+def guess_city(address: str) -> str | None:
+    low = (address or "").lower()
+    return next((en for k, en in _CITIES.items() if k in low), None)
+
+
 def normalize_name(name: str) -> str:
     return " ".join(normalize(name or "").split())
 
@@ -296,9 +328,15 @@ class Gateway:
                            branch_id=chosen, product_id=it["product_id"])
         lines = [(0, 0, {"product_id": it["product_id"],
                          "product_uom_qty": it["qty"]}) for it in items]
-        vals = {"partner_id": customer_id, "warehouse_id": chosen, "order_line": lines}
+        # A QUOTATION (not confirmed): a human confirms/invoices it at the dispensary for pickup,
+        # or approves it for delivery (then the Delivery Dispatcher takes over - future module).
+        vals = {"partner_id": customer_id, "warehouse_id": chosen, "order_line": lines,
+                "wa_order": True, "fulfillment_type": fulfillment,
+                "dispatch_status": "awaiting_approval" if fulfillment == "delivery" else "none",
+                "origin": "WhatsApp assistant"}
         if fulfillment == "delivery":
             vals["note"] = f"Delivery to: {delivery_address}"
+            vals["delivery_address_text"] = delivery_address
         if rx_used:
             refs = self.c.search_read("pharmacy.prescription", [["id", "in", list(rx_used)]],
                                       ["name", "invoice_number"])
@@ -306,15 +344,16 @@ class Gateway:
                 f"{r['name']} (invoice {r['invoice_number']})" for r in refs)).strip(" |")
         try:
             oid = self.c.create("sale.order", vals)
-            self.c.execute_kw("sale.order", "action_confirm", [[oid]])
         except OdooError as e:
             return err("invalid_input", str(e))
         if rx_used:      # one prescription = one order: it cannot be used again
             self.c.write("pharmacy.prescription", list(rx_used),
                          {"sale_order_id": oid, "state": "used"})
-        o = self.c.read("sale.order", oid, ["state", "amount_total"])[0]
-        return {"order_id": oid, "state": o["state"], "total": o["amount_total"],
-                "branch_id": chosen}
+        o = self.c.read("sale.order", oid, ["name", "state", "amount_total"])[0]
+        return {"order_id": oid, "order_ref": o["name"], "state": o["state"],
+                "total": o["amount_total"], "branch_id": chosen,
+                "branch_name": b["name"], "fulfillment": fulfillment,
+                "next_step": "quotation created; the pharmacy confirms it"}
 
     def _pick_branch_with_stock(self, items):
         for b in self.branches():
@@ -372,6 +411,58 @@ class Gateway:
         })
         return {"hold_id": oid, "expires_at": expires.isoformat(),
                 "branch_id": branch_id, "ref": ref}
+
+    # ---- customers (not LLM tools: the chat channel's fixed identify/register flow) ------
+    _PARTNER_FIELDS = ["name", "phone", "mobile", "whatsapp_number", "street", "street2", "city"]
+
+    def _profile(self, p: dict) -> dict:
+        addr = ", ".join(x for x in (p.get("street"), p.get("street2"), p.get("city")) if x)
+        return {"customer_id": p["id"], "name": p["name"], "phone": p.get("phone") or "",
+                "alt_phone": p.get("mobile") or "", "address": addr,
+                "city": p.get("city") or "", "whatsapp_number": p.get("whatsapp_number") or ""}
+
+    def find_customer(self, phone: str) -> dict | None:
+        """Customer whose WhatsApp number, phone or mobile is this number (any format:
+        0501234567, +966 50 123 4567, 966501234567...), or None."""
+        norm = normalize_phone(phone)
+        if not norm:
+            return None
+        rows = self.c.search_read("res.partner", [
+            "|", "|", ["whatsapp_number", "=", norm], ["phone", "ilike", norm[-4:]],
+            ["mobile", "ilike", norm[-4:]]], self._PARTNER_FIELDS, order="id", limit=50)
+        for p in rows:
+            if norm in {p.get("whatsapp_number"), normalize_phone(p.get("phone")),
+                        normalize_phone(p.get("mobile"))}:
+                return self._profile(p)
+        return None
+
+    def get_customer(self, customer_id: int) -> dict | None:
+        rows = self.c.search_read("res.partner", [["id", "=", customer_id]], self._PARTNER_FIELDS)
+        return self._profile(rows[0]) if rows else None
+
+    def register_customer(self, name: str, phone: str, address: str,
+                          alt_phone: str | None = None) -> dict:
+        """Create the Odoo contact for a new customer (or return the existing one for this
+        number), so later orders recognise them and invoices carry their details."""
+        existing = self.find_customer(phone)
+        if existing:
+            return existing
+        norm = normalize_phone(phone)
+        sa = self.c.search("res.country", [["code", "=", "SA"]], limit=1)
+        pid = self.c.create("res.partner", {
+            "name": name.strip(), "phone": "+" + norm, "whatsapp_number": norm,
+            "mobile": ("+" + normalize_phone(alt_phone)) if alt_phone and normalize_phone(alt_phone) else False,
+            "street": address.strip(), "city": guess_city(address) or False,
+            "country_id": sa[0] if sa else False, "customer_rank": 1,
+            "registered_via": "whatsapp",
+            "comment": "Registered by the WhatsApp ordering assistant.",
+        })
+        return self.get_customer(pid)
+
+    def update_customer_address(self, customer_id: int, address: str) -> dict | None:
+        self.c.write("res.partner", [customer_id], {"street": address.strip(), "street2": False,
+                                                    "city": guess_city(address) or False})
+        return self.get_customer(customer_id)
 
     # ---- prescriptions (not an LLM tool: the chat channel calls these) --------
     def _rx_required(self, flags, product_id):

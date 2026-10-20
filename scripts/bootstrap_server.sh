@@ -58,11 +58,11 @@ docker compose pull -q
 docker compose up -d db
 for i in $(seq 1 30); do docker compose ps db | grep -q healthy && break; sleep 3; done
 if ! docker compose exec -T db psql -U odoo -d postgres -tAc "select 1 from pg_database where datname='pharmacy'" | grep -q 1; then
-  docker compose run --rm odoo odoo -i base,product,stock,sale_management,sale_stock,pharmacy_agent \
+  docker compose run --rm odoo odoo -i base,product,stock,sale_management,sale_stock,contacts,pharmacy_agent \
     -d pharmacy --without-demo=all --stop-after-init --db_host=db --db_user=odoo --db_password=odoo
   FRESH_DB=1
 else
-  docker compose run --rm odoo odoo -u pharmacy_agent -d pharmacy --stop-after-init \
+  docker compose run --rm odoo odoo -i contacts -u pharmacy_agent -d pharmacy --stop-after-init \
     --db_host=db --db_user=odoo --db_password=odoo
   FRESH_DB=0
 fi

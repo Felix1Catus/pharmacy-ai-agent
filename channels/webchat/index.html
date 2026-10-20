@@ -63,6 +63,7 @@
     <div class="avatar">💊</div>
     <div class="who"><b>الصيدلية · Pharmacy</b><small id="status">متصل · online</small></div>
     <div class="tools">
+      <input id="wa" type="tel" dir="ltr" placeholder="📱 WhatsApp no. (sim)" title="Simulated WhatsApp sender number: a known number is greeted by name; empty = unknown customer" style="font:inherit;font-size:12.5px;border-radius:16px;border:0;padding:5px 10px;width:150px">
       <select id="model" title="model"></select>
       <label title="show tool calls"><input type="checkbox" id="dbg" checked> <span>debug</span></label>
       <button id="new" title="start a new conversation">محادثة جديدة</button>
@@ -114,9 +115,12 @@ function showReply(res) {
   msg.placeholder = res.lang === "en" ? "Type a message" : "اكتب رسالة";
   bubble("bot", res.reply, debugHtml(res.debug, res.model));
   menuButtons(res.menu);
+  statusEl.dataset.who = res.customer ? `👤 ${res.customer.name}` : (res.wa_phone ? `📱 +${res.wa_phone} (غير مسجل · unregistered)` : "زائر · guest");
+  statusEl.textContent = "متصل · online — " + statusEl.dataset.who;
 }
 async function startChat() {                    // every conversation opens with greeting + menu
-  try { showReply(await api("/api/start", {session_id: sid, model: $("#model").value || null})); }
+  try { showReply(await api("/api/start", {session_id: sid, model: $("#model").value || null,
+                                           wa_phone: $("#wa").value.trim() || null})); }
   catch (e) { bubble("bot", "⚠️ " + e.message); }
 }
 function debugHtml(d, model) {
@@ -150,7 +154,8 @@ async function sendText(text, image, imageName) {
     typing.remove(); bubble("bot", "⚠️ " + e.message);
   } finally {
     clearInterval(tick);
-    send.disabled = false; $("#attach").disabled = false; statusEl.textContent = "متصل · online"; msg.focus();
+    send.disabled = false; $("#attach").disabled = false;
+    statusEl.textContent = "متصل · online" + (statusEl.dataset.who ? " — " + statusEl.dataset.who : ""); msg.focus();
   }
 }
 send.onclick = () => sendText(msg.value);
@@ -173,6 +178,7 @@ $("#new").onclick = async () => {
   startChat();
 };
 $("#model").onchange = () => $("#new").onclick();
+$("#wa").onchange = () => $("#new").onclick();      // a different sender = a new WhatsApp chat
 SAMPLES.forEach(s => { const c = document.createElement("button"); c.className = "chip"; c.dir = "auto"; c.textContent = s;
   c.onclick = () => sendText(s); $("#chips").appendChild(c); });
 api("/api/models").then(m => m.models.forEach(n => { const o = document.createElement("option");

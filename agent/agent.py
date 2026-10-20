@@ -41,6 +41,7 @@ from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noq
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from fuzzy_search import normalize, sound_key  # noqa: E402
 from llm import LLMClient  # noqa: E402
+from customer import T as CUSTOMER_TEXTS, CustomerFlow  # noqa: E402
 from rapidfuzz import fuzz  # noqa: E402
 from menu import (TEXTS, detect_lang, format_orders, localize, match_menu,  # noqa: E402
                   menu_items, menu_text, wants_menu)
@@ -131,16 +132,23 @@ class Conversation:
     """customer_facing=True (chat page / WhatsApp): opening menu, fixed language for every reply,
     off-topic filter. False (evals, CLI): plain agent behaviour, bilingual fixed replies."""
 
-    def __init__(self, customer_id: int, conv_id: str | None = None,
-                 customer_facing: bool = False, lang: str | None = None):
+    def __init__(self, customer_id: int | None, conv_id: str | None = None,
+                 customer_facing: bool = False, lang: str | None = None,
+                 wa_phone: str | None = None):
+        # customer_id None = not identified yet (a new WhatsApp number / the test chat without
+        # one): the customer flow identifies or registers them before anything account-bound
         self.customer_id = customer_id
         self.conv_id = conv_id or f"conv-{int(time.time())}"
         self.messages: list[dict] = []
         self.customer_facing = customer_facing
         self.lang = lang
+        self.wa_phone = wa_phone         # WhatsApp sender number (wa_id); None in the test chat
+        self.customer_name: str | None = None
+        self.profile: dict | None = None # saved Odoo contact (name, address, alt phone)
+        self.flow: dict | None = None    # active identify/register step (agent/customer.py)
         self.started = False
         self.last_ts = 0.0
-        self.menu_shown = False          # the previous reply was the menu (digits 1-4 pick items)
+        self.menu_shown = False          # the previous reply was the menu (digits 1-5 pick items)
         self.last_menu: list[dict] | None = None
         self.last_guard: str | None = None
         self.last_user_text = ""
@@ -153,6 +161,25 @@ class PharmacyAgent:
         self.tools = contract.tools_for_llm()
         # built from Odoo's is_scheduled flag (official scheduling) at startup
         self.denylist = ScheduledDenylist.from_odoo(self.gw.c)
+        self.customer = CustomerFlow(self)
+
+    # ---- customer identity ------------------------------------------------------
+    def identify(self, conv, prof: dict) -> None:
+        conv.customer_id, conv.customer_name, conv.profile = (prof["customer_id"], prof["name"], prof)
+        self._audit(conv.conv_id, "customer_identified", {"customer_id": prof["customer_id"]})
+
+    def auto_identify(self, conv) -> None:
+        """WhatsApp: recognise the sender by their number (Odoo Contacts) - greeted by name."""
+        if conv.customer_facing and conv.wa_phone and not conv.customer_id:
+            prof = self.gw.find_customer(conv.wa_phone)
+            if prof:
+                self.identify(conv, prof)
+
+    def menu_text_for(self, conv) -> str:
+        lang = self._lang(conv)
+        if conv.customer_name:
+            return menu_text(lang, head=CUSTOMER_TEXTS[lang]["welcome"].format(name=conv.customer_name))
+        return menu_text(lang)
 
     # ---- helpers -----------------------------------------------------------
     def _escalate(self, conv, reason, summary):
@@ -168,11 +195,12 @@ class PharmacyAgent:
         with AUDIT.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    def _say(self, conv, text, guard=None, menu=False, **audit):
-        """Send a reply: localise fixed texts, optionally attach the menu, record + audit it."""
+    def _say(self, conv, text, guard=None, menu=False, buttons=None, **audit):
+        """Send a reply: localise fixed texts, optionally attach the menu (or flow buttons such
+        as ✅ نعم / ✏️ تعديل), record + audit it."""
         text = localize(text, conv.lang)
         conv.last_guard, conv.menu_shown = guard, menu
-        conv.last_menu = menu_items(conv.lang or "ar") if menu else None
+        conv.last_menu = buttons or (menu_items(conv.lang or "ar") if menu else None)
         conv.messages.append({"role": "assistant", "content": text})
         self._audit(conv.conv_id, "reply", {"text": text, "guard": guard, **audit})
         return text
@@ -186,7 +214,28 @@ class PharmacyAgent:
         # message must never act on, or read, another customer's account or orders
         if name in _NEEDS_CUSTOMER:
             args["customer_id"] = conv.customer_id
+        # delivery to the customer's saved (just confirmed) address unless they gave another
+        if name == "create_order" and args.get("fulfillment") == "delivery" \
+                and not args.get("delivery_address") and conv.profile and conv.profile.get("address"):
+            args["delivery_address"] = conv.profile["address"]
         return args
+
+    def _run_tool(self, conv, name, args):
+        """Execute a tool outside the model loop (resumed order) and record it like one."""
+        conv.messages.append({"role": "assistant", "content": "",
+                              "tool_calls": [{"function": {"name": name, "arguments": args}}]})
+        result = dispatch(self.gw, name, args)
+        self._audit(conv.conv_id, "tool_call", {"action": name, "args": args, "result": result,
+                                                "via": "customer_flow"})
+        conv.messages.append({"role": "tool", "tool_name": name,
+                              "content": json.dumps(result, ensure_ascii=False)})
+        return result
+
+    def _tool_error_reply(self, conv, name, code):
+        if code == "scheduled_item":
+            self._escalate(conv, "restricted_item", f"tool returned scheduled_item: {name}")
+            return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled_tool")
+        return self._say(conv, PRESCRIPTION_NEEDED, guard="prescription_tool")
 
     def _gate(self, name, args, conv):
         """Deterministic checks a tool call must pass before it runs; an error dict, or None."""
@@ -218,6 +267,11 @@ class PharmacyAgent:
         if any((q or 0) > MAX_QTY for q in qtys):
             return err("quantity_limit", f"At most {MAX_QTY} of an item per chat order; tell the "
                        f"customer larger quantities are arranged at a branch.")
+        # last: everything above passed, so a resumed order (after registration) is already valid
+        if name in ("create_order", "hold_item", "track_order", "create_dispatch") \
+                and not conv.customer_id:
+            # account-bound: never run for an unidentified chat (and never read orders by id)
+            return err("customer_required", "identify or register the customer first")
         return None
 
     @staticmethod
@@ -270,48 +324,70 @@ class PharmacyAgent:
 
     # ---- menu -------------------------------------------------------------
     def greet(self, conv: Conversation) -> str:
-        """Opening message of a conversation: greeting + menu."""
+        """Opening message of a conversation: greeting (by name when the WhatsApp number is a
+        known contact) + menu."""
         conv.lang = conv.lang or "ar"
         conv.started, conv.last_ts = True, time.time()
-        return self._say(conv, menu_text(conv.lang), guard="menu", menu=True)
+        self.auto_identify(conv)
+        return self._say(conv, self.menu_text_for(conv), guard="menu", menu=True)
 
-    def _menu_choice(self, conv, choice):
+    def _menu_choice(self, conv, choice, prefix=""):
         t = TEXTS[self._lang(conv)]
         if choice == "switch_lang":
             conv.lang = "en" if self._lang(conv) == "ar" else "ar"
-            return self._say(conv, menu_text(conv.lang), guard="menu", menu=True)
+            return self._say(conv, prefix + self.menu_text_for(conv), guard="menu", menu=True)
+        if choice == "customer":
+            return (self.customer.show_profile(conv) if conv.customer_id
+                    else self.customer.start(conv, intro=None))
         if choice == "track_order":
+            if not conv.customer_id:
+                return self.customer.start(conv, pending={"kind": "menu", "choice": "track_order"})
             res = self.gw.track_order(customer_id=conv.customer_id)
             self._audit(conv.conv_id, "tool_call", {"action": "track_order", "via": "menu",
                                                     "result": res})
-            return self._say(conv, format_orders(res if "orders" in res else {}, conv.lang or "ar"),
-                             guard="menu")
-        return self._say(conv, t[choice], guard="menu")      # new_order / questions
+            return self._say(conv, prefix + format_orders(res if "orders" in res else {},
+                                                          conv.lang or "ar"), guard="menu")
+        return self._say(conv, prefix + t[choice], guard="menu")      # new_order / questions
 
     # ---- main entry -----------------------------------------------------------
     def respond(self, conv: Conversation, user_text: str, image: bytes | None = None,
-                image_name: str | None = None) -> str:
+                image_name: str | None = None, resumed: bool = False) -> str:
         raw = user_text or ""
         now = time.time()
         new_session = conv.customer_facing and (not conv.started or now - conv.last_ts > SESSION_GAP_S)
         if conv.customer_facing and not conv.lang:
             conv.lang = detect_lang(raw) if raw.strip() else "ar"
+        if new_session:
+            self.auto_identify(conv)
         conv.started, conv.last_ts, conv.last_user_text = True, now, raw
-        conv.messages.append({"role": "user", "content": raw})
-        self._audit(conv.conv_id, "user", {"text": raw, "image": bool(image)})
+        if not resumed:
+            conv.messages.append({"role": "user", "content": raw})
+            self._audit(conv.conv_id, "user", {"text": raw, "image": bool(image)})
+
+        # --- manipulation check first: names/addresses typed in the customer flow included ---
+        if not resumed and injection_attempt(raw):
+            conv.flow = None
+            return self._say(conv, TEXTS[self._lang(conv)]["injection"], guard="injection",
+                             menu=conv.customer_facing)
+
+        # --- identify/register flow in progress (fixed steps, no model) ---
+        if conv.flow and not resumed:
+            if wants_menu(raw) or image:
+                conv.flow = None             # the customer left the flow
+            else:
+                reply = self.customer.handle(conv, raw)
+                if reply is not None:
+                    return reply
 
         # --- opening menu / menu choices (customer-facing channels) ---
-        if conv.customer_facing:
+        if conv.customer_facing and not resumed:
             choice = match_menu(raw, conv.menu_shown) if raw.strip() else None
             if choice:
                 return self._menu_choice(conv, choice)
             if (new_session and not image) or wants_menu(raw):
-                return self._say(conv, menu_text(self._lang(conv)), guard="menu", menu=True)
+                return self._say(conv, self.menu_text_for(conv), guard="menu", menu=True)
 
         # --- deterministic guards BEFORE the LLM (do not depend on the model) ---
-        if injection_attempt(raw):
-            return self._say(conv, TEXTS[self._lang(conv)]["injection"], guard="injection",
-                             menu=conv.customer_facing)
         if medical_advice_intent(raw):
             self._escalate(conv, "medical_advice", f"deterministic medical guard: {raw}")
             return self._say(conv, MEDICAL_REFUSAL, guard="medical")
@@ -322,6 +398,10 @@ class PharmacyAgent:
             return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled", matched=hit)
 
         # --- attached prescription photo/PDF: OCR + deterministic checks (not the model) ---
+        if image and conv.customer_facing and not conv.customer_id:
+            # a prescription belongs to a customer: identify/register first, then read it
+            return self.customer.start(conv, pending={"kind": "image", "image": image,
+                                                      "image_name": image_name, "text": raw})
         if image:
             try:
                 res = self.gw.submit_prescription(conv.customer_id, image, image_name)
@@ -403,6 +483,14 @@ class PharmacyAgent:
             # regardless of what the model would do next.
             if isinstance(result, dict) and "error" in result:
                 code = result["error"].get("code")
+                if code == "customer_required":
+                    # confirmed order from an unidentified customer: register/identify them
+                    # first (the quotation needs an Odoo contact), then place it automatically
+                    if name in ("create_order", "hold_item"):
+                        return self.customer.start(conv, intro="intro_checkout", pending={
+                            "kind": "tool", "name": name, "args": args})
+                    return self.customer.start(conv, pending={"kind": "menu",
+                                                              "choice": "track_order"})
                 if code == "scheduled_item":
                     self._escalate(conv, "restricted_item", f"tool returned scheduled_item: {name}")
                     return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled_tool")

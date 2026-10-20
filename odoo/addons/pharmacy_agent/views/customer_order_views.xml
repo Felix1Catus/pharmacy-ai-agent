@@ -1,0 +1,66 @@
+<odoo>
+  <!-- Contact: WhatsApp number used by the assistant to recognise the customer -->
+  <record id="view_partner_form_whatsapp" model="ir.ui.view">
+    <field name="name">res.partner.form.whatsapp</field>
+    <field name="model">res.partner</field>
+    <field name="inherit_id" ref="base.view_partner_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//field[@name='email']" position="before">
+        <field name="whatsapp_number" placeholder="9665XXXXXXXX"/>
+        <field name="registered_via" readonly="1" invisible="not registered_via"/>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Quotation / order: WhatsApp + delivery hand-off details -->
+  <record id="view_order_form_whatsapp" model="ir.ui.view">
+    <field name="name">sale.order.form.whatsapp</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="WhatsApp / Delivery" name="whatsapp_delivery" invisible="not wa_order">
+          <group>
+            <group>
+              <field name="wa_order" readonly="1"/>
+              <field name="fulfillment_type"/>
+              <field name="dispatch_status"/>
+            </group>
+            <group>
+              <field name="delivery_address_text"/>
+            </group>
+          </group>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
+  <record id="view_order_tree_whatsapp" model="ir.ui.view">
+    <field name="name">sale.order.list.whatsapp</field>
+    <field name="model">sale.order</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="name"/>
+        <field name="date_order"/>
+        <field name="partner_id"/>
+        <field name="fulfillment_type"/>
+        <field name="delivery_address_text" optional="show"/>
+        <field name="dispatch_status"/>
+        <field name="amount_total" sum="Total"/>
+        <field name="state"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="action_whatsapp_quotations" model="ir.actions.act_window">
+    <field name="name">WhatsApp orders</field>
+    <field name="res_model">sale.order</field>
+    <field name="view_mode">list,form</field>
+    <field name="view_id" ref="view_order_tree_whatsapp"/>
+    <field name="domain">[('wa_order', '=', True)]</field>
+    <field name="context">{'default_wa_order': True}</field>
+  </record>
+
+  <menuitem id="menu_whatsapp_quotations" name="WhatsApp orders" parent="menu_pharmacy_root"
+            action="action_whatsapp_quotations" sequence="5"/>
+</odoo>

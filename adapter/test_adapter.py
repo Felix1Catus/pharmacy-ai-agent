@@ -112,7 +112,7 @@ def test_create_order_pickup_success(gw, customer_id):
                                "items": [{"product_id": pid, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": branch})
     assert r.status_code == 200, r.text
-    assert r.json()["state"] == "sale"
+    assert r.json()["state"] == "draft"          # a quotation: the pharmacy confirms it
 
 
 def test_create_order_restricted_refused(gw, no_rx_customer):

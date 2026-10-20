@@ -34,7 +34,7 @@ from odoo_client import load_env  # noqa: E402
 
 load_env()
 from agent import Conversation, PharmacyAgent  # noqa: E402
-from gateway import Gateway  # noqa: E402
+from gateway import Gateway, normalize_phone  # noqa: E402
 from llm import LLMClient  # noqa: E402
 
 USER = os.environ.get("WEBCHAT_USER", "pharmacy")
@@ -48,7 +48,6 @@ HTML = (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
 app = FastAPI(title="Pharmacy agent - test chat", docs_url=None, redoc_url=None)
 security = HTTPBasic()
 gw = Gateway()
-CUSTOMER = gw.c.search("res.partner", [["ref", "=", "CUST-DEMO-1"]])[0]
 _agents: dict[str, PharmacyAgent] = {}
 _sessions: dict[str, dict] = {}
 # load the model in the background at startup so the first message doesn't pay ~90 s
@@ -106,15 +105,20 @@ GUARD_LABELS = {
     "scheduled_prescription": "scheduled-medicine guard (prescription)",
     "prescription_tool": "prescription needed -> asked for photo",
     "prescription_check": "prescription photo rejected (checks)", "handover": "handed to pharmacist",
+    "customer": "customer identify/register flow", "order": "order placed after registration",
 }
 
 
-def _session(sid: str | None, model: str):
+def _session(sid: str | None, model: str, wa_phone: str | None = None):
+    """One conversation per browser chat. It starts UNIDENTIFIED, like a WhatsApp message from
+    an unknown number; a simulated WhatsApp number (the test page's field) is looked up in Odoo
+    Contacts exactly like the real WhatsApp sender id will be."""
     sid = sid or uuid.uuid4().hex
     s = _sessions.get(sid)
     if not s or s["model"] != model:                     # new chat (or model switched)
-        s = {"model": model, "conv": Conversation(customer_id=CUSTOMER, conv_id=f"web-{sid[:8]}",
-                                                  customer_facing=True)}
+        s = {"model": model, "conv": Conversation(customer_id=None, conv_id=f"web-{sid[:8]}",
+                                                  customer_facing=True,
+                                                  wa_phone=normalize_phone(wa_phone))}
         _sessions[sid] = s
     return sid, s["conv"]
 
@@ -122,6 +126,9 @@ def _session(sid: str | None, model: str):
 def _out(sid, conv, reply, model, tools, t0):
     return {"session_id": sid, "reply": reply, "model": model, "menu": conv.last_menu,
             "lang": conv.lang,
+            "customer": ({"id": conv.customer_id, "name": conv.customer_name}
+                         if conv.customer_id else None),
+            "wa_phone": conv.wa_phone,
             "debug": {"tools": tools, "guard": GUARD_LABELS.get(conv.last_guard, conv.last_guard),
                       "seconds": round(time.time() - t0, 1)}}
 
@@ -129,13 +136,14 @@ def _out(sid, conv, reply, model, tools, t0):
 class StartIn(BaseModel):
     session_id: str | None = None
     model: str | None = None
+    wa_phone: str | None = None       # simulated WhatsApp sender number (optional)
 
 
 @app.post("/api/start", dependencies=[Depends(auth)])
 def start(m: StartIn):
     """Open a conversation: greeting + menu (instant, no model call)."""
     model = m.model or DEFAULT_MODEL
-    sid, conv = _session(m.session_id, model)
+    sid, conv = _session(m.session_id, model, m.wa_phone)
     t0 = time.time()
     reply = agent_for(model).greet(conv)
     return _out(sid, conv, reply, model, [], t0)
