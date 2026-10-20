@@ -269,15 +269,39 @@ runs in its own container). Manual test script: `odoo/addons/pharmacy_agent/test
 ---
 
 ## 5. WhatsApp-style test chat page
-**http://155.138.207.131:8090** — browser login: user `WEBCHAT_USER`, password `WEBCHAT_PASSWORD`
+**http://155.138.193.148:8090** — browser login: user `WEBCHAT_USER`, password `WEBCHAT_PASSWORD`
 (both in `/home/pharmacy-ai-agent/.env`). Runs the **real agent** (guards → Qwen via Ollama →
 tools → live Odoo sample data) with one conversation per browser tab.
 - **debug** toggle: under each reply shows the tool calls (arguments + short result), whether a
   safety guard answered, and the time taken.
 - **model** picker: production base model vs fine-tuned experiments (e.g. `pharmacy-4b-ft3`);
   switching starts a new chat. **محادثة جديدة** = new conversation.
-- Sample-message chips for quick tests. Orders/holds it creates are real records in the (dummy)
-  Odoo DB, attached to the demo customer.
+- Every chat opens with the greeting + menu (buttons). A chat starts as an **unknown guest**;
+  type a number in **📱 WhatsApp no. (sim)** to simulate a WhatsApp sender — a known contact is
+  greeted by name, an unknown one registers when they order (or via «👤 عميل حالي / جديد»).
+- Sample-message chips for quick tests (including red-team messages). Orders it creates are
+  real **quotations** in the (dummy) Odoo DB, attached to the identified/registered contact.
 Service: `systemctl status|restart pharmacy-webchat` (unit in `channels/webchat/`), logs:
 `journalctl -u pharmacy-webchat -f`. Port 8090 is open in ufw; close with `ufw delete allow 8090/tcp`.
 Plain HTTP (password travels unencrypted) — fine for testing, put HTTPS in front for anything more.
+
+## 6. WhatsApp orders and customers in Odoo
+Full flow: `docs/customer-flow.md`.
+- **Pharmacy → WhatsApp orders** lists every quotation the assistant created (customer,
+  pickup/delivery, delivery address, dispatch status, total). Nothing is confirmed by the AI:
+  - *Pickup:* confirm + invoice at the dispensary when the customer arrives.
+  - *Delivery:* review and confirm (approve); it then goes to the Delivery Dispatcher (future module).
+- **Contacts:** customers registered by the assistant have *Registered via: WhatsApp assistant*,
+  their WhatsApp number, phone, alternative phone (mobile) and address. Edit them like any contact;
+  the assistant uses the WhatsApp number / phone / mobile to recognise them.
+- **Prescriptions** used for an order are noted on the quotation and marked *Used* under
+  Pharmacy → Prescriptions.
+
+## 7. WhatsApp channel (Meta Cloud API)
+`channels/whatsapp/webhook.py`. Fill `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
+`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` in `.env`, run
+`.venv/bin/uvicorn --app-dir channels/whatsapp webhook:app --host 127.0.0.1 --port 8091` behind an
+HTTPS reverse proxy, and register `https://<domain>/webhook` (+ the verify token) in the Meta app.
+Without the access token / phone id it is a **dry run**: replies go to
+`results/whatsapp_outbox.jsonl` instead of WhatsApp. Health: `GET /health`.
+Tests: `.venv/bin/python -m pytest channels/whatsapp/ -q`.

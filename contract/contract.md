@@ -27,6 +27,16 @@ pickup/delivery). The agent must confirm before calling them.
 - **Restricted / prescription items** are never ordered or held → `escalate_to_human(reason="restricted_item")`. `create_order`/`hold_item` also return `restricted_item` as a safety net if called anyway.
 - **Low confidence / unclear / abusive** → `escalate_to_human` with the matching reason.
 
+## Customer identity and quotations (enforced by the agent, not the model)
+- `create_order`, `hold_item`, `track_order`, `create_dispatch` only run for an **identified**
+  customer (WhatsApp number or the «عميل حالي / جديد» flow); the agent always injects that
+  customer's id, whatever the model passes. A guest's confirmed order triggers registration
+  first and is then placed automatically (`docs/customer-flow.md`).
+- `create_order` creates a **quotation** (draft `sale.order`, `wa_order`, fulfilment, delivery
+  address, `dispatch_status`), returning `order_ref`; a human confirms / invoices it.
+- Prescription-only items need a verified prescription (`prescription_required` otherwise);
+  Scheduled items always return `scheduled_item`.
+
 ## Error shape
 Every action returns, on failure, an object:
 ```json
