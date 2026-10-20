@@ -33,9 +33,15 @@ def _remove_test_records():
     orders = c.search("sale.order", [["id", ">", start["sale.order"]]])
     test_partners = c.search("res.partner", [["name", "=like", TEST_PREFIX + "%"]])
     orders = sorted(set(orders) | set(c.search("sale.order", [["partner_id", "in", test_partners]])))
-    if orders:
-        c.execute_kw("sale.order", "action_cancel", [orders])
-        c.execute_kw("sale.order", "unlink", [orders])
+    for oid in orders:                   # one at a time: Odoo 18 cancels a single order per call
+        try:
+            state = c.read("sale.order", oid, ["state"])[0]["state"]
+            if state not in ("draft", "sent", "cancel"):   # confirmed: Odoo cancels via its wizard
+                w = c.create("sale.order.cancel", {"order_id": oid})
+                c.execute_kw("sale.order.cancel", "action_cancel", [[w]])
+            c.execute_kw("sale.order", "unlink", [[oid]])
+        except Exception:
+            pass
     rx = c.search("pharmacy.prescription", ["|", ["id", ">", start["pharmacy.prescription"]],
                                             ["partner_id", "in", test_partners]])
     if rx:
