@@ -192,8 +192,7 @@ def test_city_detection_and_egyptian_numbers():
 
 def test_promises_removed_from_replies():
     from agent import _strip_promises
-    text = "تم الطلب ✅
-سأُرسل لك رابط التتبع بعد التوصيل. شكراً لك!"
+    text = "تم الطلب ✅\nسأُرسل لك رابط التتبع بعد التوصيل. شكراً لك!"
     out = _strip_promises(text)
     assert "رابط" not in out and "تم الطلب" in out and "شكراً" in out
 
