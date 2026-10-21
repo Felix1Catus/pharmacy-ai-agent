@@ -33,7 +33,7 @@ KEEP_ALIVE = os.environ.get("AGENT_KEEP_ALIVE", "-1")
 
 class LLMClient:
     def __init__(self, model: str | None = None, url: str | None = None,
-                 temperature: float = 0.0, num_ctx: int = 4096, num_predict: int = 512):
+                 temperature: float = 0.0, num_ctx: int = 4096, num_predict: int = 300):
         self.model = model or MODEL
         self.url = (url or OLLAMA).rstrip("/")
         self.options = {"temperature": temperature, "num_ctx": num_ctx,

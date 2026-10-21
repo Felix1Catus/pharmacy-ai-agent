@@ -43,7 +43,7 @@ from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noq
 from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E402
 from llm import LLMClient  # noqa: E402
 from customer import T as CUSTOMER_TEXTS, CustomerFlow  # noqa: E402
-from order_flow import OrderFlow  # noqa: E402
+from order_flow import OrderFlow, _core as order_core  # noqa: E402
 
 CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
 from rapidfuzz import fuzz  # noqa: E402
@@ -316,6 +316,39 @@ class PharmacyAgent:
         return bool(need) and all(
             any(k == h or (len(k) >= 4 and fuzz.ratio(k, h) >= 85) for h in keys) for k in need)
 
+    DIRECT_MIN_SCORE = 85
+
+    def _direct_search(self, conv, raw):
+        """Search without the model when the customer's own words strongly match a product name
+        (score >= 85). Recorded in the history like a model tool call. None = ask the model."""
+        core = order_core(raw)
+        if len(core.replace(" ", "")) < 3:
+            return None
+        res = self.gw.search_product(query=core)
+        if not isinstance(res, dict) or "error" in res:
+            return None
+        def score(c):
+            return max(fuzz.token_set_ratio(core, order_core(c.get("name_ar") or "")),
+                       fuzz.token_set_ratio(core, order_core(c.get("name_en") or "")))
+        strong = [c for c in res.get("candidates") or [] if score(c) >= self.DIRECT_MIN_SCORE]
+        if not strong:
+            return None
+        args = {"query": core}
+        conv.messages.append({"role": "assistant", "content": "",
+                              "tool_calls": [{"function": {"name": "search_product", "arguments": args}}]})
+        self._audit(conv.conv_id, "tool_call", {"action": "search_product", "args": args,
+                                                "result": res, "via": "direct"})
+        if all(c.get("is_scheduled") for c in strong):          # it names a controlled medicine
+            conv.messages.append({"role": "tool", "tool_name": "search_product",
+                                  "content": json.dumps({"candidates": []})})
+            self._escalate(conv, "restricted_item", "direct search matched a scheduled medicine")
+            return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled_search")
+        res["candidates"] = [c for c in res.get("candidates") or [] if not c.get("is_scheduled")]
+        res["alternatives"] = [c for c in res.get("alternatives") or [] if not c.get("is_scheduled")]
+        conv.messages.append({"role": "tool", "tool_name": "search_product",
+                              "content": json.dumps(self._compact("search_product", res), ensure_ascii=False)})
+        return self.order.present(conv, res, raw)
+
     @staticmethod
     def _compact(name, result):
         """What the model keeps of a search in its history: number, name, price, prescription
@@ -501,6 +534,13 @@ class PharmacyAgent:
             if not mid_flow:
                 return self._say(conv, TEXTS[self._lang(conv)]["off_topic"], guard="off_topic",
                                  menu=True)
+
+        # A message that clearly names a catalogue product ("عندكم سنتروم؟") is searched directly:
+        # no model call at all (the model sometimes answered such questions from memory, slowly).
+        if conv.customer_facing and not image:
+            direct = self._direct_search(conv, raw)
+            if direct is not None:
+                return direct
 
         # The language hint rides on THIS turn's message, not the system prompt: the system prompt
         # stays byte-identical for every customer, so Ollama reuses its cached ~1,800 tokens.

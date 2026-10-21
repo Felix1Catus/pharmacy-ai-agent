@@ -110,7 +110,7 @@ def test_full_sentence_order_needs_one_model_call(shop):
     assert shop == [{"items": [{"product_id": 1, "qty": 2}], "fulfillment": "pickup", "branch_id": 3,
                      "customer_id": prof["customer_id"]}]
     assert "S04321" in reply and "/my/orders/4321" in reply
-    assert len(llm.seen) == 1                                                # only the search call
+    assert len(llm.seen) <= 1                                                # at most the search call
 
 
 @live
@@ -127,7 +127,7 @@ def test_missing_details_are_asked_with_buttons(shop):
     assert "ملخص طلبك" in reply and "× 3" in reply
     a.respond(conv, "نعم")
     assert shop[0]["fulfillment"] == "delivery" and shop[0]["delivery_address"].startswith("الرياض")
-    assert len(llm.seen) == 1
+    assert len(llm.seen) <= 1
 
 
 @live
