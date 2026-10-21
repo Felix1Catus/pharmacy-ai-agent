@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 
 from gateway import guess_city
-from fuzzy_search import words as fuzzy_words
+from fuzzy_search import _STOP as _FUZZY_STOP
 from guards import is_affirmation, normalize
 from rapidfuzz import fuzz
 
@@ -103,6 +103,20 @@ def parse_qty(text: str) -> int | None:
     return None
 
 
+_QTY_SET = {w for w, _ in _QTY_WORDS}
+_FILLER = {"من", "الى", "على", "عن", "لو", "سمحت", "ابغا", "ودي", "ممكن", "اريد", "عايزه", "want", "need",
+           "have", "you", "do", "i", "a", "the", "price", "box", "boxes", "علب", "عبوه", "جده", "الرياض",
+           "الدمام", "توصيل", "استلام", "فرع"}
+
+
+def _core(text: str) -> str:
+    """Product words of a message or a product name, numbers included (Arabic digits -> 0-9)."""
+    n = normalize(text or "").translate(_DIG)
+    toks = re.findall(r"[a-z؀-ۿ]+|\d+(?:[.,]\d+)?", n)
+    return " ".join(t for t in toks if t not in _FUZZY_STOP and t not in _QTY_SET and t not in _FILLER
+                    and (len(t) >= 2 or t.isdigit()))
+
+
 def parse_fulfilment(text: str) -> str | None:
     n = normalize(text)
     if re.search(r"(توصيل|وصل|توصلون|ارسل|delivery|deliver|ship)", n):
@@ -164,11 +178,12 @@ class OrderFlow:
         list; one clear match is selected straight away."""
         t = self._t(conv)
         cands = [c for c in (result.get("candidates") or []) if not c.get("is_scheduled")]
-        # closest to what the CUSTOMER wrote first ("بنادول اكسترا" -> Panadol Extra on top)
-        core = " ".join(fuzzy_words(raw))
+        # closest to what the CUSTOMER wrote first ("بنادول اكسترا" -> Panadol Extra on top,
+        # "بنادول 500" -> Panadol 500 on top: numbers count, quantity words don't)
+        core = _core(raw)
         if core:
-            score = lambda c: max(fuzz.token_set_ratio(core, normalize(c.get("name_ar") or "")),  # noqa: E731
-                                  fuzz.token_set_ratio(core, normalize(c.get("name_en") or "")))
+            score = lambda c: max(fuzz.token_set_ratio(core, _core(c.get("name_ar") or "")),  # noqa: E731
+                                  fuzz.token_set_ratio(core, _core(c.get("name_en") or "")))
             cands = sorted(cands, key=score, reverse=True)
             ranked = [score(c) for c in cands]
             # one product clearly named: select it straight away (a general "بنادول" ties -> list)
