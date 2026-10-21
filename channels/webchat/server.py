@@ -106,6 +106,8 @@ GUARD_LABELS = {
     "prescription_tool": "prescription needed -> asked for photo",
     "prescription_check": "prescription photo rejected (checks)", "handover": "handed to pharmacist",
     "customer": "customer identify/register flow", "order": "order placed (fixed confirmation)",
+    "rx_review": "prescription quotation -> pharmacist review",
+    "review_result": "pharmacist review result (sent by the system)",
 }
 
 
@@ -179,6 +181,24 @@ def chat(m: ChatIn):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})
     return _out(sid, conv, reply, model, tools, t0)
+
+
+class PollIn(BaseModel):
+    session_id: str
+
+
+@app.post("/api/poll", dependencies=[Depends(auth)])
+def poll(m: PollIn):
+    """Messages the system sends on its own, e.g. the pharmacist's prescription decision
+    (on WhatsApp these are pushed; the test page asks every few seconds)."""
+    s = _sessions.get(m.session_id)
+    if not s:
+        return {"messages": []}
+    conv = s["conv"]
+    msgs = agent_for(s["model"]).customer.deliver_notifications(conv)
+    return {"messages": [{"reply": x["reply"], "menu": x["menu"],
+                          "debug": {"tools": [], "guard": GUARD_LABELS["review_result"],
+                                    "seconds": 0}} for x in msgs]}
 
 
 @app.get("/api/health")

@@ -185,6 +185,15 @@ api("/api/models").then(m => m.models.forEach(n => { const o = document.createEl
   o.value = n; o.textContent = n === m.default ? "production (base 4B)" : n.replace(":latest", ""); $("#model").appendChild(o); }))
   .catch(() => {});
 startChat();
+// messages the system sends on its own (the pharmacist's prescription decision): on WhatsApp
+// they are pushed; here the page asks every 8 seconds
+setInterval(async () => {
+  if (!sid || send.disabled) return;
+  try {
+    const r = await api("/api/poll", {session_id: sid});
+    r.messages.forEach(m => { bubble("bot", m.reply, debugHtml(m.debug, "system")); menuButtons(m.menu); });
+  } catch (e) {}
+}, 8000);
 msg.focus();
 </script>
 </body>

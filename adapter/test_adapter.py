@@ -115,13 +115,21 @@ def test_create_order_pickup_success(gw, customer_id):
     assert r.json()["state"] == "draft"          # a quotation: the pharmacy confirms it
 
 
-def test_create_order_restricted_refused(gw, no_rx_customer):
+def _review_or_no_stock(r):
+    """Prescription-only order: a quotation for pharmacist review (or out of stock) - never refused."""
+    body = r.json()
+    if r.status_code == 200:
+        assert body["rx_review"] in ("pending", "awaiting_photo"), body
+    else:
+        assert body["error"]["code"] == "out_of_stock", body
+
+
+def test_create_order_prescription_goes_to_review(gw, no_rx_customer):
     pid = _variant(gw, "RX-0001")  # Augmentin
     r = _call("create_order", {"customer_id": no_rx_customer,
                                "items": [{"product_id": pid, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
-    assert r.status_code == 400
-    assert r.json()["error"]["code"] == "prescription_required"
+    _review_or_no_stock(r)
 
 
 def test_create_order_pickup_requires_branch(gw, customer_id):
@@ -206,12 +214,11 @@ def sfda_rx_product(gw):
     gw.c.execute_kw("product.template", "unlink", [[tmpl]])
 
 
-def test_create_order_sfda_prescription_refused(sfda_rx_product, no_rx_customer):
+def test_create_order_sfda_prescription_goes_to_review(sfda_rx_product, no_rx_customer):
     r = _call("create_order", {"customer_id": no_rx_customer,
                                "items": [{"product_id": sfda_rx_product, "qty": 1}],
                                "fulfillment": "pickup", "branch_id": 2})
-    assert r.status_code == 400
-    assert r.json()["error"]["code"] == "prescription_required"
+    _review_or_no_stock(r)
 
 
 def test_hold_sfda_prescription_refused(sfda_rx_product, no_rx_customer):

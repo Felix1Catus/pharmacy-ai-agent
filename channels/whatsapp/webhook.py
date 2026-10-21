@@ -182,6 +182,47 @@ def send(to: str, text: str, buttons: list[dict] | None, is_menu: bool = False) 
                   headers={"Authorization": f"Bearer {TOKEN}"})
 
 
+# ---- pushed messages: the pharmacist's prescription decision ----------------------
+NOTIFY_EVERY_S = int(os.environ.get("WHATSAPP_NOTIFY_EVERY_S", "30"))
+
+
+def notify_pending() -> int:
+    """Send every approved/rejected prescription review the customer hasn't been told about
+    (approved -> quotation details + ✅ confirm & pay / ❌ cancel buttons). Returns how many."""
+    a, sent = agent(), 0
+    for s in a.gw.pending_notifications():
+        wa = s.get("whatsapp_number")
+        if not wa:
+            continue                                  # no WhatsApp number: staff calls the customer
+        with _locks.setdefault(wa, threading.Lock()):
+            conv = conversation(wa)
+            if not conv.customer_id:
+                prof = a.gw.get_customer(s["customer_id"])
+                if prof:
+                    a.identify(conv, prof)
+            conv.started, conv.last_ts = True, time.time()
+            text = a.customer.review_message(conv, s)
+            send(wa, text, conv.last_menu)
+            a.gw.mark_notified(s["order_id"])
+            sent += 1
+    return sent
+
+
+def _notify_loop():
+    while True:
+        try:
+            notify_pending()
+        except Exception:                             # Odoo restarting etc.: try again next round
+            pass
+        time.sleep(NOTIFY_EVERY_S)
+
+
+@app.on_event("startup")
+def _start_notifier():
+    if os.environ.get("WHATSAPP_NOTIFIER", "1") == "1":
+        threading.Thread(target=_notify_loop, daemon=True).start()
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "dry_run": DRY_RUN, "conversations": len(_convs)}

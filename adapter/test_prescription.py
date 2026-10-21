@@ -159,50 +159,87 @@ def _order(ctx, pid):
 
 
 @odoo
-def test_order_with_verified_prescription_then_consumed(ctx):
+def test_pharmacist_approved_prescription_skips_review_once(ctx):
     aug = ctx["var"]("RX-0001")
-    rid = ctx["make"]([aug])
+    rid = ctx["make"]([aug], state="verified")
     r = _order(ctx, aug)
-    assert "order_id" in r, r
+    assert r["rx_review"] == "none", r
     p = GW.c.read("pharmacy.prescription", rid, ["state", "sale_order_id"])[0]
     assert p["state"] == "used" and p["sale_order_id"][0] == r["order_id"]
-    assert _order(ctx, aug)["error"]["code"] == "prescription_required"   # one use only
+    assert _order(ctx, aug)["rx_review"] in ("pending", "awaiting_photo")   # one use only
 
 
 @odoo
-def test_old_prescription_does_not_unlock(ctx):
+def test_ocr_checked_photo_goes_to_pharmacist_review(ctx):
     aug = ctx["var"]("RX-0001")
-    ctx["make"]([aug], days_ago=rx.PRESCRIPTION_MAX_AGE_DAYS + 1)
-    assert _order(ctx, aug)["error"]["code"] == "prescription_required"
+    rid = ctx["make"]([aug], state="auto_verified")          # OCR pre-check passed
+    r = _order(ctx, aug)
+    assert r["rx_review"] == "pending"
+    p = GW.c.read("pharmacy.prescription", rid, ["state", "sale_order_id"])[0]
+    assert p["state"] == "submitted" and p["sale_order_id"][0] == r["order_id"]
+    o = GW.c.read("sale.order", r["order_id"], ["rx_review_state", "state"])[0]
+    assert o == {"id": r["order_id"], "rx_review_state": "pending", "state": "draft"}
 
 
 @odoo
-def test_prescription_only_unlocks_listed_medicine(ctx):
-    ctx["make"]([ctx["var"]("RX-0001")])
-    assert _order(ctx, ctx["var"]("RX-0003"))["error"]["code"] == "prescription_required"
+def test_without_photo_the_quotation_waits_for_it(ctx):
+    r = _order(ctx, ctx["var"]("RX-0003"))
+    assert r["rx_review"] == "awaiting_photo" and r["order_id"]
 
 
 @odoo
-def test_unverified_prescription_does_not_unlock(ctx):
+def test_old_approved_prescription_does_not_skip_review(ctx):
     aug = ctx["var"]("RX-0001")
-    ctx["make"]([aug], state="submitted")
-    assert _order(ctx, aug)["error"]["code"] == "prescription_required"
+    ctx["make"]([aug], days_ago=rx.PRESCRIPTION_MAX_AGE_DAYS + 1, state="verified")
+    assert _order(ctx, aug)["rx_review"] != "none"
 
 
 @odoo
 def test_scheduled_stays_blocked_even_with_prescription(ctx):
     tram = ctx["var"]("RX-0005")
-    ctx["make"]([tram])
+    ctx["make"]([tram], state="verified")
     assert _order(ctx, tram)["error"]["code"] == "scheduled_item"
 
 
 @odoo
-def test_hold_with_verified_prescription(ctx):
+def test_hold_needs_pharmacist_approved_prescription(ctx):
     ven = ctx["var"]("RX-0003")
-    ctx["make"]([ven])
-    b = ctx["branch"]
-    r = GW.hold_item(ven, b, 1, ctx["cust"])
-    assert "hold_id" in r, r
+    assert GW.hold_item(ven, ctx["branch"], 1, ctx["cust"])["error"]["code"] == "prescription_required"
+    ctx["make"]([ven], state="verified")
+    assert "hold_id" in GW.hold_item(ven, ctx["branch"], 1, ctx["cust"])
+
+
+@odoo
+def test_review_approve_notify_confirm_pay(ctx):
+    aug = ctx["var"]("RX-0001")
+    ctx["make"]([aug], state="auto_verified")
+    r = _order(ctx, aug)
+    oid = r["order_id"]
+    GW.c.execute_kw("sale.order", "action_rx_approve", [[oid]])
+    o = GW.c.read("sale.order", oid, ["rx_review_state", "notify_state", "prescription_ids"])[0]
+    assert o["rx_review_state"] == "approved" and o["notify_state"] == "pending"
+    assert GW.c.read("pharmacy.prescription", o["prescription_ids"][0], ["state"])[0]["state"] == "verified"
+    note = [n for n in GW.pending_notifications(ctx["cust"]) if n["order_id"] == oid][0]
+    assert note["review"] == "approved" and note["lines"] and note["total"] > 0
+    GW.mark_notified(oid)
+    assert not [n for n in GW.pending_notifications(ctx["cust"]) if n["order_id"] == oid]
+    res = GW.customer_confirms(oid, ctx["cust"])
+    assert "/my/orders/" in res["payment_link"]
+    o = GW.c.read("sale.order", oid, ["customer_confirmed", "payment_state_wa"])[0]
+    assert o["customer_confirmed"] and o["payment_state_wa"] == "link_sent"
+
+
+@odoo
+def test_reject_needs_a_reason_then_notifies(ctx):
+    r = _order(ctx, ctx["var"]("RX-0003"))
+    oid = r["order_id"]
+    GW.c.write("sale.order", [oid], {"rx_review_state": "pending"})
+    with pytest.raises(Exception):
+        GW.c.execute_kw("sale.order", "action_rx_reject", [[oid]])
+    GW.c.write("sale.order", [oid], {"rx_review_note": "Prescription is not legible"})
+    GW.c.execute_kw("sale.order", "action_rx_reject", [[oid]])
+    note = [n for n in GW.pending_notifications(ctx["cust"]) if n["order_id"] == oid][0]
+    assert note["review"] == "rejected" and "legible" in note["note"]
 
 
 # ---- full OCR on a generated image ---------------------------------------

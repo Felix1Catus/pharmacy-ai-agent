@@ -200,3 +200,63 @@ def test_promises_removed_from_replies():
 def test_search_with_wrong_branch_still_finds_product():
     r = GW.search_product("بنادول", branch_id=999999)
     assert r["candidates"] and "does not exist" in r["note_branch"]
+
+
+# ---- prescription-only order -> pharmacist review -> confirm & pay -------------------
+def test_rx_order_collects_photo_then_closes_with_review_note(monkeypatch):
+    prof = GW.register_customer("ZZ Test Rx Flow", "0500000808", "Riyadh, Al Sahafa, St 2")
+    monkeypatch.setattr(GW, "create_order", lambda **kw: {
+        "order_id": 4242, "order_ref": "S04242", "state": "draft", "total": 45.0, "branch_id": 1,
+        "branch_name": "Riyadh", "fulfillment": "pickup", "rx_review": "awaiting_photo"})
+    monkeypatch.setattr(GW, "submit_prescription", lambda *a, **k: {
+        "ok": True, "problems": [], "prescription_id": 99, "date": "2026-10-21",
+        "invoice_number": "INV-1", "medications": [], "scheduled_count": 0})
+    attached = []
+    monkeypatch.setattr(GW, "attach_prescription", lambda oid, rid, cid: attached.append((oid, rid, cid))
+                        or {"order_id": oid, "order_ref": "S04242", "total": 45.0})
+    order = {"content": "", "tool_calls": [{"name": "create_order", "arguments": {
+        "items": [{"product_id": 36, "qty": 1}], "fulfillment": "pickup", "branch_id": 1}}]}
+    a = PharmacyAgent(llm=ScriptLLM([order]), gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500000808")
+    a.greet(conv)
+    reply = a.respond(conv, "نعم اكد الطلب")
+    assert "S04242" in reply and "صورة الوصفة" in reply and conv.awaiting_rx_order == 4242
+    reply = a.respond(conv, "", image=b"\x89PNG fake")
+    assert attached == [(4242, 99, prof["customer_id"])] and conv.awaiting_rx_order is None
+    assert "الصيدلي" in reply and "+966500000808" in reply and conv.last_guard == "rx_review"
+
+
+def test_approved_review_is_sent_then_confirm_gives_payment_link(monkeypatch):
+    prof = GW.register_customer("ZZ Test Rx Approve", "0500000909", "Riyadh, Al Arid, St 8")
+    summary = {"order_id": 777, "order_ref": "S00777", "customer_id": prof["customer_id"],
+               "total": 45.0, "fulfillment": "delivery", "address": "Riyadh, Al Arid, St 8",
+               "branch_name": "Riyadh", "review": "approved", "note": "", "state": "draft",
+               "payment_link": "", "lines": [{"name": "Augmentin 1g", "qty": 1.0, "total": 45.0}]}
+    marked = []
+    monkeypatch.setattr(GW, "pending_notifications", lambda cid=None: [summary] if not marked else [])
+    monkeypatch.setattr(GW, "mark_notified", lambda oid: marked.append(oid))
+    monkeypatch.setattr(GW, "customer_confirms", lambda oid, cid: {
+        **summary, "payment_link": "http://odoo/my/orders/777?access_token=x"})
+    a = PharmacyAgent(llm=ScriptLLM([]), gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500000909")
+    a.greet(conv)
+    msgs = a.customer.deliver_notifications(conv)
+    assert marked == [777] and "S00777" in msgs[0]["reply"] and "Augmentin 1g" in msgs[0]["reply"]
+    assert [b["id"] for b in msgs[0]["menu"]] == ["confirm_pay", "cancel_order"]
+    reply = a.respond(conv, "✅ أؤكد وأدفع")
+    assert "/my/orders/777" in reply and conv.awaiting_confirm_order is None
+
+
+def test_otc_quotation_reply_has_payment_link(monkeypatch):
+    GW.register_customer("ZZ Test Otc Pay", "0500001010", "Riyadh, Al Wadi, St 1")
+    monkeypatch.setattr(GW, "create_order", lambda **kw: {
+        "order_id": 555, "order_ref": "S00555", "state": "draft", "total": 12.0, "branch_id": 1,
+        "branch_name": "Riyadh", "fulfillment": "pickup", "rx_review": "none"})
+    monkeypatch.setattr(GW, "payment_link", lambda oid: "http://odoo/my/orders/555?access_token=y")
+    order = {"content": "", "tool_calls": [{"name": "create_order", "arguments": {
+        "items": [{"product_id": 1, "qty": 1}], "fulfillment": "pickup", "branch_id": 1}}]}
+    a = PharmacyAgent(llm=ScriptLLM([order]), gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500001010")
+    a.greet(conv)
+    reply = a.respond(conv, "نعم اكد")
+    assert "S00555" in reply and "/my/orders/555" in reply

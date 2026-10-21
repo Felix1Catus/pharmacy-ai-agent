@@ -42,7 +42,7 @@
   },
   "returns": {
     "type": "object",
-    "description": "candidates: list of {product_id, name_ar, name_en, brand, scientific_name, price_sar, match, requires_prescription, prescription_on_file}; alternatives: same active ingredient, other brands; active_ingredient; note (e.g. requested strength not available); hint when nothing matched. Lists may be empty.",
+    "description": "candidates: list of {product_id, name_ar, name_en, brand, scientific_name, price_sar, match, requires_prescription}; alternatives: same active ingredient, other brands; active_ingredient; note (e.g. requested strength not available); hint when nothing matched. Lists may be empty.",
     "properties": {
       "candidates": {
         "type": "array"

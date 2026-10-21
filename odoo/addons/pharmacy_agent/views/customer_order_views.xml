@@ -12,22 +12,66 @@
     </field>
   </record>
 
-  <!-- Quotation / order: WhatsApp + delivery hand-off details -->
+  <!-- Quotation / order: prescription review buttons + WhatsApp, delivery, payment details -->
   <record id="view_order_form_whatsapp" model="ir.ui.view">
     <field name="name">sale.order.form.whatsapp</field>
     <field name="model">sale.order</field>
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
+      <xpath expr="//header" position="inside">
+        <button name="action_rx_approve" type="object" string="✅ Approve prescription"
+                class="btn-primary" invisible="rx_review_state != 'pending'"/>
+        <button name="action_rx_reject" type="object" string="❌ Reject prescription"
+                invisible="rx_review_state not in ('pending', 'awaiting_photo')"
+                confirm="Reject this prescription? The reason in the Prescription review tab is sent to the customer."/>
+      </xpath>
+      <xpath expr="//div[@name='button_box']" position="after">
+        <widget name="web_ribbon" title="Pending approval" bg_color="text-bg-warning"
+                invisible="rx_review_state != 'pending'"/>
+        <widget name="web_ribbon" title="Awaiting prescription" bg_color="text-bg-info"
+                invisible="rx_review_state != 'awaiting_photo'"/>
+        <widget name="web_ribbon" title="Rx rejected" bg_color="text-bg-danger"
+                invisible="rx_review_state != 'rejected'"/>
+      </xpath>
       <xpath expr="//notebook" position="inside">
-        <page string="WhatsApp / Delivery" name="whatsapp_delivery" invisible="not wa_order">
+        <page string="Prescription review" name="rx_review" invisible="rx_review_state == 'none'">
+          <group>
+            <group>
+              <field name="rx_review_state" readonly="1" widget="badge"
+                     decoration-warning="rx_review_state == 'pending'"
+                     decoration-info="rx_review_state == 'awaiting_photo'"
+                     decoration-success="rx_review_state == 'approved'"
+                     decoration-danger="rx_review_state == 'rejected'"/>
+              <field name="rx_reviewed_by"/>
+            </group>
+            <group>
+              <field name="rx_review_note" placeholder="Required to reject: the reason sent to the customer"/>
+            </group>
+          </group>
+          <field name="prescription_ids" readonly="1">
+            <list>
+              <field name="name"/>
+              <field name="prescription_date"/>
+              <field name="invoice_number"/>
+              <field name="extracted_drug"/>
+              <field name="ocr_status"/>
+              <field name="state"/>
+            </list>
+          </field>
+        </page>
+        <page string="WhatsApp / Delivery / Payment" name="whatsapp_delivery" invisible="not wa_order">
           <group>
             <group>
               <field name="wa_order" readonly="1"/>
               <field name="fulfillment_type"/>
               <field name="dispatch_status"/>
+              <field name="delivery_address_text"/>
             </group>
             <group>
-              <field name="delivery_address_text"/>
+              <field name="notify_state"/>
+              <field name="customer_confirmed"/>
+              <field name="payment_state_wa"/>
+              <field name="payment_link" widget="url"/>
             </group>
           </group>
         </page>
@@ -39,16 +83,42 @@
     <field name="name">sale.order.list.whatsapp</field>
     <field name="model">sale.order</field>
     <field name="arch" type="xml">
-      <list>
+      <list decoration-warning="rx_review_state == 'pending'" decoration-danger="rx_review_state == 'rejected'">
         <field name="name"/>
         <field name="date_order"/>
         <field name="partner_id"/>
+        <field name="rx_review_state" widget="badge"
+               decoration-warning="rx_review_state == 'pending'"
+               decoration-info="rx_review_state == 'awaiting_photo'"
+               decoration-success="rx_review_state == 'approved'"
+               decoration-danger="rx_review_state == 'rejected'"/>
         <field name="fulfillment_type"/>
         <field name="delivery_address_text" optional="show"/>
-        <field name="dispatch_status"/>
+        <field name="payment_state_wa" optional="show"/>
+        <field name="dispatch_status" optional="hide"/>
         <field name="amount_total" sum="Total"/>
         <field name="state"/>
       </list>
+    </field>
+  </record>
+
+  <record id="view_order_search_whatsapp" model="ir.ui.view">
+    <field name="name">sale.order.search.whatsapp</field>
+    <field name="model">sale.order</field>
+    <field name="arch" type="xml">
+      <search>
+        <field name="name"/>
+        <field name="partner_id"/>
+        <filter name="rx_pending" string="Pending approval" domain="[('rx_review_state', '=', 'pending')]"/>
+        <filter name="rx_awaiting" string="Awaiting prescription photo" domain="[('rx_review_state', '=', 'awaiting_photo')]"/>
+        <filter name="rx_done" string="Reviewed" domain="[('rx_review_state', 'in', ('approved', 'rejected'))]"/>
+        <separator/>
+        <filter name="delivery" string="Delivery" domain="[('fulfillment_type', '=', 'delivery')]"/>
+        <filter name="pickup" string="Pickup" domain="[('fulfillment_type', '=', 'pickup')]"/>
+        <group expand="0" string="Group By">
+          <filter name="group_rx" string="Prescription review" context="{'group_by': 'rx_review_state'}"/>
+        </group>
+      </search>
     </field>
   </record>
 
@@ -57,10 +127,30 @@
     <field name="res_model">sale.order</field>
     <field name="view_mode">list,form</field>
     <field name="view_id" ref="view_order_tree_whatsapp"/>
+    <field name="search_view_id" ref="view_order_search_whatsapp"/>
     <field name="domain">[('wa_order', '=', True)]</field>
     <field name="context">{'default_wa_order': True}</field>
   </record>
 
+  <!-- the reviewer's queue: quotations with prescription-only medicines -->
+  <record id="action_prescription_review" model="ir.actions.act_window">
+    <field name="name">Prescription review</field>
+    <field name="res_model">sale.order</field>
+    <field name="view_mode">list,form</field>
+    <field name="view_id" ref="view_order_tree_whatsapp"/>
+    <field name="search_view_id" ref="view_order_search_whatsapp"/>
+    <field name="domain">[('rx_review_state', '!=', 'none')]</field>
+    <field name="context">{'search_default_rx_pending': 1}</field>
+    <field name="help" type="html">
+      <p class="o_view_nocontent_smiling_face">No prescriptions waiting for review</p>
+      <p>Quotations with prescription-only medicines from the WhatsApp assistant appear here.
+         Open one, check the prescription image, then Approve or Reject (with a reason).
+         The customer is messaged automatically.</p>
+    </field>
+  </record>
+
+  <menuitem id="menu_prescription_review" name="Prescription review" parent="menu_pharmacy_root"
+            action="action_prescription_review" sequence="1"/>
   <menuitem id="menu_whatsapp_quotations" name="WhatsApp orders" parent="menu_pharmacy_root"
             action="action_whatsapp_quotations" sequence="5"/>
 </odoo>

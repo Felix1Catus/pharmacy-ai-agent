@@ -93,15 +93,14 @@ SYSTEM_PROMPT = (
     "or that is on their verified prescription; if a brand is not found, tell the customer and "
     "ask for the active ingredient written on the box or prescription. If the result has a note "
     "that the requested strength is not available, tell the customer the strengths we do have.\n"
-    "5.Prescription-only medicines (search result requires_prescription=true, not scheduled): "
-    "you MAY confirm availability (check_stock) and price (price_sar from search_product). Each "
-    "such result has prescription_on_file. If prescription_on_file=true, handle it like any other "
-    "medicine (confirm, then create_order / hold_item). If it is false and the customer wants to "
-    "buy, order or reserve it, do NOT call create_order or escalate: reply asking them to attach "
-    "a photo or PDF of their prescription with the 📎 button (in Arabic say: 'يحتاج وصفة طبية، أرسل "
-    "صورة الوصفة من زر المرفقات 📎 وأكمل لك الطلب') - never mix English words into Arabic "
-    "replies. A message starting with [Prescription verified] lists the medicines the customer "
-    "may now order. Scheduled/controlled medicines (is_scheduled=true) are fully "
+    "5. Prescription-only medicines (search result requires_prescription=true, not scheduled): "
+    "handle them like any other medicine - availability, price, quantity, pickup or delivery, "
+    "confirm, then create_order. The system turns the order into a quotation that a pharmacist "
+    "reviews with the customer's prescription photo, and asks for the photo itself if needed. "
+    "You may mention once that it needs a prescription (in Arabic: 'يحتاج وصفة طبية'); never "
+    "refuse it, never say it is approved, never mix English words into Arabic replies. A message "
+    "starting with [Prescription received] lists the medicines on a prescription the customer "
+    "sent. Scheduled/controlled medicines (is_scheduled=true) are fully "
     "blocked: give no availability or price, call escalate_to_human reason='restricted_item'.\n"
     "6. If the message is vague/unintelligible or you cannot map it to a product, order or "
     "action, call escalate_to_human reason='unclear' — do NOT reply with a free-text question. "
@@ -168,6 +167,8 @@ class Conversation:
         self.customer_name: str | None = None
         self.profile: dict | None = None # saved Odoo contact (name, address, alt phone)
         self.flow: dict | None = None    # active identify/register step (agent/customer.py)
+        self.awaiting_rx_order: int | None = None      # quotation waiting for a prescription photo
+        self.awaiting_confirm_order: int | None = None # approved quotation waiting for "confirm & pay"
         self.started = False
         self.last_ts = 0.0
         self.menu_shown = False          # the previous reply was the menu (digits 1-5 pick items)
@@ -327,18 +328,17 @@ class PharmacyAgent:
         return _ID_MENTION.sub("", text).strip()
 
     def _prescription_note(self, res: dict) -> str:
-        lines = [f"[Prescription verified] The customer attached a prescription photo; it was "
-                 f"verified automatically (invoice {res['invoice_number']}, dated {res['date']}). "
-                 f"Medicines found on it:"]
+        lines = [f"[Prescription received] The customer attached a prescription (invoice "
+                 f"{res['invoice_number']}, dated {res['date']}); a pharmacist reviews it together "
+                 f"with the order. Medicines found on it:"]
         for m in res["medications"]:          # Scheduled ones were already removed by the gateway
-            what = ("prescription-only - may now be ordered/held" if m["requires_prescription"]
-                    else "over the counter")
+            what = ("prescription-only - can be ordered, the pharmacist reviews the prescription"
+                    if m["requires_prescription"] else "over the counter")
             name = f"{m['name_en']} / {m['name_ar']}" if m.get("name_ar") else m["name_en"]
             lines.append(f"- {name}: {what}")
         if res.get("same_ingredient_count"):
-            lines.append("Other brands with exactly the same active ingredient(s) are also allowed "
-                         "on this prescription (search_product shows them as alternatives with "
-                         "prescription_on_file=true).")
+            lines.append("Other brands with exactly the same active ingredient(s) are also fine "
+                         "(search_product shows them as alternatives).")
         if res.get("scheduled_count"):
             lines.append("The prescription also lists controlled medicines: they cannot be ordered "
                          "through the chat - say only that a pharmacist handles those, give no "
@@ -414,6 +414,12 @@ class PharmacyAgent:
                 if reply is not None:
                     return reply
 
+        # --- answer to a pharmacist-approved quotation: confirm & pay / cancel ---
+        if conv.awaiting_confirm_order and not resumed and not image:
+            reply = self.customer.handle_review_reply(conv, raw)
+            if reply is not None:
+                return reply
+
         # --- opening menu / menu choices (customer-facing channels) ---
         if conv.customer_facing and not resumed:
             choice = match_menu(raw, conv.menu_shown) if raw.strip() else None
@@ -449,6 +455,12 @@ class PharmacyAgent:
             if not res["ok"]:
                 return self._say(conv, prescription_rejected(res["problems"], res.get("date")),
                                  guard="prescription_check")
+            if conv.awaiting_rx_order:           # the quotation was waiting for this photo
+                att = self.gw.attach_prescription(conv.awaiting_rx_order, res["prescription_id"],
+                                                  conv.customer_id)
+                if "error" not in att:
+                    return self.customer.prescription_attached(conv, att)
+                conv.awaiting_rx_order = None
             note = self._prescription_note(res)
             conv.messages[-1]["content"] = note + ("\n\nCustomer message: " + raw
                                                    if raw.strip() else "")
@@ -508,7 +520,6 @@ class PharmacyAgent:
                 if "alternatives" in result:
                     result["alternatives"] = [c for c in result["alternatives"]
                                               if not c.get("is_scheduled")]
-                self._annotate_prescriptions(conv, result)
             calls_made += 1
             self._audit(conv.conv_id, "tool_call",
                         {"action": name, "args": args, "result": result})

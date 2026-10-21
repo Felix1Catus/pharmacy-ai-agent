@@ -40,7 +40,7 @@ def _needs_prescription(flags: dict) -> bool:
 
 
 # prescription states that let the agent order/hold the medicines found on it
-RX_OK_STATES = ["auto_verified", "verified"]
+RX_OK_STATES = ["verified"]                # pharmacist-approved only; OCR is a pre-check
 RX_PRODUCT_FIELDS = ["name", "x_name_ar", "x_brand", "sfda_scientific_name", "product_variant_id",
                      "x_is_restricted", "x_requires_prescription", "sfda_requires_prescription",
                      "is_scheduled"]
@@ -318,6 +318,7 @@ class Gateway:
             return err("invalid_input", "items is required")
         # resolve + guardrail restricted
         rx_used: set[int] = set()
+        rx_review = False
         for it in items:
             flags = self._product_flags(it["product_id"])
             if not flags:
@@ -329,9 +330,10 @@ class Gateway:
                            product_id=it["product_id"])
             if _needs_prescription(flags):
                 rid = self.valid_prescription(customer_id, it["product_id"])
-                if not rid:
-                    return self._rx_required(flags, it["product_id"])
-                rx_used.add(rid)
+                if rid:
+                    rx_used.add(rid)             # already pharmacist-approved for this customer
+                else:
+                    rx_review = True             # quotation goes to the pharmacist for review
         # choose branch
         if fulfillment == "pickup":
             if not branch_id:
@@ -377,11 +379,23 @@ class Gateway:
         if rx_used:      # one prescription = one order: it cannot be used again
             self.c.write("pharmacy.prescription", list(rx_used),
                          {"sale_order_id": oid, "state": "used"})
+        review = "none"
+        if rx_review:
+            # attach the prescription(s) the customer already sent (not yet on an order); a
+            # pharmacist approves/rejects in Odoo (Pharmacy > Prescription review)
+            sent = self.c.search("pharmacy.prescription", [
+                ["partner_id", "=", customer_id], ["sale_order_id", "=", False],
+                ["state", "in", ["submitted", "auto_verified"]]], order="id desc", limit=3)
+            if sent:
+                self.c.write("pharmacy.prescription", sent, {"sale_order_id": oid, "state": "submitted"})
+            review = "pending" if sent else "awaiting_photo"
+            self.c.write("sale.order", [oid], {"rx_review_state": review})
         o = self.c.read("sale.order", oid, ["name", "state", "amount_total"])[0]
         return {"order_id": oid, "order_ref": o["name"], "state": o["state"],
                 "total": o["amount_total"], "branch_id": chosen,
-                "branch_name": b["name"], "fulfillment": fulfillment,
-                "next_step": "quotation created; the pharmacy confirms it"}
+                "branch_name": b["name"], "fulfillment": fulfillment, "rx_review": review,
+                "next_step": ("prescription review by the pharmacist" if review != "none"
+                              else "customer pays via the payment link, then it is confirmed")}
 
     def _pick_branch_with_stock(self, items):
         for b in self.branches():
@@ -502,9 +516,79 @@ class Gateway:
                    f"{rx.PRESCRIPTION_MAX_AGE_DAYS} days that shows this medicine and an invoice "
                    f"number", product_id=product_id)
 
+    # ---- prescription review results, confirmation and payment (chat channels) --------
+    def attach_prescription(self, order_id: int, prescription_id: int, customer_id: int) -> dict:
+        """A photo sent after the quotation: put it on that order -> pending pharmacist review."""
+        if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id]]):
+            return err("not_found", "no such order for this customer")
+        self.c.write("pharmacy.prescription", [prescription_id],
+                     {"sale_order_id": order_id, "state": "submitted"})
+        self.c.write("sale.order", [order_id], {"rx_review_state": "pending"})
+        o = self.c.read("sale.order", order_id, ["name", "amount_total"])[0]
+        return {"order_id": order_id, "order_ref": o["name"], "total": o["amount_total"]}
+
+    def order_summary(self, order_id: int) -> dict:
+        o = self.c.read("sale.order", order_id, [
+            "name", "partner_id", "amount_total", "fulfillment_type", "delivery_address_text",
+            "warehouse_id", "rx_review_state", "rx_review_note", "state", "payment_link"])[0]
+        lines = self.c.search_read("sale.order.line", [["order_id", "=", order_id],
+                                                       ["display_type", "=", False]],
+                                   ["name", "product_uom_qty", "price_total"])
+        return {"order_id": order_id, "order_ref": o["name"], "customer_id": o["partner_id"][0],
+                "total": o["amount_total"], "fulfillment": o["fulfillment_type"],
+                "address": o["delivery_address_text"] or "",
+                "branch_name": (o["warehouse_id"] or [0, ""])[1],
+                "review": o["rx_review_state"], "note": o["rx_review_note"] or "",
+                "state": o["state"], "payment_link": o["payment_link"] or "",
+                "lines": [{"name": l["name"].split("\n")[0], "qty": l["product_uom_qty"],
+                           "total": l["price_total"]} for l in lines]}
+
+    def pending_notifications(self, customer_id: int | None = None) -> list[dict]:
+        """Review results the pharmacist decided that the customer has not been told yet."""
+        dom = [["notify_state", "=", "pending"]]
+        if customer_id:
+            dom.append(["partner_id", "=", customer_id])
+        out = []
+        for oid in self.c.search("sale.order", dom, order="id"):
+            s = self.order_summary(oid)
+            p = self.c.read("res.partner", s["customer_id"], ["name", "whatsapp_number", "phone"])[0]
+            s.update(customer_name=p["name"],
+                     whatsapp_number=p["whatsapp_number"] or normalize_phone(p["phone"]))
+            out.append(s)
+        return out
+
+    def mark_notified(self, order_id: int) -> None:
+        self.c.write("sale.order", [order_id], {"notify_state": "sent"})
+
+    def payment_link(self, order_id: int) -> str:
+        """Link the customer pays from: the quotation's Odoo customer page (online payment is
+        enabled there once a payment provider is configured - payment capture/recording is the
+        next phase)."""
+        base = (self.c.search_read("ir.config_parameter", [["key", "=", "web.base.url"]],
+                                   ["value"]) or [{"value": ""}])[0]["value"].rstrip("/")
+        path = self.c.execute_kw("sale.order", "get_portal_url", [[order_id]])
+        url = base + path
+        self.c.write("sale.order", [order_id], {"payment_link": url, "payment_state_wa": "link_sent"})
+        return url
+
+    def customer_confirms(self, order_id: int, customer_id: int) -> dict:
+        """The customer accepted an approved quotation: record it and hand back the payment link."""
+        if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id],
+                                            ["state", "in", ["draft", "sent"]]]):
+            return err("not_found", "no open quotation for this customer")
+        self.c.write("sale.order", [order_id], {"customer_confirmed": True})
+        return {**self.order_summary(order_id), "payment_link": self.payment_link(order_id)}
+
+    def customer_cancels(self, order_id: int, customer_id: int) -> dict:
+        if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id],
+                                            ["state", "in", ["draft", "sent"]]]):
+            return err("not_found", "no open quotation for this customer")
+        self.c.execute_kw("sale.order", "action_cancel", [[order_id]])
+        return {"order_id": order_id, "cancelled": True}
+
     def valid_prescription(self, customer_id, product_id) -> int | None:
-        """Id of an unused, verified prescription of this customer, dated within the allowed
-        window, that lists this product — or None."""
+        """Id of an unused, PHARMACIST-approved prescription of this customer, dated within the
+        allowed window, that lists this product — or None (OCR alone never approves)."""
         if not customer_id:
             return None
         oldest = (rx.today_ksa() - timedelta(days=rx.PRESCRIPTION_MAX_AGE_DAYS)).isoformat()
@@ -614,13 +698,16 @@ class Gateway:
         if not domain:
             return err("invalid_input", "order_id or customer_id is required")
         rows = self.c.search_read("sale.order", domain,
-                                  ["name", "state", "amount_total", "delivery_status"],
+                                  ["name", "state", "amount_total", "delivery_status",
+                                   "rx_review_state", "payment_state_wa"],
                                   order="id desc", limit=10)
         if not rows:
             return err("not_found", "no matching order")
         orders = [{"order_id": r["id"], "name": r["name"], "state": r["state"],
                    "total": r["amount_total"],
-                   "dispatch_state": r.get("delivery_status") or "none"}
+                   "dispatch_state": r.get("delivery_status") or "none",
+                   "prescription_review": r.get("rx_review_state") or "none",
+                   "payment": r.get("payment_state_wa") or "none"}
                   for r in rows]
         return {"orders": orders}
 
