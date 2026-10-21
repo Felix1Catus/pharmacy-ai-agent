@@ -104,8 +104,7 @@ def test_full_sentence_order_needs_one_model_call(shop):
     llm = ScriptLLM([_search_call("بنادول 500")])
     a, conv, prof = _identified(llm)
     reply = a.respond(conv, "ابغى علبتين بنادول 500 استلام من فرع جدة")
-    assert "1. بنادول ٥٠٠ ملغ" in reply and len(conv.last_menu) == 3           # numbered list + buttons
-    reply = a.respond(conv, "1")                                             # qty 2, pickup Jeddah known
+    # one product clearly named + qty 2 + pickup Jeddah: straight to the summary
     assert "ملخص طلبك" in reply and "× 2" in reply and "Jeddah" in reply
     reply = a.respond(conv, "✅ تأكيد الطلب")
     assert shop == [{"items": [{"product_id": 1, "qty": 2}], "fulfillment": "pickup", "branch_id": 3,
