@@ -171,3 +171,11 @@ def test_not_found_is_a_fixed_reply(monkeypatch):
     a, conv, prof = _identified(llm)
     reply = a.respond(conv, "عندكم zzqx؟")
     assert "ما لقيت" in reply and len(llm.seen) == 1
+
+
+@live
+def test_product_question_answered_from_memory_is_replaced_by_real_search(shop):
+    llm = ScriptLLM([{"content": "لا، عندنا سنتروم فقط للطلبات المحددة", "tool_calls": []}])
+    a, conv, prof = _identified(llm)
+    reply = a.respond(conv, "عندكم بنادول؟")          # model skipped the search
+    assert "1. بنادول ٥٠٠ ملغ" in reply and "للطلبات المحددة" not in reply

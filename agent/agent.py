@@ -542,6 +542,16 @@ class PharmacyAgent:
                 if reply_gives_medical_advice(reply):   # dosage/treatment slipped through: never sent
                     self._escalate(conv, "medical_advice", f"model reply blocked: {reply[:200]}")
                     return self._say(conv, MEDICAL_REFUSAL, guard="medical_output")
+                # the model answered a product question from memory ("لا، عندنا سنتروم فقط...")
+                # instead of searching: search ourselves and show the real catalogue
+                if conv.customer_facing and not any(m.get("tool_calls") for m in conv.messages[turn:]):
+                    found = self.gw.search_product(query=raw) if raw.strip() else {}
+                    if isinstance(found, dict) and (found.get("candidates") or found.get("alternatives")):
+                        self._audit(conv.conv_id, "forced_search", {"model_text": reply[:200]})
+                        found["candidates"] = [c for c in found.get("candidates") or [] if not c.get("is_scheduled")]
+                        found["alternatives"] = [c for c in found.get("alternatives") or [] if not c.get("is_scheduled")]
+                        if found["candidates"] or found["alternatives"]:
+                            return self.order.present(conv, found, raw)
                 reply = _strip_promises(reply)
                 reply = reply or ("عفواً، ممكن توضح طلبك؟" if self._lang(conv) == "ar"
                                   else "Sorry, could you clarify your request?")
