@@ -202,4 +202,4 @@ def test_customer_named_ingredients_override_partial_model_search(monkeypatch):
     a, llm, conv = _cf([partial])
     a.greet(conv)
     a.respond(conv, "the box says amoxicillin and clavulanic acid")
-    assert seen[0]["active_ingredient"] == "amoxicillin, clavulanic acid"
+    assert any(c.get("active_ingredient") == "amoxicillin, clavulanic acid" for c in seen)

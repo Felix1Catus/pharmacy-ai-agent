@@ -160,7 +160,7 @@ def test_identity_kept_and_given_to_the_model():
     a.respond(conv, "4")
     a.respond(conv, "0500000606")
     a.respond(conv, "✅ نعم، اعتمدها")
-    a.respond(conv, "ابغى بنادول")                      # several turns later, still identified
+    a.respond(conv, "وين اقرب فرع لي؟")                 # several turns later, still identified
     assert conv.customer_id == prof["customer_id"]
     last_user = [m for m in llm.seen[-1] if m["role"] == "user"][-1]["content"]
     assert "ZZ Test Memory" in last_user and "الفيصلية" in last_user
