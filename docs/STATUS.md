@@ -38,6 +38,10 @@ customer flow). Automated tests: 159 passing on the server.
   next phase; meanwhile staff confirm/invoice (pickup) or approve for delivery (future Delivery Dispatcher).
 
 ## What was built (by area)
+- **Order wizard + speed** (2026-10-21): product messages searched directly or with one model
+  call, numbered list, fixed steps, ✅-only ordering; system prompt 5.3k → 1.5k chars, customer
+  chats get 5 tools, compact results. Measured live: whole order ~1 s (was 3–4 min), product
+  questions 0.1–0.6 s; free-text questions that need the model ~10–35 s.
 - **Prescription review** (2026-10-21): quotations with prescription-only medicines are marked
   *Pending approval* / *Awaiting prescription photo*; Odoo **Pharmacy → Prescription review** with
   Approve / Reject (reason required); decisions are messaged to the customer (WhatsApp push / test

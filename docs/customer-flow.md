@@ -43,6 +43,14 @@ The Odoo contact gets: name, phone (`+966…`), `whatsapp_number`, alternative p
 address (`street`; city detected from the text), country Saudi Arabia, customer flag.
 
 ## 4. Ordering → registration at checkout → quotation
+**Order wizard** (`agent/order_flow.py`, fixed steps): a message that clearly names a catalogue
+product is searched directly (no model call); otherwise the model only turns the words into a
+search. Results are a numbered list with prices + buttons (a clearly named product is selected
+at once). Details already in the message are reused («علبتين بنادول استلام من فرع جدة» = 2,
+pickup, Jeddah); only missing ones are asked with buttons: quantity → 🚚 توصيل / 🏪 استلام →
+branch (real branches) or saved address → stock check (other branches offered) → summary
+(total before VAT) with ✅ تأكيد الطلب / ➕ منتج آخر / ❌ إلغاء. **Only ✅ creates the quotation**;
+in customer chats the model has no order tools at all. A typical order takes ~1 s end to end.
 1. The customer orders (menu 1 or free text); the agent searches, checks stock, asks
    pickup/delivery and **asks for a clear "yes"** before placing anything.
 2. If the customer is not identified yet, the confirmed order is held and the registration
