@@ -93,7 +93,10 @@ def models():
 
 @app.post("/api/reset", dependencies=[Depends(auth)])
 def reset(body: dict):
-    _sessions.pop(body.get("session_id") or "", None)
+    sid = body.get("session_id") or ""
+    _sessions.pop(sid, None)
+    if sid:
+        (SESS_DIR / f"{_safe(sid)}.json").unlink(missing_ok=True)
     return {"ok": True}
 
 
@@ -116,13 +119,44 @@ def _session(sid: str | None, model: str, wa_phone: str | None = None):
     an unknown number; a simulated WhatsApp number (the test page's field) is looked up in Odoo
     Contacts exactly like the real WhatsApp sender id will be."""
     sid = sid or uuid.uuid4().hex
-    s = _sessions.get(sid)
+    s = _sessions.get(sid) or _load(sid)
     if not s or s["model"] != model:                     # new chat (or model switched)
         s = {"model": model, "conv": Conversation(customer_id=None, conv_id=f"web-{sid[:8]}",
                                                   customer_facing=True,
                                                   wa_phone=normalize_phone(wa_phone))}
-        _sessions[sid] = s
+    _sessions[sid] = s
     return sid, s["conv"]
+
+
+# Conversations are saved after every reply, so restarting the service (deploys) never makes a
+# chat forget who the customer is or what they were ordering.
+SESS_DIR = ROOT / "results" / "webchat_sessions"
+
+
+def _safe(sid: str) -> str:
+    return "".join(ch for ch in sid if ch.isalnum())[:64]
+
+
+def _save(sid: str) -> None:
+    s = _sessions.get(sid)
+    if not s:
+        return
+    SESS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = SESS_DIR / f"{_safe(sid)}.tmp"
+    tmp.write_text(json.dumps({"model": s["model"], "conv": s["conv"].to_dict()},
+                              ensure_ascii=False), encoding="utf-8")
+    tmp.replace(SESS_DIR / f"{_safe(sid)}.json")
+
+
+def _load(sid: str) -> dict | None:
+    f = SESS_DIR / f"{_safe(sid)}.json"
+    if not sid or not f.exists():
+        return None
+    try:
+        d = json.loads(f.read_text(encoding="utf-8"))
+        return {"model": d["model"], "conv": Conversation.from_dict(d["conv"])}
+    except Exception:                                    # corrupt/old file: start a new chat
+        return None
 
 
 def _out(sid, conv, reply, model, tools, t0):
@@ -148,6 +182,7 @@ def start(m: StartIn):
     sid, conv = _session(m.session_id, model, m.wa_phone)
     t0 = time.time()
     reply = agent_for(model).greet(conv)
+    _save(sid)
     return _out(sid, conv, reply, model, [], t0)
 
 
@@ -180,6 +215,7 @@ def chat(m: ChatIn):
     if image and new and str(new[0].get("content", "")).startswith("[Prescription verified]"):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})
+    _save(sid)
     return _out(sid, conv, reply, model, tools, t0)
 
 
@@ -191,11 +227,14 @@ class PollIn(BaseModel):
 def poll(m: PollIn):
     """Messages the system sends on its own, e.g. the pharmacist's prescription decision
     (on WhatsApp these are pushed; the test page asks every few seconds)."""
-    s = _sessions.get(m.session_id)
+    s = _sessions.get(m.session_id) or _load(m.session_id)
     if not s:
         return {"messages": []}
     conv = s["conv"]
+    _sessions[m.session_id] = s
     msgs = agent_for(s["model"]).customer.deliver_notifications(conv)
+    if msgs:
+        _save(m.session_id)
     return {"messages": [{"reply": x["reply"], "menu": x["menu"],
                           "debug": {"tools": [], "guard": GUARD_LABELS["review_result"],
                                     "seconds": 0}} for x in msgs]}

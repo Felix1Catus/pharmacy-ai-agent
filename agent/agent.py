@@ -20,6 +20,7 @@ confirm). Tracking confirmation state programmatically is a flagged next iterati
 """
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sys
@@ -129,6 +130,10 @@ _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
 _ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
+# the bot's previous message asked the customer to confirm an order
+_ASKED_CONFIRM = re.compile(r"(تاكيد|تاكد|تؤكد|اكد|نثبت|confirm|shall i place|place the order|"
+                            r"go ahead)", re.I)
+
 # promises the pharmacy cannot keep (no tracking links / SMS exist): such sentences are removed
 _PROMISE = re.compile(r"(رابط\s*(ال)?تتبع|رابط\s*للتتبع|رسال[ةه]\s*نصي[ةه]|SMS|tracking\s*link|"
                       r"track(ing)?\s*(url|number)|link to track|will (text|sms|email) you)", re.I)
@@ -169,6 +174,32 @@ class Conversation:
         self.flow: dict | None = None    # active identify/register step (agent/customer.py)
         self.awaiting_rx_order: int | None = None      # quotation waiting for a prescription photo
         self.awaiting_confirm_order: int | None = None # approved quotation waiting for "confirm & pay"
+
+    # saved to disk by the chat channel, so a service restart never forgets who the customer is
+    _FIELDS = ("customer_id", "conv_id", "messages", "customer_facing", "lang", "wa_phone",
+               "customer_name", "profile", "flow", "started", "last_ts", "menu_shown",
+               "last_menu", "last_guard", "last_user_text", "awaiting_rx_order",
+               "awaiting_confirm_order")
+
+    def to_dict(self) -> dict:
+        d = {k: getattr(self, k) for k in self._FIELDS}
+        pending = (self.flow or {}).get("pending") or {}
+        if isinstance(pending.get("image"), bytes):          # photo waiting in an interrupted flow
+            d["flow"] = {**self.flow, "pending": {**pending,
+                         "image": base64.b64encode(pending["image"]).decode(), "image_b64": True}}
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Conversation":
+        conv = cls(d.get("customer_id"))
+        for k in cls._FIELDS:
+            if k in d:
+                setattr(conv, k, d[k])
+        pending = (conv.flow or {}).get("pending") or {}
+        if pending.get("image_b64"):
+            conv.flow["pending"] = {**pending, "image": base64.b64decode(pending["image"])}
+            conv.flow["pending"].pop("image_b64", None)
+        return conv
         self.started = False
         self.last_ts = 0.0
         self.menu_shown = False          # the previous reply was the menu (digits 1-5 pick items)
@@ -479,6 +510,12 @@ class PharmacyAgent:
         turn = len(conv.messages) - 1
         hint = LANG_HINT.get(conv.lang or "", "") + self._customer_hint(conv)
         calls_made = 0
+        # the customer said "yes" to the bot's own order summary: if the model answers with yet
+        # another "do you confirm?" instead of placing it, tell it once, firmly, to place it
+        prev = next((m["content"] for m in reversed(conv.messages[:-1])
+                     if m["role"] == "assistant" and m.get("content")), "")
+        confirming = is_affirmation(raw) and bool(_ASKED_CONFIRM.search(normalize(prev)))
+        nudged = False
 
         while calls_made <= MAX_TOOL_CALLS:
             msgs = list(conv.messages)
@@ -486,6 +523,15 @@ class PharmacyAgent:
                 msgs[turn] = {**msgs[turn], "content": msgs[turn]["content"] + hint}
             out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + msgs,
                                 tools=self.tools)
+            if not out["tool_calls"] and confirming and not nudged and not any(
+                    m.get("tool_calls") and m["tool_calls"][0]["function"]["name"]
+                    in ("create_order", "hold_item") for m in conv.messages[turn:]):
+                nudged = True
+                hint += ("\n(The customer just said YES to the order summary above. Call "
+                         "create_order NOW with exactly those items, quantities and pickup branch "
+                         "or delivery - do not ask for confirmation again.)")
+                self._audit(conv.conv_id, "confirm_nudge", {"model_text": out["content"][:200]})
+                continue
             if not out["tool_calls"]:
                 reply = self._clean_reply(out["content"].strip())
                 if reply is None:                    # leaked internals: never sent to the customer

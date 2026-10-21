@@ -131,3 +131,8 @@ def test_internal_ids_stripped_from_replies():
 def test_localize_keeps_english_sentences_with_dashes():
     en = "We couldn't find an account with this number — let's register you 🙂"
     assert localize(en, "en") == en and localize("Go ahead — ask about our products", "en").startswith("Go ahead")
+
+
+@pytest.mark.parametrize("text", ["تاكيد", "تأكيد", "تأكيد الطلب", "ايه اكد", "ثبته", "يلا اطلبه"])
+def test_confirmation_words(text):
+    assert is_affirmation(text), text

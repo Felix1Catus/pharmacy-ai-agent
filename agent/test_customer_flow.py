@@ -262,3 +262,35 @@ def test_otc_quotation_reply_has_payment_link(monkeypatch):
     a.greet(conv)
     reply = a.respond(conv, "نعم اكد")
     assert "S00555" in reply and "/my/orders/555" in reply
+
+
+def test_conversation_survives_save_and_reload():
+    conv = Conversation(123, conv_id="web-x", customer_facing=True, lang="ar", wa_phone="966500000001")
+    conv.customer_name, conv.profile = "ZZ Test Saved", {"customer_id": 123, "address": "Riyadh"}
+    conv.messages.append({"role": "user", "content": "مرحبا"})
+    conv.flow = {"step": "ask_name", "data": {}, "pending": {"kind": "image", "image": b"\x89PNG", "text": ""}}
+    conv.awaiting_confirm_order = 77
+    import json
+    back = Conversation.from_dict(json.loads(json.dumps(conv.to_dict())))
+    assert back.customer_id == 123 and back.customer_name == "ZZ Test Saved"
+    assert back.flow["pending"]["image"] == b"\x89PNG" and back.awaiting_confirm_order == 77
+    assert back.messages == conv.messages and back.wa_phone == "966500000001"
+
+
+def test_yes_after_summary_places_order_even_if_model_asks_again(monkeypatch):
+    GW.register_customer("ZZ Test Nudge", "0500001111", "Jeddah, Al Rawdah, St 3")
+    placed = []
+    monkeypatch.setattr(GW, "create_order", lambda **kw: placed.append(kw) or {
+        "order_id": 9, "order_ref": "S00009", "state": "draft", "total": 24.0, "branch_id": 1,
+        "branch_name": "Jeddah", "fulfillment": "pickup", "rx_review": "none"})
+    monkeypatch.setattr(GW, "payment_link", lambda oid: "http://odoo/my/orders/9?access_token=z")
+    llm = ScriptLLM([
+        {"content": "2 علبة بنادول 500، استلام من فرع جدة. هل ترغب في تأكيد الطلب؟", "tool_calls": []},
+        {"content": "", "tool_calls": [{"name": "create_order", "arguments": {
+            "items": [{"product_id": 1, "qty": 2}], "fulfillment": "pickup", "branch_id": 1}}]}])
+    a = PharmacyAgent(llm=llm, gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500001111")
+    a.greet(conv)
+    conv.messages.append({"role": "assistant", "content": "علبتين بنادول 500 من فرع جدة، هل تؤكد الطلب؟"})
+    reply = a.respond(conv, "تاكيد")
+    assert len(placed) == 1 and "S00009" in reply
