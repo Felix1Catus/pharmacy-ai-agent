@@ -182,6 +182,12 @@ class Conversation:
         self.flow: dict | None = None    # active identify/register step (agent/customer.py)
         self.awaiting_rx_order: int | None = None      # quotation waiting for a prescription photo
         self.awaiting_confirm_order: int | None = None # approved quotation waiting for "confirm & pay"
+        self.started = False
+        self.last_ts = 0.0
+        self.menu_shown = False          # the previous reply was the menu (digits 1-5 pick items)
+        self.last_menu: list[dict] | None = None
+        self.last_guard: str | None = None
+        self.last_user_text = ""
 
     # saved to disk by the chat channel, so a service restart never forgets who the customer is
     _FIELDS = ("customer_id", "conv_id", "messages", "customer_facing", "lang", "wa_phone",
@@ -208,12 +214,6 @@ class Conversation:
             conv.flow["pending"] = {**pending, "image": base64.b64decode(pending["image"])}
             conv.flow["pending"].pop("image_b64", None)
         return conv
-        self.started = False
-        self.last_ts = 0.0
-        self.menu_shown = False          # the previous reply was the menu (digits 1-5 pick items)
-        self.last_menu: list[dict] | None = None
-        self.last_guard: str | None = None
-        self.last_user_text = ""
 
 
 class PharmacyAgent:
