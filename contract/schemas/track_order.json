@@ -1,23 +1,48 @@
 {
   "name": "track_order",
-  "description": "Look up the status of an order by order_id, or the customer's recent orders by customer_id. Read-only.",
+  "description": "The customer's recent orders and their status.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
     "properties": {
-      "order_id": {"type": "integer"},
-      "customer_id": {"type": "integer"}
+      "order_id": {
+        "type": "integer"
+      },
+      "customer_id": {
+        "type": "integer"
+      }
     },
-    "anyOf": [{"required": ["order_id"]}, {"required": ["customer_id"]}],
+    "anyOf": [
+      {
+        "required": [
+          "order_id"
+        ]
+      },
+      {
+        "required": [
+          "customer_id"
+        ]
+      }
+    ],
     "additionalProperties": false
   },
   "returns": {
     "type": "object",
     "description": "orders: list of {order_id, state, total, dispatch_state, tracking_ref}.",
-    "properties": {"orders": {"type": "array"}}
+    "properties": {
+      "orders": {
+        "type": "array"
+      }
+    }
   },
   "errors": [
-    {"code": "not_found", "when": "no order for the given id/customer"},
-    {"code": "invalid_input", "when": "neither order_id nor customer_id given"}
+    {
+      "code": "not_found",
+      "when": "no order for the given id/customer"
+    },
+    {
+      "code": "invalid_input",
+      "when": "neither order_id nor customer_id given"
+    }
   ]
 }

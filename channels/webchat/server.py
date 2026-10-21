@@ -110,6 +110,8 @@ GUARD_LABELS = {
     "prescription_check": "prescription photo rejected (checks)", "handover": "handed to pharmacist",
     "customer": "customer identify/register flow", "order": "order placed (fixed confirmation)",
     "rx_review": "prescription quotation -> pharmacist review",
+    "search_list": "search results (fixed list, no 2nd model call)",
+    "order_flow": "order wizard step (fixed, no model)",
     "review_result": "pharmacist review result (sent by the system)",
 }
 

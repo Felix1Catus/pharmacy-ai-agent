@@ -1,6 +1,6 @@
 {
   "name": "create_order",
-  "description": "Create a QUOTATION for a customer. ONLY call after the customer has explicitly confirmed the items, quantities and pickup/delivery. Scheduled/controlled items are never ordered. Prescription-only items ARE ordered: the quotation goes to a pharmacist for prescription review (the system collects the prescription photo). For pickup, branch_id is required and must have stock; for delivery, the system picks a branch with stock.",
+  "description": "Create a quotation, only after the customer confirmed the items, quantities and pickup branch or delivery.",
   "requires_confirmed_intent": true,
   "parameters": {
     "type": "object",
@@ -38,11 +38,11 @@
       },
       "branch_id": {
         "type": "integer",
-        "description": "Required when fulfillment = pickup."
+        "description": "Required for pickup: a branch_id from list_branches."
       },
       "delivery_address": {
         "type": "string",
-        "description": "Required when fulfillment = delivery."
+        "description": "Required for delivery."
       }
     },
     "required": [

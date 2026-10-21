@@ -1,18 +1,18 @@
 {
   "name": "search_product",
-  "description": "Search the catalogue by product name (Arabic, English, brand) or active ingredient. Use this before any stock/order/hold action. Returns candidates and, for a brand, alternatives (other brands with the same active ingredient). If a brand is not found, call it again with active_ingredient set to that brand's generic active ingredient.",
+  "description": "Find products by name, brand or active ingredient (Arabic or English).",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
     "properties": {
       "query": {
         "type": "string",
-        "description": "Customer's term for the product: Arabic name, English name, brand, or ingredient. e.g. 'بنادول', 'panadol', 'paracetamol'.",
+        "description": "Product words only, e.g. 'بنادول' or 'amoxicillin 500mg'.",
         "minLength": 1
       },
       "branch_id": {
         "type": "integer",
-        "description": "Optional. Restrict results to products stocked at this branch."
+        "description": "Optional branch_id from list_branches."
       },
       "limit": {
         "type": "integer",
@@ -22,7 +22,7 @@
       },
       "active_ingredient": {
         "type": "string",
-        "description": "Optional. Generic active ingredient (e.g. 'amoxicillin', 'paracetamol') to find the same medicine under any brand - use when the customer's brand is not found."
+        "description": "Only an ingredient the customer wrote or that is on their prescription."
       }
     },
     "required": [],
