@@ -139,7 +139,8 @@ NOT_PLACED = {"ar": "عذراً، لم يتم تسجيل الطلب بعد. اك
               "en": "Sorry, the order hasn't been placed yet. Reply \"yes\" and I'll place it with the details we agreed."}
 
 # the bot's previous message asked the customer to confirm an order
-_ASKED_CONFIRM = re.compile(r"(تاكيد|تاكد|تؤكد|اكد|نثبت|confirm|shall i place|place the order|"
+# (matched on normalize()d text: ؤ -> و, أ -> ا, so "تؤكد" arrives as "توكد")
+_ASKED_CONFIRM = re.compile(r"(تاكيد|تاكد|توكد|تؤكد|اكد|موكد|نثبت|confirm|shall i place|place the order|"
                             r"go ahead)", re.I)
 
 # promises the pharmacy cannot keep (no tracking links / SMS exist): such sentences are removed
