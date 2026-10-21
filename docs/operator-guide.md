@@ -294,8 +294,12 @@ Full flow: `docs/customer-flow.md`.
 - **Contacts:** customers registered by the assistant have *Registered via: WhatsApp assistant*,
   their WhatsApp number, phone, alternative phone (mobile) and address. Edit them like any contact;
   the assistant uses the WhatsApp number / phone / mobile to recognise them.
-- **Prescriptions** used for an order are noted on the quotation and marked *Used* under
-  Pharmacy → Prescriptions.
+- **Prescription review** (Pharmacy → Prescription review): quotations with prescription-only
+  medicines wait here (*Pending approval*). Open one → tab *Prescription review* → check the
+  image and OCR pre-check → **✅ Approve prescription**, or write the reason in *Review note* and
+  **❌ Reject prescription**. The customer is messaged automatically (approved → confirm & pay
+  with the payment link; rejected → the reason). *Awaiting prescription* = the customer has not
+  sent the photo yet.
 
 ## 7. WhatsApp channel (Meta Cloud API)
 `channels/whatsapp/webhook.py`. Fill `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,

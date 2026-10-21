@@ -51,18 +51,48 @@ address (`street`; city detected from the text), country Saudi Arabia, customer 
 3. The order is created in **Sales as a Quotation** (not confirmed), with:
    customer contact · lines · branch · `wa_order` ✔ · fulfilment (pickup / delivery) ·
    delivery address as given · `dispatch_status` = *Awaiting pharmacy approval* for deliveries.
-   Prescriptions used are noted on it and marked *Used*.
-4. The customer gets a **fixed confirmation** (never model-written): their name, order number,
-   total, delivery address or pickup branch, and that the pharmacy will confirm it. They follow
-   it from «📦 تتبع طلب» (shown as «بانتظار تأكيد الصيدلية» until a human confirms it). The
-   assistant never promises tracking links, SMS or delivery times (a filter removes them).
+4. The customer gets a **fixed message** (never model-written):
+   - **no prescription needed:** order number, total, pickup branch / delivery address and the
+     **payment link** — «💳 لإتمام الطلب ادفع من هذا الرابط … بعد الدفع يتم تأكيد الطلب وإصدار الفاتورة»;
+   - **prescription-only medicine:** see section 4b.
+   They follow orders from «📦 تتبع طلب». The assistant never promises tracking links, SMS or
+   delivery times (a filter removes them).
 5. Once identified, the customer stays identified for the whole chat: the model is told their
    name and saved address every turn, never asks for them again, and every quotation is
    created under that contact (the model cannot choose another customer).
 
+## 4b. Prescription-only medicines → pharmacist review → confirm & pay
+1. The customer orders as usual (the bot never refuses a prescription-only medicine). On "yes"
+   the quotation is created with **Prescription review = Pending approval** if the customer
+   already sent the prescription photo/PDF in this chat, otherwise **Awaiting prescription
+   photo** — and the bot asks for it («أرسل صورة الوصفة أو ملف PDF من زر المرفقات 📎»).
+2. The photo is read by OCR as a **pre-check** (date within 5 days, invoice/Rx number,
+   medicines). Obvious problems (too old, unreadable, no invoice number) are answered at once;
+   otherwise it is attached to the quotation → *Pending approval*. OCR never approves anything.
+3. The bot **closes the conversation**: «استلمنا طلبك رقم S000xx مع صورة الوصفة. سجّلنا بياناتك ورقم
+   جوالك +966…، وسيراجع الصيدلي الوصفة الآن. سنراسلك هنا فور مراجعتها لتأكيد الطلب والدفع».
+4. The pharmacist reviews it in Odoo (**Pharmacy → Prescription review**) and clicks
+   **✅ Approve prescription** or **❌ Reject prescription** (the reason is required and is sent).
+5. The bot messages the customer automatically (WhatsApp push; the test chat checks every 8 s):
+   - **approved:** «✅ وافق الصيدلي على وصفتك! عرض السعر رقم … • items … 💰 الإجمالي … 🏪/🚚 … هل تؤكد
+     الطلب وتنتقل للدفع؟» with **✅ أؤكد وأدفع / ❌ إلغاء الطلب**. Confirm → the **payment link**;
+     cancel → the quotation is cancelled.
+   - **rejected:** the reason, and a new prescription photo goes back to the same quotation.
+6. **Payment (next phase):** the link is the quotation's Odoo customer page
+   (`/my/orders/<id>?access_token=…`), where Odoo takes online payment once a payment provider
+   is configured. Recording the payment, confirming the order and creating the invoice
+   automatically is the next step; `payment_state_wa` (*Payment link sent → Paid*) is ready for it.
+A prescription already approved by a pharmacist (valid 5 days, one order) skips the review.
+Scheduled (مقيد) medicines never enter this flow — they stay fully blocked.
+
 ## 5. In Odoo (staff)
-- **Pharmacy → WhatsApp orders:** all quotations from the assistant (customer, fulfilment,
-  delivery address, dispatch status, total). Open one → tab *WhatsApp / Delivery*.
+- **Pharmacy → Prescription review:** the reviewer's queue (default filter *Pending approval*):
+  open a quotation → tab *Prescription review* (prescription image, OCR pre-check, medicines
+  found) → **Approve** / **Reject** (write the reason first). A ribbon shows *Pending approval*,
+  *Awaiting prescription* or *Rx rejected*.
+- **Pharmacy → WhatsApp orders:** all quotations from the assistant (customer, review badge,
+  fulfilment, delivery address, payment state, total). Tab *WhatsApp / Delivery / Payment*
+  shows the payment link, whether the customer confirmed, and whether the message was sent.
 - **Pickup:** confirm the quotation and invoice it at the dispensary when the customer comes.
 - **Delivery:** a human approves it (confirm) — then it is handed to the Delivery Dispatcher.
 - **Contacts:** customers registered by the assistant show *Registered via: WhatsApp assistant*
@@ -81,4 +111,6 @@ delivered. `sale.order.dispatch_status` already carries the hand-off states for 
 `WHATSAPP_PHONE_NUMBER_ID`. Without the token / phone id it runs in **dry run**: nothing is
 sent and every reply is written to `results/whatsapp_outbox.jsonl` (tests use this).
 Handles text, menu/button taps, and prescription photos/PDFs (downloaded from Meta and sent to
-the same OCR checks); replies as text, list message (menu) or reply buttons (flow).
+the same OCR checks); replies as text, list message (menu) or reply buttons (flow). A background
+loop (every 30 s, `WHATSAPP_NOTIFY_EVERY_S`) sends the pharmacist's decisions to the customer's
+WhatsApp number (`whatsapp_number`, else phone).

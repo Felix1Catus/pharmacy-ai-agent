@@ -1,4 +1,4 @@
-# Project status — Pharmacy AI Agent (as of 2026-10-20)
+# Project status — Pharmacy AI Agent (as of 2026-10-21)
 
 Repo: https://github.com/Felix1Catus/pharmacy-ai-agent (private) · server: Vultr 155.138.193.148
 (4 vCPU / 16 GB RAM, Ubuntu 24.04, **no GPU**; the earlier 32-vCPU server was 155.138.207.131).
@@ -27,16 +27,21 @@ customer flow). Automated tests: 159 passing on the server.
 
 ## Policy (current)
 - **OTC:** full service — search, stock, price, quotation.
-- **Prescription-only (يحتاج وصفة طبية):** availability + price; ordering allowed once the customer
-  sends a **verified prescription photo/PDF** (computerised, dated within 5 days, invoice/Rx number,
-  the medicine on it); otherwise the chat asks for it. One prescription = one order. Same active
-  ingredient(s) at the prescribed strength are accepted (generic substitution).
+- **Prescription-only (يحتاج وصفة طبية):** ordered like any medicine, but the quotation goes to a
+  **pharmacist for review** with the customer's prescription photo/PDF (OCR is only a pre-check).
+  The bot collects the photo, tells the customer they'll be messaged, and after approval sends the
+  quotation for "confirm & pay"; rejection is sent with the reason (`docs/customer-flow.md` §4b).
 - **Scheduled (مقيد / خاضعة للرقابة):** fully blocked — never shown to the model, never unlocked by a
   prescription, fixed refusal + pharmacist handover.
-- **Orders are quotations** in Sales: a human confirms/invoices them (pickup) or approves them for
-  delivery (future Delivery Dispatcher).
+- **Orders are quotations** in Sales, each sent to the customer with a **payment link** (the
+  quotation's Odoo customer page). Payment capture/recording → order confirmation → invoice is the
+  next phase; meanwhile staff confirm/invoice (pickup) or approve for delivery (future Delivery Dispatcher).
 
 ## What was built (by area)
+- **Prescription review** (2026-10-21): quotations with prescription-only medicines are marked
+  *Pending approval* / *Awaiting prescription photo*; Odoo **Pharmacy → Prescription review** with
+  Approve / Reject (reason required); decisions are messaged to the customer (WhatsApp push / test
+  chat polling) with ✅ confirm & pay / ❌ cancel; every quotation gets a payment link.
 - **Customer recognition + registration** (`agent/customer.py`, 2026-10-20): WhatsApp number →
   Odoo contact → greeted by name; menu «👤 عميل حالي / جديد»: phone → saved profile (confirm /
   edit address) or registration (name → address → alt phone → confirm → contact created); a
@@ -69,7 +74,9 @@ customer flow). Automated tests: 159 passing on the server.
 5. **Pharmacist review of catalogue flags** (e.g. some amoxicillin brands are not marked prescription-only).
 
 ## Recommended next steps (in order)
-1. **Re-run the 106-message eval** on the current build and fix regressions.
+1. **Payment:** configure an Odoo payment provider so the quotation link takes payment, then
+   record the payment automatically → confirm the order → create the invoice (`payment_state_wa`).
+2. **Re-run the 106-message eval** on the current build and fix regressions.
 2. **Security before real customers:** HTTPS (domain + reverse proxy), SSH key-only login, keep
    :8069/:8090 closed or behind the proxy.
 3. **Go live on WhatsApp:** add credentials, run `channels/whatsapp/webhook.py` as a service behind
