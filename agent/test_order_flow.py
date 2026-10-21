@@ -156,9 +156,9 @@ def test_guest_confirm_registers_then_places(shop):
 
 @live
 def test_model_never_gets_order_tools_in_customer_chats(shop):
-    llm = ScriptLLM([_search_call("بنادول")])
+    llm = ScriptLLM([{"content": "فروعنا في الرياض وجدة والدمام", "tool_calls": []}])
     a, conv, prof = _identified(llm)
-    a.respond(conv, "عندكم بنادول؟")
+    a.respond(conv, "وين فروعكم بالضبط؟")              # not a product: goes to the model
     names = {t["function"]["name"] for t in llm.seen[0][1]}
     assert names == {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
 
