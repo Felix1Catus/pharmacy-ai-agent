@@ -179,3 +179,14 @@ def test_product_question_answered_from_memory_is_replaced_by_real_search(shop):
     a, conv, prof = _identified(llm)
     reply = a.respond(conv, "عندكم بنادول؟")          # model skipped the search
     assert "1. بنادول ٥٠٠ ملغ" in reply and "للطلبات المحددة" not in reply
+
+
+@live
+def test_clearly_named_product_is_selected_and_general_name_lists(shop):
+    llm = ScriptLLM([_search_call("بنادول")])           # the model shortened the query
+    a, conv, prof = _identified(llm)
+    reply = a.respond(conv, "ابغى بنادول اكسترا توصيل")
+    assert reply.startswith("✅ بنادول اكسترا") and "كم علبة" in reply
+    llm2 = ScriptLLM([_search_call("بنادول")])
+    a2, conv2, _ = _identified(llm2)
+    assert "1. " in a2.respond(conv2, "عندكم بنادول؟")    # general name: the list

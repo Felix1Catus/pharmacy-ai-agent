@@ -40,7 +40,7 @@ from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noq
                     looks_in_scope, medical_advice_intent, prescription_rejected,
                     reply_gives_medical_advice,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
-from fuzzy_search import normalize, sound_key  # noqa: E402
+from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E402
 from llm import LLMClient  # noqa: E402
 from customer import T as CUSTOMER_TEXTS, CustomerFlow  # noqa: E402
 from order_flow import OrderFlow  # noqa: E402
@@ -615,6 +615,16 @@ class PharmacyAgent:
             # then quantity / pickup or delivery / confirm) - no second model call
             if name == "search_product" and conv.customer_facing and isinstance(result, dict) \
                     and "error" not in result:
+                # the model often shortens the query ("بنادول" for "بنادول اكسترا"): also search the
+                # customer's own product words and merge, so the exact product is in the list
+                core = " ".join(fuzzy_words(raw))
+                if core and normalize(core) != normalize(args.get("query") or ""):
+                    extra = self.gw.search_product(query=core)
+                    if isinstance(extra, dict) and "error" not in extra:
+                        seen = {c["product_id"] for c in result.get("candidates") or []}
+                        result["candidates"] = [c for c in (extra.get("candidates") or [])
+                                                if c["product_id"] not in seen and not c.get("is_scheduled")] \
+                            + (result.get("candidates") or [])
                 return self.order.present(conv, result, raw)
 
             # terminal: a completed handover ends the turn with its acknowledgement

@@ -12,7 +12,9 @@ from __future__ import annotations
 import re
 
 from gateway import guess_city
+from fuzzy_search import words as fuzzy_words
 from guards import is_affirmation, normalize
+from rapidfuzz import fuzz
 
 MAX_QTY = 10
 MAX_CHOICES = 5
@@ -162,6 +164,17 @@ class OrderFlow:
         list; one clear match is selected straight away."""
         t = self._t(conv)
         cands = [c for c in (result.get("candidates") or []) if not c.get("is_scheduled")]
+        # closest to what the CUSTOMER wrote first ("بنادول اكسترا" -> Panadol Extra on top)
+        core = " ".join(fuzzy_words(raw))
+        if core:
+            score = lambda c: max(fuzz.token_set_ratio(core, normalize(c.get("name_ar") or "")),  # noqa: E731
+                                  fuzz.token_set_ratio(core, normalize(c.get("name_en") or "")))
+            cands = sorted(cands, key=score, reverse=True)
+            ranked = [score(c) for c in cands]
+            # one product clearly named: select it straight away (a general "بنادول" ties -> list)
+            clear = len(ranked) >= 1 and ranked[0] >= 90 and (len(ranked) == 1 or ranked[1] <= ranked[0] - 10)
+        else:
+            clear = False
         alts = [c for c in (result.get("alternatives") or []) if not c.get("is_scheduled")]
         choices = (cands + alts)[:MAX_CHOICES]
         if not choices:
@@ -178,7 +191,7 @@ class OrderFlow:
             for c in choices])
         conv.order = order
         exact = [c for c in cands if c.get("match") == "exact"]
-        if len(choices) == 1 or (len(exact) == 1 and len(cands) == 1):
+        if len(choices) == 1 or clear or (len(exact) == 1 and len(cands) == 1):
             return self._pick(conv, 0, prefix="")
         rows, n = [], 1
         for i, c in enumerate(order["choices"]):
