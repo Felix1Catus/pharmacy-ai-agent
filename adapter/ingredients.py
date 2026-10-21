@@ -114,7 +114,7 @@ def strength_mg(text: str) -> float | None:
 
 
 def dosage_form(text: str) -> str | None:
-    for w in re.findall(r"[a-z؀-ۿ]+", normalize(text or "")):
+    for w in re.findall(r"[a-zء-يٱ-ۓ]+", normalize(text or "")):
         if w in _FORMS:
             return _FORMS[w]
     return None
@@ -124,7 +124,7 @@ def parse_query(q: str) -> dict:
     """Split a customer query into the name part and optional strength / dosage form."""
     n = normalize(q).translate(_DIG)
     core = _STRENGTH.sub(" ", n)
-    core = " ".join(w for w in re.findall(r"[a-z؀-ۿ]+", core) if w not in _FORMS)
+    core = " ".join(w for w in re.findall(r"[a-zء-يٱ-ۓ]+", core) if w not in _FORMS)
     return {"core": core.strip(), "strength_mg": strength_mg(q), "form": dosage_form(q)}
 
 
@@ -174,7 +174,7 @@ class IngredientIndex:
         Each query word is compared by sound key with every known ingredient name."""
         self.ensure()
         found = set()
-        words = [w for w in re.findall(r"[a-z؀-ۿ]+", normalize(text)) if len(w) >= 5]
+        words = [w for w in re.findall(r"[a-zء-يٱ-ۓ]+", normalize(text)) if len(w) >= 5]
         for w in words + ([" ".join(words)] if len(words) > 1 else []):
             wl = _SYNONYMS.get(w, w)
             k = sound_key(wl.replace(" ", ""))

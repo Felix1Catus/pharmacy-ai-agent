@@ -310,8 +310,8 @@ class PharmacyAgent:
         """True if every word of `ingredient` was written by the customer (any script, compared
         by sound: 'اموكسيسيلين' = 'amoxicillin') or appears in their verified prescription note."""
         said = " ".join(m["content"] for m in conv.messages if m["role"] == "user")
-        keys = {sound_key(w) for w in re.findall(r"[a-z؀-ۿ]+", normalize(said)) if len(w) >= 4}
-        need = [sound_key(w) for w in re.findall(r"[a-z؀-ۿ]+", normalize(ingredient))
+        keys = {sound_key(w) for w in re.findall(r"[a-zء-يٱ-ۓ]+", normalize(said)) if len(w) >= 4}
+        need = [sound_key(w) for w in re.findall(r"[a-zء-يٱ-ۓ]+", normalize(ingredient))
                 if len(w) >= 5 and w not in ("acid", "sodium", "potassium")]
         return bool(need) and all(
             any(k == h or (len(k) >= 4 and fuzz.ratio(k, h) >= 85) for h in keys) for k in need)

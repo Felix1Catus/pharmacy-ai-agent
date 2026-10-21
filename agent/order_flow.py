@@ -112,7 +112,7 @@ _FILLER = {"من", "الى", "على", "عن", "لو", "سمحت", "ابغا", "
 def _core(text: str) -> str:
     """Product words of a message or a product name, numbers included (Arabic digits -> 0-9)."""
     n = normalize(text or "").translate(_DIG)
-    toks = re.findall(r"[a-z؀-ۿ]+|\d+(?:[.,]\d+)?", n)
+    toks = re.findall(r"[a-zء-يٱ-ۓ]+|\d+(?:[.,]\d+)?", n)
     return " ".join(t for t in toks if t not in _FUZZY_STOP and t not in _QTY_SET and t not in _FILLER
                     and (len(t) >= 2 or t.isdigit()))
 

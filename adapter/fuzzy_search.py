@@ -71,7 +71,7 @@ _STOP = {"mg", "ml", "mcg", "tab", "tabs", "tablet", "tablets", "cap", "caps", "
 
 
 def words(text: str) -> list[str]:
-    toks = re.findall(r"[a-z؀-ۿ]+", normalize(text))
+    toks = re.findall(r"[a-zء-يٱ-ۓ]+", normalize(text))
     return [t for t in toks if t not in _STOP and len(t) >= 2]
 
 

@@ -189,3 +189,10 @@ def test_clearly_named_product_is_selected_and_general_name_lists(shop):
     llm2 = ScriptLLM([_search_call("بنادول")])
     a2, conv2, _ = _identified(llm2)
     assert "1. " in a2.respond(conv2, "عندكم بنادول؟")    # general name: the list
+
+
+def test_arabic_punctuation_is_not_part_of_words():
+    from order_flow import _core
+    assert _core("كم سعر فيتامين سي؟") == _core("كم سعر فيتامين سي")
+    from fuzzy_search import words
+    assert "سي" in words("فيتامين سي؟")
