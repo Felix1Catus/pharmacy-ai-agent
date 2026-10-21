@@ -130,6 +130,14 @@ _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
 _ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
+# a model reply claiming an order exists ("تم تأكيد طلبك", "رقم الطلب: 10452") - only allowed if
+# create_order/hold_item really succeeded this turn (the model once invented order 10452)
+_CLAIMS_ORDER = re.compile(r"(رقم\s*(ال)?طلب|تم\s*(تاكيد|تسجيل|انشاء|ارسال)\s*(ال)?طلب|طلبك\s*(تم|اتسجل|تاكد)|"
+                           r"order\s*(number|no\.?|#|id)|order (has been|was|is) (placed|confirmed|created)|"
+                           r"your order is confirmed)", re.I)
+NOT_PLACED = {"ar": "عذراً، لم يتم تسجيل الطلب بعد. اكتب «نعم» لأسجّله لك بالتفاصيل اللي اتفقنا عليها.",
+              "en": "Sorry, the order hasn't been placed yet. Reply \"yes\" and I'll place it with the details we agreed."}
+
 # the bot's previous message asked the customer to confirm an order
 _ASKED_CONFIRM = re.compile(r"(تاكيد|تاكد|تؤكد|اكد|نثبت|confirm|shall i place|place the order|"
                             r"go ahead)", re.I)
@@ -523,7 +531,12 @@ class PharmacyAgent:
                 msgs[turn] = {**msgs[turn], "content": msgs[turn]["content"] + hint}
             out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + msgs,
                                 tools=self.tools)
-            if not out["tool_calls"] and confirming and not nudged and not any(
+            fake_order = (not out["tool_calls"]
+                          and bool(_CLAIMS_ORDER.search(normalize(out["content"] or ""))))
+            if fake_order and nudged:            # still claiming an order that doesn't exist
+                self._audit(conv.conv_id, "fake_order_blocked", {"model_text": out["content"][:300]})
+                return self._say(conv, NOT_PLACED[self._lang(conv)], guard="output_filter")
+            if not out["tool_calls"] and (confirming or fake_order) and not nudged and not any(
                     m.get("tool_calls") and m["tool_calls"][0]["function"]["name"]
                     in ("create_order", "hold_item") for m in conv.messages[turn:]):
                 nudged = True

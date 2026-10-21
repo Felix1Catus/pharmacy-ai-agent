@@ -294,3 +294,15 @@ def test_yes_after_summary_places_order_even_if_model_asks_again(monkeypatch):
     conv.messages.append({"role": "assistant", "content": "علبتين بنادول 500 من فرع جدة، هل تؤكد الطلب؟"})
     reply = a.respond(conv, "تاكيد")
     assert len(placed) == 1 and "S00009" in reply
+
+
+def test_invented_order_confirmation_is_never_sent(monkeypatch):
+    GW.register_customer("ZZ Test Fake Order", "0500001212", "Jeddah, Al Safa, St 1")
+    fake = {"content": "تم تأكيد طلبك! رقم الطلب: 10452، الإجمالي: 24 ريال", "tool_calls": []}
+    llm = ScriptLLM([fake, fake])                      # the model insists, never calls create_order
+    a = PharmacyAgent(llm=llm, gateway=GW)
+    conv = Conversation(None, customer_facing=True, wa_phone="966500001212")
+    a.greet(conv)
+    reply = a.respond(conv, "اكيد")
+    assert "10452" not in reply and "لم يتم تسجيل الطلب" in reply
+    assert len(llm.seen) == 2                          # it was told once to really place it
