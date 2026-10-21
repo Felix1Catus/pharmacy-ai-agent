@@ -219,7 +219,13 @@ class IngredientIndex:
             out += [t for s, ids in self.by_set.items() if s != want_set and want_set < s for t in ids]
         return out
 
-    def strengths(self, ids, form=None) -> list[str]:
-        mgs = sorted({self.products[t]["strength_mg"] for t in ids if t in self.products
-                      and self.products[t]["strength_mg"] and (form is None or self.products[t]["form"] == form)})
-        return [fmt_mg(m) for m in mgs][:8]
+    def strengths(self, ids, form=None) -> list[float]:
+        """All strengths (mg) we stock for these products - the FULL list (callers decide how
+        many to show; cutting it first made '1 g' look unavailable)."""
+        return sorted({self.products[t]["strength_mg"] for t in ids if t in self.products
+                       and self.products[t]["strength_mg"] and (form is None or self.products[t]["form"] == form)})
+
+    @staticmethod
+    def nearest(mgs: list[float], want: float, n: int = 8) -> list[str]:
+        """The n stocked strengths closest to the requested one, in ascending order."""
+        return [fmt_mg(m) for m in sorted(sorted(mgs, key=lambda m: abs(m - want))[:n])]

@@ -128,3 +128,14 @@ def test_user_sample_prescription_is_accepted():
             assert "METFORMIN 500 mg" in names and "ATORVASTATIN 20 mg" in names
         finally:
             GW.c.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])
+
+
+@live
+def test_existing_large_strength_is_not_reported_missing():
+    r = GW.search_product("Augmentin 1g")                 # 1 g exists (sample + SFDA products)
+    assert "note" not in r, r.get("note")
+
+
+def test_nearest_strengths():
+    assert ingr.IngredientIndex.nearest([1, 156, 228, 312, 375, 457, 625, 1000, 1200], 1000, 3) == \
+        ["625 mg", "1 g", "1.2 g"]

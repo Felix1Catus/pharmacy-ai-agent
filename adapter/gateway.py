@@ -279,9 +279,10 @@ class Gateway:
             if strength:
                 pool = self._ingr.same_ingredients(ing)
                 have = self._ingr.strengths(pool, form) or self._ingr.strengths(pool)
-                if have and ingr.fmt_mg(strength) not in have:
+                if have and strength not in have and strength not in self._ingr.strengths(pool):
                     out["note"] = (f"{ingr.fmt_mg(strength)} is not available for this active "
-                                   f"ingredient; available strengths: {', '.join(have)}")
+                                   f"ingredient; closest strengths we have: "
+                                   f"{', '.join(self._ingr.nearest(have, strength))}")
         if not cands and not out.get("alternatives"):
             out["hint"] = ("Not in our catalogue. Tell the customer, and ask them for the active "
                            "ingredient written on the box or prescription (or a photo of the "
