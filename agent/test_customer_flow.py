@@ -172,6 +172,7 @@ def test_identified_order_goes_to_that_customer_with_fixed_confirmation(monkeypa
     monkeypatch.setattr(GW, "create_order", lambda **kw: placed.append(kw) or {
         "order_id": 1, "order_ref": "S01234", "state": "draft", "total": 120.0,
         "branch_id": 1, "branch_name": "Riyadh", "fulfillment": "delivery"})
+    monkeypatch.setattr(GW, "payment_link", lambda oid: "http://odoo/my/orders/1?access_token=t")
     order = {"content": "", "tool_calls": [{"name": "create_order", "arguments": {
         "items": [{"product_id": 1, "qty": 2}], "fulfillment": "delivery", "customer_id": 7}}]}
     a = PharmacyAgent(llm=ScriptLLM([order]), gateway=GW)
@@ -180,7 +181,8 @@ def test_identified_order_goes_to_that_customer_with_fixed_confirmation(monkeypa
     reply = a.respond(conv, "نعم اكد الطلب")
     assert placed[0]["customer_id"] == prof["customer_id"]          # never Demo Customer (7)
     assert placed[0]["delivery_address"] == "Riyadh, Al Malqa, St 4"
-    assert "S01234" in reply and "ZZ Test Order Owner" in reply and "رابط" not in reply
+    assert "S01234" in reply and "ZZ Test Order Owner" in reply and "رابط التتبع" not in reply
+    assert "/my/orders/1" in reply                                   # the payment link
 
 
 def test_city_detection_and_egyptian_numbers():
