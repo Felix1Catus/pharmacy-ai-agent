@@ -40,6 +40,7 @@ _DIGIT_WORDS = {
     "ثمان": "8", "تمانية": "8", "تسعة": "9", "تسعه": "9", "تسع": "9",
     # frequent Whisper mishearings of Gulf digits (only ever converted inside a run of digits)
     "وافد": "1", "وحد": "1", "صف": "0", "سفر": "0", "سفى": "0", "زفر": "0", "اثنن": "2",
+    "ثماني": "8", "ثمانى": "8", "تماني": "8",
     "تسع": "9", "ستّة": "6",
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
     "seven": "7", "eight": "8", "nine": "9", "oh": "0",
@@ -51,7 +52,8 @@ _DIG = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 _VOCAB = {w.strip("،.") for w in GULF_PROMPT.split()} | {
     "فيتامين", "بنادول", "بانادول", "بروفين", "سنتروم", "اوميغا", "اوميجا", "غافيسكون", "اسبرين",
     "اوجمنتين", "اموكسيسيلين", "باراسيتامول", "ايبوبروفين", "كلاريتين", "ديتول", "ستربسلز",
-    "فولتارين", "نيوروفين", "كالسيوم", "مغنيسيوم", "حديد", "مضاد", "حيوي", "مسكن", "بخاخ", "مرهم"}
+    "فولتارين", "نيوروفين", "كالسيوم", "مغنيسيوم", "حديد", "مضاد", "حيوي", "مسكن", "بخاخ", "مرهم",
+    "طلبي", "رقمي", "عنواني", "بيتي", "طلباتي"}
 
 
 def _norm(w: str) -> str:
@@ -67,6 +69,12 @@ def rejoin_split_words(text: str) -> str:
     pharmacy word are merged (only then - normal word pairs are untouched)."""
     words, out, i = text.split(), [], 0
     while i < len(words):
+        # "طلب اي" -> "طلبي", "رقم اي" -> "رقمي": a possessive ي heard as a separate "اي"
+        if i + 1 < len(words) and _norm(words[i + 1]) in ("اي", "ي") \
+                and _norm(words[i] + "ي") in _VOCAB_N:
+            out.append(words[i] + "ي")
+            i += 2
+            continue
         if i + 1 < len(words) and _norm(words[i] + words[i + 1]) in _VOCAB_N and not (
                 _norm(words[i]) in _VOCAB_N and _norm(words[i + 1]) in _VOCAB_N):
             out.append(words[i] + words[i + 1])
@@ -84,7 +92,9 @@ def spoken_digits_to_numbers(text: str, min_run: int = 4) -> str:
     out, run = [], []
 
     def flush():
-        if len(run) >= min_run:
+        # a run counts if it is long, or already holds a multi-digit number that a spoken digit
+        # continues ("051234567 ثماني" -> "0512345678")
+        if len(run) >= min_run or (len(run) >= 2 and any(w.isdigit() and len(w) >= 3 for w in run)):
             out.append("".join(_DIGIT_WORDS.get(w.strip("،,.؟?").lower(), w) for w in run))
         else:
             out.extend(run)

@@ -139,3 +139,9 @@ def test_split_pharmacy_words_are_rejoined():
     assert voice.rejoin_split_words("عندكم في تامين سي، وكم سعره؟") == "عندكم فيتامين سي، وكم سعره؟"
     assert voice.rejoin_split_words("ابغى بنا دول اكسترا") == "ابغى بنادول اكسترا"
     assert voice.rejoin_split_words("وين طلبي في الرياض") == "وين طلبي في الرياض"     # untouched
+
+
+def test_voice_eval_mishearings():
+    # from the voice eval: "وين وصل طلبي" heard as "طلب اي"; "ثمانية" heard as "ثماني"
+    assert voice.rejoin_split_words("وين وصل طلب اي رقم ثلاث") == "وين وصل طلبي رقم ثلاث"
+    assert voice.spoken_digits_to_numbers("رقمي 051234567 ثماني") == "رقمي 0512345678"
