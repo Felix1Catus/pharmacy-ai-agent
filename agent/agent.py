@@ -447,10 +447,12 @@ class PharmacyAgent:
     VOICE_TEXT = {
         "ar": {"heard": "🎤 «{text}»", "unclear": "🎤 ما قدرت أسمع الرسالة الصوتية بوضوح، ممكن "
                                                   "تعيدها بصوت أوضح أو تكتب طلبك؟",
-               "long": "(سمعت أول دقيقتين فقط من الرسالة)"},
+               "long": "(سمعت أول دقيقتين فقط من الرسالة)",
+               "phone": "📱 ما قدرت ألتقط رقم الجوال من الرسالة الصوتية، اكتبه بالأرقام لو سمحت."},
         "en": {"heard": "🎤 “{text}”", "unclear": "🎤 I couldn't hear the voice note clearly — "
                                                  "could you record it again or type your request?",
-               "long": "(I only heard the first two minutes)"},
+               "long": "(I only heard the first two minutes)",
+               "phone": "📱 I couldn't catch the phone number in the voice note - please type it in digits."},
     }
 
     def respond_voice(self, conv: Conversation, audio: bytes, filename: str | None = None,
@@ -472,6 +474,10 @@ class PharmacyAgent:
             return self._say(conv, vt["unclear"], guard="voice_unclear")
         reply = self.respond(conv, tr["text"])
         head = vt["heard"].format(text=tr["text"]) + (("\n" + vt["long"]) if tr["truncated"] else "")
+        # a phone number was spoken but didn't come through as one: ask for it typed
+        if re.search(r"(رقم\s*(ال)?(جوال|موبايل|تلفون|هاتف)|رقمي|جوالي|phone|mobile|number)", tr["text"]) \
+                and not re.search(r"\d{9,}", tr["text"].replace(" ", "")):
+            reply += "\n\n" + vt["phone"]
         return head + "\n\n" + reply
 
     # ---- main entry -----------------------------------------------------------

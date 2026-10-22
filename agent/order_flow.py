@@ -109,12 +109,27 @@ _FILLER = {"من", "الى", "على", "عن", "لو", "سمحت", "ابغا", "
            "الدمام", "توصيل", "استلام", "فرع"}
 
 
+# a phone number is never part of a product name: "رقم جوال صفر خمسة ..." / "رقمي 05..." up to the
+# end of that clause is dropped before searching (it pulled in "حليب نان رقم ١" and "ميزان رقمي")
+_CONTACT = re.compile(r"(رقم\s*(ال)?(جوال|موبايل|تلفون|هاتف|واتس\w*)|رقمي|جوالي|my (phone |mobile )?number|"
+                      r"phone number|mobile number)[^،,.؟?\n]*")
+_NUM_WORDS = {"الف", "الفين", "مليون", "ميه", "ميتين", "مائه", "مئه", "عشرين", "ثلاثين", "اربعين", "خمسين",
+              "ستين", "سبعين", "ثمانين", "تسعين", "صفر", "زيرو", "وشرين", "انتين", "تين", "اثنعش", "احدعش"}
+_TIME = {"اليوم", "بكره", "بكرا", "الحين", "الان", "today", "tomorrow", "now", "tonight", "الليله"}
+
+
+def _junk(t: str) -> bool:
+    bare = t[1:] if t.startswith("و") and t[1:] in _NUM_WORDS else t
+    return bare in _NUM_WORDS or t in _TIME or (t.isdigit() and len(t) >= 6)
+
+
 def _core(text: str) -> str:
-    """Product words of a message or a product name, numbers included (Arabic digits -> 0-9)."""
-    n = normalize(text or "").translate(_DIG)
+    """Product words of a message or a product name, numbers included (Arabic digits -> 0-9).
+    Phone numbers, spoken number words and time words are not product words."""
+    n = _CONTACT.sub(" ", normalize(text or "").translate(_DIG))
     toks = re.findall(r"[a-zء-يٱ-ۓ]+|\d+(?:[.,]\d+)?", n)
     return " ".join(t for t in toks if t not in _FUZZY_STOP and t not in _QTY_SET and t not in _FILLER
-                    and (len(t) >= 2 or t.isdigit()))
+                    and not _junk(t) and (len(t) >= 2 or t.isdigit()))
 
 
 def parse_fulfilment(text: str) -> str | None:
@@ -255,6 +270,9 @@ class OrderFlow:
             o["fulfillment"] = f
             return self._next(conv)
         if step == "branch":
+            if _pressed(raw, "delivery") or parse_fulfilment(raw) == "delivery":
+                o["fulfillment"], o["branch_id"] = "delivery", None    # changed their mind
+                return self._next(conv)
             branches = self.a.gw.list_branches()["branches"]
             bid = next((b["branch_id"] for b in branches if normalize("🏪 " + b["name"]) == normalize(raw)
                         or normalize(b["name"]) == normalize(raw)), None) or match_branch(raw, branches)
@@ -264,6 +282,10 @@ class OrderFlow:
             if bid is None:
                 return None if len(raw.split()) > 3 else self._ask_branch(conv)
             o["branch_id"] = bid
+            return self._next(conv)
+        if step in ("address_saved", "address") and (
+                _pressed(raw, "pickup") or parse_fulfilment(raw) == "pickup"):
+            o["fulfillment"], o["address"] = "pickup", None            # changed their mind
             return self._next(conv)
         if step == "address_saved":
             if _pressed(raw, "use_saved") or is_affirmation(raw):
@@ -331,7 +353,8 @@ class OrderFlow:
         conv.order["step"] = "branch"
         branches = self.a.gw.list_branches()["branches"]
         return self.a._say(conv, picked + head + self._t(conv)["ask_branch"], guard="order_flow",
-                           buttons=[{"id": f"b{b['branch_id']}", "label": "🏪 " + b["name"]} for b in branches])
+                           buttons=[{"id": f"b{b['branch_id']}", "label": "🏪 " + b["name"]} for b in branches]
+                           + self._btns(conv, "delivery"))
 
     def _stock_problem(self, conv):
         """Every item in stock at the chosen branch (pickup) / some branch (delivery)?

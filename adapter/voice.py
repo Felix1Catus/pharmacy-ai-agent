@@ -144,11 +144,16 @@ class Transcriber:
             model = self._load()
             lang, prob, _ = model.detect_language(audio)
             language = "en" if lang == "en" and prob >= 0.7 else "ar"
-            segs, _info = model.transcribe(
-                audio, language=language, beam_size=5, vad_filter=True,
-                initial_prompt=GULF_PROMPT if language == "ar" else None,
-                condition_on_previous_text=False)
-            text = " ".join(s.text.strip() for s in segs).strip()
+            text = ""
+            # the silence filter (VAD) can drop a whole quiet or close-mic note: retry without it
+            for vad in (True, False):
+                segs, _info = model.transcribe(
+                    audio, language=language, beam_size=5, vad_filter=vad,
+                    initial_prompt=GULF_PROMPT if language == "ar" else None,
+                    condition_on_previous_text=False)
+                text = " ".join(s.text.strip() for s in segs).strip()
+                if len(re.sub(r"\W", "", text)) >= 2:
+                    break
         text = spoken_digits_to_numbers(rejoin_split_words(text))
         return {"text": text, "language": language, "audio_seconds": round(total_s, 1),
                 "seconds": round(time.time() - t0, 2), "truncated": total_s > MAX_SECONDS,
@@ -162,8 +167,9 @@ def decode(data: bytes, filename: str | None = None):
     with tempfile.TemporaryDirectory() as d:
         src = Path(d) / ("in" + (Path(filename).suffix if filename else ".bin"))
         src.write_bytes(data)
+        # dynaudnorm lifts quiet recordings (browser microphones) to a normal speaking level
         r = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(src),
-                            "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
+                            "-af", "dynaudnorm", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
                            capture_output=True, timeout=120)
     if r.returncode != 0 or not r.stdout:
         raise RuntimeError("could not decode audio: " + r.stderr.decode(errors="ignore"))

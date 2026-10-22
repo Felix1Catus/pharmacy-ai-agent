@@ -196,3 +196,38 @@ def test_arabic_punctuation_is_not_part_of_words():
     assert _core("كم سعر فيتامين سي؟") == _core("كم سعر فيتامين سي")
     from fuzzy_search import words
     assert "سي" in words("فيتامين سي؟")
+
+
+# ---- from the 2026-10-22 voice test (owner's transcript) -----------------------------
+def test_phone_and_number_words_are_not_searched():
+    from order_flow import _core
+    heard = ("أبي، علبتين، بنادول، استلام اليوم، رقم جوال، الف وشرين، تين، انتين، وشرين، تين، "
+             "وشرين، وشرين.")
+    assert _core(heard) == "بنادول"                     # not "رقم"/"الف" -> no baby milk, no scale
+    assert _core("ابغى بنادول اكسترا رقمي 0501234567") == "بنادول اكسترا"
+    assert _core("حليب نان رقم ١") == "حليب نان رقم 1"   # product names keep their numbers
+
+
+@live
+def test_switch_from_pickup_to_delivery_at_the_branch_question(shop):
+    llm = ScriptLLM([_search_call("بنادول")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "ابي علبتين بنادول استلام")
+    reply = a.respond(conv, "1")
+    assert conv.order["step"] == "branch" and "delivery" in [b["id"] for b in conv.last_menu]
+    reply = a.respond(conv, "ابي توصيل للمنزل")          # changed their mind
+    assert conv.order["fulfillment"] == "delivery" and "العليا" in reply   # saved address offered
+    a.respond(conv, "✅ نعم لعنواني")
+    a.respond(conv, "نعم")
+    assert shop and shop[0]["fulfillment"] == "delivery"
+
+
+@live
+def test_switch_from_delivery_to_pickup_at_the_address_question(shop):
+    llm = ScriptLLM([_search_call("بنادول")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "ابي علبة بنادول توصيل")
+    a.respond(conv, "1")
+    assert conv.order["step"] == "address_saved"
+    reply = a.respond(conv, "لا خلاص استلام من الفرع")
+    assert conv.order["fulfillment"] == "pickup" and conv.order["step"] == "branch"

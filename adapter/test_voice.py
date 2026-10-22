@@ -145,3 +145,24 @@ def test_voice_eval_mishearings():
     # from the voice eval: "وين وصل طلبي" heard as "طلب اي"; "ثمانية" heard as "ثماني"
     assert voice.rejoin_split_words("وين وصل طلب اي رقم ثلاث") == "وين وصل طلبي رقم ثلاث"
     assert voice.spoken_digits_to_numbers("رقمي 051234567 ثماني") == "رقمي 0512345678"
+
+
+def test_voice_asks_to_type_a_phone_number_it_could_not_catch():
+    a, Conversation = _agent()
+    conv = Conversation(None, customer_facing=True)
+    a.greet(conv)
+    reply = a.respond_voice(conv, b"...", "v.ogg", transcriber=FakeTranscriber(
+        "ابي علبتين بنادول، رقم جوال الف وشرين تين انتين"))
+    assert "اكتبه بالأرقام" in reply
+
+
+@needs_ffmpeg
+@pytest.mark.skipif(not _whisper_ready(), reason="faster-whisper / sample missing")
+def test_quiet_voice_note_is_still_heard():
+    import subprocess, tempfile
+    with tempfile.TemporaryDirectory() as d:          # the sample at 1/20 of its volume
+        quiet = Path(d) / "quiet.ogg"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(SAMPLE), "-af", "volume=0.05",
+                        "-c:a", "libopus", str(quiet)], check=True)
+        r = voice.transcriber().transcribe(quiet.read_bytes(), "quiet.ogg")
+    assert not r["empty"] and "فيتامين" in r["text"], r["text"]
