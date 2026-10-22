@@ -81,20 +81,33 @@ def speakable(text: str, lang: str = "ar") -> str:
     return t.strip()
 
 
-def sentences(text: str, lang: str = "ar", max_chars: int = 220) -> list[str]:
-    """Speakable sentences, short enough for low first-audio latency and clean interruption."""
+def sentences(text: str, lang: str = "ar", max_chars: int = 120, first_chars: int = 70) -> list[str]:
+    """Low first-audio latency. Sentences are split apart at enders (clean interruption); words are
+    packed into chunks with the FIRST chunk of the reply capped short (~first_chars) so speech
+    starts in ~1-2 s even for a long comma-less opener, later chunks up to max_chars. A clause
+    comma ends a chunk once reasonably full; a break right before a connective و is avoided so
+    number / and-pairs are not split."""
     out = []
     for line in speakable(text, lang).split("\n"):
-        for part in re.split(r"(?<=[.!؟?؛;:])\s+", line):
-            part = part.strip(" ،,.")
-            if len(re.sub(r"\W", "", part)) < 2:
+        for sent in re.split(r"(?<=[.!؟?])\s+", line.strip()):
+            sent = sent.strip()
+            if len(re.sub(r"\W", "", sent)) < 2:
                 continue
-            while len(part) > max_chars:                            # very long: cut at a comma/space
-                cut = max(part.rfind("،", 0, max_chars), part.rfind(",", 0, max_chars),
-                          part.rfind(" ", 0, max_chars))
-                cut = cut if cut > 40 else max_chars
-                out.append(part[:cut].strip(" ،,"))
-                part = part[cut:].strip(" ،,")
-            if part:
-                out.append(part)
-    return out
+            buf = ""
+            for w in sent.split():
+                cap = first_chars if not out else max_chars
+                cand = f"{buf} {w}".strip()
+                if buf and len(cand) > cap:
+                    if w.startswith("و") and len(cand) <= cap + 15:
+                        buf = cand                              # keep "X و Y" together
+                    else:
+                        out.append(buf)
+                        buf = w
+                elif buf and w[-1:] in "،,؛;:" and len(cand) >= cap * 0.55:
+                    out.append(cand)
+                    buf = ""
+                else:
+                    buf = cand
+            if buf:
+                out.append(buf)
+    return [c.strip(" ،,.") for c in out if len(re.sub(r"\W", "", c)) >= 2]

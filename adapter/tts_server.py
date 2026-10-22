@@ -61,6 +61,12 @@ if DEVICE == "cuda" and VOCODER_DTYPE is not torch.float32:
 
     model.s3gen.inference = _s3_autocast
 
+# internal bot: skip the Perth audio watermark (CPU numpy, ~1 s/synth) - it adds nothing here
+try:
+    model.watermarker.apply_watermark = lambda wav, sample_rate=None: wav
+except Exception:
+    pass
+
 _lock = threading.Lock()
 app = FastAPI(title="NAMAA Saudi TTS", docs_url=None, redoc_url=None)
 

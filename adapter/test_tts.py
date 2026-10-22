@@ -27,7 +27,7 @@ def test_list_reply_becomes_speakable_sentences():
 
 def test_order_ref_money_and_link():
     s = sentences("✅ تم إنشاء عرض السعر رقم S00120 بإجمالي 51.75 ريال.\n💳 ادفع من هنا:\nhttp://x/my/orders/120")
-    assert s[0] == "تم إنشاء عرض السعر رقم مائة وعشرون بإجمالي واحد وخمسون ريال وخمسة وسبعون هللة"
+    assert s[0] == "تم إنشاء عرض السعر رقم مائة وعشرون بإجمالي واحد وخمسون ريال وخمسة وسبعون"
     assert "الرابط موجود في الرسالة" in s and not any("http" in x for x in s)
 
 
@@ -37,7 +37,7 @@ def test_phone_numbers_are_read_digit_by_digit():
 
 def test_english_reply():
     assert sentences("Quotation S00555 created, total 12.50 SAR.", "en") == [
-        "Quotation number five hundred and fifty-five created, total twelve SAR and fifty halalas"]
+        "Quotation number five hundred and fifty-five created", "total twelve SAR and fifty halalas"]
 
 
 def test_emojis_markdown_and_buttons_text_are_not_spoken():

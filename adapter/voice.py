@@ -29,6 +29,7 @@ MAX_SECONDS = int(os.environ.get("ASR_MAX_SECONDS", "120"))
 MODEL_NAME = os.environ.get("ASR_MODEL", "large-v3")
 CPU_THREADS = int(os.environ.get("ASR_THREADS") or os.cpu_count() or 4)
 ASR_DEVICE = os.environ.get("ASR_DEVICE", "auto")          # auto -> cuda if available else cpu
+ASR_GPU = int(os.environ.get("ASR_GPU", "1"))             # keep ASR off GPU0 (NAMAA lives there)
 
 GULF_PROMPT = ("محادثة واتساب مع صيدلية في السعودية باللهجة الخليجية: ابغى، ابي، وش، عندكم، "
                "كم سعره، علبة، علبتين، حبوب، شراب، بنادول، بروفين، ادفيل، اسبرين، اوجمنتين، "
@@ -172,8 +173,10 @@ class Transcriber:
             from faster_whisper import WhisperModel
             if ASR_DEVICE == "cuda" or (ASR_DEVICE == "auto" and _cuda_available()):
                 try:
+                    import ctranslate2
+                    idx = ASR_GPU if ctranslate2.get_cuda_device_count() > ASR_GPU else 0
                     self._model = WhisperModel(self.model_name, device="cuda",
-                                               compute_type="float16")
+                                               device_index=idx, compute_type="float16")
                     return self._model
                 except Exception:
                     pass                       # no CUDA runtime -> fall back to CPU

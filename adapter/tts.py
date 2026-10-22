@@ -104,6 +104,17 @@ def _fixed_prompts(lang: str) -> list:
             out.append(tt["bad_qty"].format(max=_of.MAX_QTY))
     except Exception:
         pass
+    try:                                     # the common fixed guard / menu replies
+        import agent as _ag
+        for _nm in ("MEDICAL_REFUSAL", "SCHEDULED_REFUSAL"):
+            _v = getattr(_ag, _nm, None)
+            if isinstance(_v, str):
+                out.append(_v)
+        for _d in getattr(_ag, "TEXTS", {}).values():
+            if isinstance(_d, dict):
+                out += [v for v in _d.values() if isinstance(v, str) and "{" not in v]
+    except Exception:
+        pass
     return out
 
 
