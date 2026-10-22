@@ -24,7 +24,7 @@ from pathlib import Path
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
@@ -88,6 +88,7 @@ class ChatIn(BaseModel):
     model: str | None = None
     image: str | None = None          # prescription photo or PDF: base64 or data: URL
     image_name: str | None = None
+    speak: bool = False               # also answer with voice (sentence by sentence)
 
 
 @app.get("/", response_class=HTMLResponse, dependencies=[Depends(auth)])
@@ -242,7 +243,57 @@ def chat(m: ChatIn):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})
     _save(sid)
-    return _out(sid, conv, reply, model, tools, t0)
+    out = _out(sid, conv, reply, model, tools, t0)
+    if m.speak or audio is not None:  # a voice note gets a voice answer too
+        out["speech"] = _speech(conv)
+    return out
+
+
+def _speech(conv):
+    """Start speaking the agent's last reply (not the «what I heard» line)."""
+    import tts
+    said = next((x["content"] for x in reversed(conv.messages)
+                 if x.get("role") == "assistant" and x.get("content")), "")
+    job = tts.new_job(said, "en" if conv.lang == "en" else "ar")
+    if not job:
+        return None
+    _speech_owner[job.id] = conv
+    return {"job": job.id, "count": len(job.sentences)}
+
+
+_speech_owner: dict = {}
+
+
+@app.get("/api/tts/{job_id}/{index}", dependencies=[Depends(auth)])
+def tts_sentence(job_id: str, index: int):
+    """WAV of one sentence of a spoken reply; the next one is prepared meanwhile."""
+    import tts
+    job = tts.get_job(job_id)
+    data = job.audio(index) if job else None
+    if not data:
+        return Response(status_code=204)
+    return Response(data, media_type="audio/wav", headers={"Cache-Control": "no-store"})
+
+
+class CancelIn(BaseModel):
+    heard: int = 0                    # sentences the listener actually heard
+
+
+@app.post("/api/tts/{job_id}/cancel", dependencies=[Depends(auth)])
+def tts_cancel(job_id: str, m: CancelIn):
+    """The customer interrupted (started talking / tapped 🎤 / typed): stop speaking and let the
+    agent know what they heard."""
+    import tts
+    job = tts.get_job(job_id)
+    if not job or job.cancelled:
+        return {"ok": True}
+    job.cancel()
+    conv = _speech_owner.pop(job_id, None)
+    if conv is not None and m.heard < len(job.sentences):
+        heard = " ".join(job.sentences[: max(0, m.heard)]) or "(nothing)"
+        conv.interrupt_note = (f"(The customer interrupted your previous spoken reply; they only "
+                               f"heard: {heard!r}. Do not assume they heard the rest.)")
+    return {"ok": True, "heard": m.heard, "of": len(job.sentences)}
 
 
 class PollIn(BaseModel):

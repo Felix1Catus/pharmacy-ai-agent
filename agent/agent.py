@@ -147,6 +147,7 @@ class Conversation:
         self.awaiting_rx_order: int | None = None      # quotation waiting for a prescription photo
         self.awaiting_confirm_order: int | None = None # approved quotation waiting for "confirm & pay"
         self.last_voice: dict | None = None            # last voice-note transcription (debug)
+        self.interrupt_note: str | None = None         # spoken reply cut off by the customer
         self.order: dict | None = None   # order wizard state (agent/order_flow.py)
         self.started = False
         self.last_ts = 0.0
@@ -584,6 +585,9 @@ class PharmacyAgent:
         # stays byte-identical for every customer, so Ollama reuses its cached ~1,800 tokens.
         turn = len(conv.messages) - 1
         hint = LANG_HINT.get(conv.lang or "", "") + self._customer_hint(conv)
+        if conv.interrupt_note:                        # conversation mode: they cut us off
+            hint += "\n" + conv.interrupt_note
+            conv.interrupt_note = None
         calls_made = 0
         # the customer said "yes" to the bot's own order summary: if the model answers with yet
         # another "do you confirm?" instead of placing it, tell it once, firmly, to place it

@@ -13,3 +13,5 @@ huggingface_hub==2.2.0
 Pillow==11.1.0        # prescription photos (OCR pre-processing; Tesseract via apt)
 faster-whisper==1.2.1 # voice notes -> text on CPU (adapter/voice.py; audio decoded by ffmpeg, not PyAV)
 edge-tts==7.3.1       # only for SYNTHETIC test voice notes (evals/datasets/make_synthetic_voice.py)
+piper-tts==1.8.0      # spoken replies (adapter/tts.py), Arabic voice ar_JO-kareem downloaded by bootstrap
+num2words==0.5.14     # prices / quantities read as words (adapter/speech_text.py)

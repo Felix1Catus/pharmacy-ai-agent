@@ -145,11 +145,46 @@ def handle(msg: dict) -> None:
             reply = (agent().respond_voice(conv, media, msg.get("filename")) if media is not None
                      else agent().respond(conv, ""))
             send(msg["wa_id"], reply, conv.last_menu, conv.menu_shown)
+            if VOICE_REPLIES:                         # answer a voice note with a voice note too
+                said = next((x["content"] for x in reversed(conv.messages)
+                             if x.get("role") == "assistant" and x.get("content")), "")
+                send_voice(msg["wa_id"], said, "en" if conv.lang == "en" else "ar")
             return
         # first contact / after 6 h idle: respond() greets (by name if the number is a known
         # contact) and shows the menu; otherwise it continues the conversation
         reply = agent().respond(conv, msg["text"], image=media, image_name=msg.get("filename"))
         send(msg["wa_id"], reply, conv.last_menu, conv.menu_shown)
+
+
+VOICE_REPLIES = os.environ.get("WHATSAPP_VOICE_REPLIES", "1") == "1"
+MEDIA_DIR = ROOT / "results" / "whatsapp_media"
+
+
+def send_voice(to: str, text: str, lang: str = "ar") -> None:
+    """Speak the reply (adapter/tts.py) and send it as a WhatsApp voice note (Opus .ogg)."""
+    try:
+        import tts
+        ogg = tts.whole_reply_ogg(text, lang)
+    except Exception:
+        ogg = None
+    if not ogg:
+        return
+    if DRY_RUN:
+        MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+        path = MEDIA_DIR / f"reply-{to}-{int(time.time() * 1000)}.ogg"
+        path.write_bytes(ogg)
+        OUTBOX.parent.mkdir(exist_ok=True)
+        with OUTBOX.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": time.time(), "messaging_product": "whatsapp", "to": to,
+                                 "type": "audio", "audio": {"file": str(path)}}) + "\n")
+        return
+    up = requests.post(f"{GRAPH}/{PHONE_ID}/media", headers={"Authorization": f"Bearer {TOKEN}"},
+                       data={"messaging_product": "whatsapp", "type": "audio/ogg"},
+                       files={"file": ("reply.ogg", ogg, "audio/ogg")}, timeout=60).json()
+    if up.get("id"):
+        requests.post(f"{GRAPH}/{PHONE_ID}/messages", headers={"Authorization": f"Bearer {TOKEN}"},
+                      json={"messaging_product": "whatsapp", "to": to, "type": "audio",
+                            "audio": {"id": up["id"]}}, timeout=30)
 
 
 def download_media(media_id: str) -> bytes | None:

@@ -39,6 +39,13 @@ systemctl enable --now ollama >/dev/null 2>&1 || true
 for i in $(seq 1 30); do curl -sf http://localhost:11434/api/version >/dev/null && break; sleep 2; done
 ollama list | grep -q "Qwen3-4B-Instruct-2507" || ollama pull "$AGENT_MODEL_TAG"
 
+log "   text-to-speech voice (Piper ar_JO-kareem, adapter/tts.py)"
+mkdir -p /opt/tts/piper
+for f in ar_JO-kareem-medium.onnx ar_JO-kareem-medium.onnx.json; do
+  [ -s /opt/tts/piper/$f ] || curl -fsSL -o /opt/tts/piper/$f \
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/ar/ar_JO/kareem/medium/$f"
+done
+
 log "4/8 Python environment"
 [ -d .venv ] || python3 -m venv .venv
 .venv/bin/pip install -q --upgrade pip

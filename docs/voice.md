@@ -71,3 +71,37 @@ run the same scripts with `--manifest`.
 - Real Gulf voice notes from the owner/staff (50+) → measure, then decide on a dialect-tuned
   Whisper if `small` misses too much.
 - Spoken replies (text-to-speech voice answers) — later.
+
+## Spoken replies (text-to-speech) — ready for conversation mode
+The agent can answer with voice: on WhatsApp a voice note is answered with a voice note
+(`WHATSAPP_VOICE_REPLIES=1`), in the test chat 🔊 turns spoken replies on (automatically after a
+🎤 voice note).
+
+**Pipeline (`adapter/speech_text.py` → `adapter/tts.py`):** the chat reply is made speakable
+(emojis, bullets, links and markdown dropped; prices, strengths and order numbers as Arabic words —
+«51.75 ريال» → «واحد وخمسون ريال وخمسة وسبعون هللة»; phone numbers digit by digit), split into
+sentences, and spoken **one sentence at a time**: the first sentence plays after ~0.3 s and the next
+is prepared while the current one plays.
+
+**Interruptions (barge-in):** the customer tapping 🎤, typing or sending stops the audio at once;
+`POST /api/tts/<job>/cancel` stops synthesis and records how many sentences were heard, and the
+model is told on the next turn which part of its reply the customer actually heard. The voice
+web UI / conversation mode will add microphone voice-activity detection to trigger the same cancel.
+
+**Engines** (`TTS_ENGINE`), measured on this 4-vCPU server (`results/tts_bench_*.json`, samples in
+`results/tts_samples/`):
+
+| Engine | Voice | Licence | First audio per sentence | Real-time factor |
+|---|---|---|---|---|
+| **piper** (default) | ar_JO-kareem, standard Arabic | MIT (code; voice dataset: see its card) | **0.3 s** (max 0.7 s) | 0.06 |
+| namaa | NAMAA-Saudi-TTS, **Saudi dialect** (Chatterbox 0.5B) | MIT | 22 s (max 63 s) | ~8 |
+
+NAMAA sounds more Saudi but is far too slow on CPU for a conversation; it runs as its own service
+(`adapter/tts_server.py`, venv `/opt/tts/namaa-venv`) and becomes practical on a GPU server.
+NAMAA-Saudi-TTS-V2 (F5/Habibi based) was excluded: CC-BY-NC-SA licence (non-commercial).
+
+```bash
+.venv/bin/python evals/runners/tts_bench.py --engine piper
+/opt/tts/namaa-venv/bin/python evals/runners/tts_bench.py --engine namaa
+.venv/bin/python -m pytest adapter/test_tts.py -q
+```

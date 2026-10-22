@@ -69,6 +69,8 @@
     <div class="who"><b>الصيدلية · Pharmacy</b><small id="status">متصل · online</small></div>
     <div class="tools">
       <input id="wa" type="tel" dir="ltr" placeholder="📱 WhatsApp no. (sim)" title="Simulated WhatsApp sender number: a known number is greeted by name; empty = unknown customer" style="font:inherit;font-size:12.5px;border-radius:16px;border:0;padding:5px 10px;width:150px">
+      <label title="ردود صوتية · voice replies (on automatically after a voice note)"><input type="checkbox" id="speak"> <span>🔊</span></label>
+      <button id="stopSpeak" title="إيقاف الصوت · stop speaking" hidden>⏹</button>
       <select id="model" title="model"></select>
       <label title="show tool calls"><input type="checkbox" id="dbg" checked> <span>debug</span></label>
       <button id="new" title="start a new conversation">محادثة جديدة</button>
@@ -118,12 +120,47 @@ function menuButtons(items) {                  // WhatsApp list-message style qu
     inner.appendChild(b); });
   box.appendChild(inner); chat.appendChild(box); chat.scrollTop = chat.scrollHeight;
 }
+// ---- spoken replies: sentence by sentence, stopped the moment the customer interrupts ----
+let speaking = null;                              // {job, count, heard, audio}
+function stopSpeech() {                           // barge-in: 🎤, typing, sending, new chat
+  if (!speaking) return;
+  const sp = speaking; speaking = null;
+  if (sp.audio) sp.audio.pause();
+  $("#stopSpeak").hidden = true;
+  api(`/api/tts/${sp.job}/cancel`, {heard: sp.heard}).catch(() => {});
+}
+async function speak(speech) {
+  stopSpeech();
+  if (!speech || !speech.count) return;
+  const sp = speaking = {job: speech.job, count: speech.count, heard: 0, audio: null};
+  $("#stopSpeak").hidden = false;
+  for (let i = 0; i < sp.count; i++) {
+    if (speaking !== sp) return;
+    let r;
+    try { r = await fetch(`/api/tts/${sp.job}/${i}`, {credentials: "same-origin"}); } catch (e) { break; }
+    if (speaking !== sp) return;
+    if (r.status !== 200) continue;
+    const url = URL.createObjectURL(await r.blob());
+    sp.audio = new Audio(url);
+    await new Promise(done => {
+      sp.audio.onended = done; sp.audio.onerror = done;
+      sp.audio.onpause = () => { if (speaking !== sp) done(); };
+      sp.audio.play().catch(done);
+    });
+    URL.revokeObjectURL(url);
+    if (speaking !== sp) return;
+    sp.heard = i + 1;
+  }
+  if (speaking === sp) { speaking = null; $("#stopSpeak").hidden = true; }
+}
+$("#stopSpeak").onclick = stopSpeech;
 function showReply(res) {
   sid = res.session_id;
   document.documentElement.lang = res.lang || "ar";
   msg.placeholder = res.lang === "en" ? "Type a message" : "اكتب رسالة";
   bubble("bot", res.reply, debugHtml(res.debug, res.model));
   menuButtons(res.menu);
+  if (res.speech) speak(res.speech);
   statusEl.dataset.who = res.customer ? `👤 ${res.customer.name}` : (res.wa_phone ? `📱 +${res.wa_phone} (غير مسجل · unregistered)` : "زائر · guest");
   statusEl.textContent = "متصل · online — " + statusEl.dataset.who;
 }
@@ -148,6 +185,8 @@ async function api(path, body) {
 }
 async function sendText(text, image, imageName) {
   text = text.trim(); if ((!text && !image) || send.disabled) return;
+  stopSpeech();                                   // the customer is talking again
+  if (image && image.startsWith("data:audio/")) $("#speak").checked = true;   // voice in -> voice out
   if (image && image.startsWith("data:audio/")) text = "";   // a voice note carries no typed text
   bubble("me", text, null, image, imageName); msg.value = ""; msg.style.height = "auto";
   send.disabled = true; $("#attach").disabled = true; $("#mic").disabled = true;
@@ -159,7 +198,8 @@ async function sendText(text, image, imageName) {
   }, 1000);
   try {
     const res = await api("/api/chat", {session_id: sid, text, model: $("#model").value || null,
-                                        image: image || null, image_name: imageName || null});
+                                        image: image || null, image_name: imageName || null,
+                                        speak: $("#speak").checked});
     typing.remove(); showReply(res);
   } catch (e) {
     typing.remove(); bubble("bot", "⚠️ " + e.message);
@@ -175,6 +215,7 @@ $("#attach").onclick = () => $("#file").click();
 // microphone on HTTPS (or localhost); on plain http, attach an audio file with 📎 instead.
 let rec = null, recChunks = [];
 $("#mic").onclick = async () => {
+  stopSpeech();                                   // barge-in: start talking over the reply
   if (rec && rec.state === "recording") { rec.stop(); return; }
   if (!window.isSecureContext || !navigator.mediaDevices || !window.MediaRecorder) {
     bubble("bot", "🎤 التسجيل من المتصفح يحتاج اتصالاً آمناً (https). أرفق ملفاً صوتياً من زر 📎 بدلاً من ذلك. · Recording needs https here — attach an audio file with 📎 instead.");
@@ -209,11 +250,13 @@ $("#file").onchange = e => {
   r.onload = () => sendText(msg.value, r.result, f.name);   // any typed text goes with the photo / audio
   r.readAsDataURL(f);
 };
+msg.addEventListener("input", () => { if (msg.value.trim()) stopSpeech(); });   // typing interrupts
 msg.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(msg.value); } });
 msg.addEventListener("input", () => { msg.style.height = "auto"; msg.style.height = Math.min(msg.scrollHeight, 120) + "px"; });
 $("#dbg").onchange = e => document.body.classList.toggle("show-debug", e.target.checked);
 $("#new").onclick = async () => {
   if (sid) { try { await api("/api/reset", {session_id: sid}); } catch (e) {} }
+  stopSpeech();
   sid = null;
   chat.innerHTML = '<div class="day"><span>محادثة جديدة · New conversation</span></div>';
   startChat();
