@@ -160,6 +160,81 @@ def catalogue_hotwords(max_terms: int = 150) -> str:
         return _hotwords_cache
 
 
+_brand_idx = None
+_FUNC_WORDS = {"عن", "في", "من", "على", "مع", "الى", "عند", "لك", "لي", "له", "لها", "او", "ثم", "يا", "هذا", "هذه", "اليوم" "ابي", "ابغى", "ابغا", "ابغي", "اريد", "ودي", "عايز", "عايزه", "عطني", "اعطني", "اعطيني", "ممكن", "عندكم", "عندك", "فيه", "بغيت", "حاب", "حبيت", "دور", "دورلي", "كم", "سعر", "وش", "ايش", "هل", "لو", "سمحت"}
+
+
+def _brand_index():
+    """{sound_key: canonical brand name} from the Odoo catalogue (brand heads + short names)."""
+    global _brand_idx
+    if _brand_idx is not None:
+        return _brand_idx
+    pairs = {}
+    try:
+        from gateway import Gateway
+        from fuzzy_search import sound_key
+        rows = Gateway().c.search_read("product.template", [], ["x_name_ar", "x_brand"], limit=5000)
+        for r in rows:
+            for f in ("x_name_ar", "x_brand"):
+                v = (r.get(f) or "").strip()
+                if not v:
+                    continue
+                for cand in ({v.split()[0], v} if len(v.split()) <= 2 else {v.split()[0]}):
+                    k = sound_key(cand.replace(" ", ""))
+                    if len(k) >= 3:
+                        pairs.setdefault(k, cand)
+    except Exception:
+        pass
+    _brand_idx = list(pairs.items())
+    return _brand_idx
+
+
+def correct_names(text: str, threshold: float = 0.80) -> str:
+    """Snap mis-heard drug-name spans to the nearest real catalogue product by Arabic sound key.
+    Conservative: only a span with a drug-like token (>=4 chars) that clearly matches one brand is
+    replaced, so ordinary words are left alone."""
+    idx = _brand_index()
+    if not idx or not text:
+        return text
+    from fuzzy_search import normalize, sound_key
+    from rapidfuzz.distance import Levenshtein
+    toks = text.split()
+    out, i = [], 0
+    while i < len(toks):
+        if normalize(toks[i]).strip("،,.؟?") in _FUNC_WORDS:
+            out.append(toks[i])
+            i += 1
+            continue
+        hit = None
+        for span in (3, 2, 1):
+            if i + span > len(toks):
+                continue
+            core = [normalize(w).strip("،,.؟?") for w in toks[i:i + span]]
+            if len("".join(core)) < 4:
+                continue
+            wk = sound_key("".join(core))
+            if len(wk) < 3:
+                continue
+            best_c, best_s, second_s = None, 0.0, 0.0
+            for bk, canon in idx:
+                s = Levenshtein.normalized_similarity(wk, bk)
+                if s > best_s:
+                    best_s, best_c, second_s = s, canon, best_s
+                elif s > second_s:
+                    second_s = s
+            if (best_c and best_s >= threshold and best_s - second_s >= 0.10
+                    and normalize(best_c) != " ".join(core)):
+                hit = (span, best_c)
+                break
+        if hit:
+            out.append(hit[1])
+            i += hit[0]
+        else:
+            out.append(toks[i])
+            i += 1
+    return " ".join(out)
+
+
 class Transcriber:
     """Thread-safe, lazily loaded faster-whisper model (one transcription at a time on CPU)."""
 

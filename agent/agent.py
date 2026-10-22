@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import sys
 import time
@@ -44,6 +45,11 @@ from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E40
 from llm import LLMClient  # noqa: E402
 from customer import T as CUSTOMER_TEXTS, CustomerFlow  # noqa: E402
 from order_flow import OrderFlow, _core as order_core  # noqa: E402
+
+VOICE_LLM_CORRECT = os.environ.get("VOICE_LLM_CORRECT", "0") == "1"   # #3 off by default: LLM refine can drift meaning; #1 (phonetic) is the safe win
+_VOICE_REFINE_SYS = ("أنت تصحّح نصاً ناتجاً عن تحويل كلام صوتي لعميل صيدلية سعودي باللهجة "
+                     "الخليجية. أعد كتابة الجملة مع تصحيح أخطاء التعرّف الواضحة فقط، خصوصاً "
+                     "أسماء الأدوية. لا تُجب على السؤال ولا تضف شيئاً؛ أعد الجملة المصحّحة فقط في سطر واحد.")
 
 CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
 from rapidfuzz import fuzz  # noqa: E402
@@ -456,6 +462,19 @@ class PharmacyAgent:
                "phone": "📱 I couldn't catch the phone number in the voice note - please type it in digits."},
     }
 
+    def _voice_refine(self, text: str, lang: str | None) -> str:
+        """#3: one guarded Qwen pass to clean Gulf-dialect STT output; keeps the original if
+        the model strays (wrong length / multi-line)."""
+        if not VOICE_LLM_CORRECT or (lang or "ar") != "ar" or len(text.strip()) < 8:
+            return text
+        try:
+            out = (self.llm.chat([{"role": "system", "content": _VOICE_REFINE_SYS},
+                                  {"role": "user", "content": text}]).get("content") or "").strip()
+        except Exception:
+            return text
+        out = out.strip("«»\"' ").splitlines()[0].strip() if out else ""
+        return out if out and 0.5 * len(text) <= len(out) <= 2.0 * len(text) else text
+
     def respond_voice(self, conv: Conversation, audio: bytes, filename: str | None = None,
                       transcriber=None) -> str:
         """A voice note: transcribe it (Gulf-tuned Whisper, adapter/voice.py), then answer the
@@ -473,6 +492,9 @@ class PharmacyAgent:
         if tr["empty"]:
             conv.messages.append({"role": "user", "content": "[voice note: not understood]"})
             return self._say(conv, vt["unclear"], guard="voice_unclear")
+        if conv.customer_facing:                 # #3 LLM dialect refine, then #1 name snap
+            from voice import correct_names
+            tr["text"] = correct_names(self._voice_refine(tr["text"], conv.lang))
         reply = self.respond(conv, tr["text"])
         head = vt["heard"].format(text=tr["text"]) + (("\n" + vt["long"]) if tr["truncated"] else "")
         # a phone number was spoken but didn't come through as one: ask for it typed
