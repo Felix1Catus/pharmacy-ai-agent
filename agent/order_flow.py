@@ -163,15 +163,18 @@ def match_branch(text: str, branches: list[dict]) -> int | None:
 
 
 def parse_choice(text: str, n: int) -> int | None:
-    """'2', '٢', '2.', 'الثاني', 'the second' -> index 0..n-1."""
-    t = normalize(text).translate(_DIG).strip(" .)-")
-    m = re.match(r"^(\d{1,2})(\s*[.)-].*)?$", t)
+    """'2', '٢', '2.', 'رقم اثنين', 'اختيار رقم 2', 'الثاني', 'the second' -> index 0..n-1."""
+    t = normalize(text).translate(_DIG)
+    m = (re.search(r"(?:رقم|اختيار|الخيار|خيار|option|number|no|#)\s*[:.]?\s*(\d{1,2})", t)
+         or re.match(r"^(\d{1,2})(\s*[.)-].*)?$", t.strip(" .)-")))
     if m and 1 <= int(m.group(1)) <= n:
         return int(m.group(1)) - 1
-    for i, words in enumerate([("الاول", "اول", "first"), ("الثاني", "ثاني", "second"),
-                               ("الثالث", "ثالث", "third"), ("الرابع", "رابع", "fourth"),
-                               ("الخامس", "خامس", "fifth")][:n]):
-        if any(re.search(rf"(?<!\w){w}(?!\w)", t) for w in words):
+    for i, words in enumerate([("الاول", "اول", "first"),
+                               ("الثاني", "ثاني", "اثنين", "اثنان", "ثنين", "second"),
+                               ("الثالث", "ثالث", "ثلاثه", "ثلاث", "third"),
+                               ("الرابع", "رابع", "اربعه", "اربع", "fourth"),
+                               ("الخامس", "خامس", "خمسه", "خمس", "fifth")][:n]):
+        if any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", t) for w in words):
             return i
     return None
 
@@ -270,11 +273,23 @@ class OrderFlow:
                 return self.a._say(conv, t["ask_name"], guard="order_flow")
             return self.present(conv, self.a.gw.search_product(query=core), raw)
         if step == "choose":
+            nr = normalize(raw)
             labels = [normalize(f"{i + 1}. {c['name']}"[:24]) for i, c in enumerate(o["choices"])]
-            idx = labels.index(normalize(raw)) if normalize(raw) in labels else parse_choice(raw, len(o["choices"]))
-            if idx is None:
-                hit = [i for i, c in enumerate(o["choices"]) if normalize(raw) and normalize(raw) in normalize(c["name"])]
-                idx = hit[0] if len(hit) == 1 else None
+            idx = labels.index(nr) if nr in labels else None
+            if idx is None:                  # a listed product NAMED beats a position number
+                scored = []
+                for i, c in enumerate(o["choices"]):
+                    cn = normalize(c["name"])
+                    toks = [w for w in cn.split() if len(w) >= 3]
+                    if cn and (cn in nr or nr in cn):
+                        scored.append((i, 99))
+                    elif toks and all(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", nr) for w in toks):
+                        scored.append((i, len(toks)))
+                scored.sort(key=lambda x: -x[1])
+                if scored and (len(scored) == 1 or scored[0][1] > scored[1][1]):
+                    idx = scored[0][0]
+            if idx is None:                  # else a position number / ordinal / cardinal
+                idx = parse_choice(raw, len(o["choices"]))
             if idx is None:
                 return None
             return self._pick(conv, idx, prefix="")

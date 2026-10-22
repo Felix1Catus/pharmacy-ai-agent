@@ -32,7 +32,7 @@ def normalize(text: str) -> str:
 _MEDICAL_TERMS = [
     # dosage (ar) — "جرعه" plus administration verbs ("give/take") which, unlike bare "كم حبة"
     # (also a stock question), signal a dosage/medical question.
-    "جرعه", "اعطي", "اعطيه", "اعطيها", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
+    "جرعه", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
     # advice / recommendation / diagnosis (ar)
     "المناسب لي", "الدواء المناسب", "العلاج المناسب", "وش اعطي", "ايش اعطي", "وش الدوا",
     "ايش الدوا", "اخد ايه", "اخد ايش", "اخذ ايش", "وش اخذ", "ايش اخذ", "ايه اخد", "شو اخذ",

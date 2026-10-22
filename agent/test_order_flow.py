@@ -267,3 +267,24 @@ def test_cancel_word_cancels_mid_order(shop):
     a.respond(conv, "ابغى بنادول اكسترا")
     reply = a.respond(conv, "الغاء")                    # typed cancel, not the button
     assert conv.order is None and "إلغاء" in reply
+
+
+def test_parse_choice_cardinals_and_phrasing():
+    from order_flow import parse_choice
+    assert parse_choice("رقم اثنين", 5) == 1
+    assert parse_choice("اختيار رقم 2", 5) == 1
+    assert parse_choice("الخيار الثالث", 5) == 2
+    assert parse_choice("5", 3) is None
+
+
+@live
+def test_voice_selection_during_order_not_blocked_by_medical_guard(shop):
+    # owner transcript 2026-10-22: "اعطيني البنادول اكسترا ..." selected a product but hit the
+    # medical-advice guard. It must select, not refuse.
+    llm = ScriptLLM([_search_call("بنادول")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "عندكم بنادول؟")                          # -> numbered list (choose step)
+    assert conv.order["step"] == "choose"
+    reply = a.respond(conv, "اعطيني البنادول اكسترا اختيار رقم اثنين")  # name beats the (disagreeing) position number
+    assert "نصائح طبية" not in reply                          # not the medical refusal
+    assert reply.startswith("✅ بنادول اكسترا") and "كم علبة" in reply
