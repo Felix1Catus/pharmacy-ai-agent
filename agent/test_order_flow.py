@@ -231,3 +231,39 @@ def test_switch_from_delivery_to_pickup_at_the_address_question(shop):
     assert conv.order["step"] == "address_saved"
     reply = a.respond(conv, "لا خلاص استلام من الفرع")
     assert conv.order["fulfillment"] == "pickup" and conv.order["step"] == "branch"
+
+
+# ---- from the 2026-10-22 owner transcript: confirm weak matches, allow corrections / cancel ----
+@live
+def test_weak_single_match_is_confirmed_before_quantity(shop, monkeypatch):
+    # a lone sound-alike match (not exact) must be confirmed, not locked straight into quantity
+    one = [{"product_id": 9, "name_en": "STIEPROX 1.5% Shampoo", "name_ar": "ستيبروكس شامبو",
+            "price_sar": 28.85, "match": "sound-alike", "requires_prescription": False,
+            "is_scheduled": False}]
+    monkeypatch.setattr(GW, "search_product", lambda **kw: {"candidates": [dict(c) for c in one]})
+    llm = ScriptLLM([_search_call("سترابرونكس")])
+    a, conv, prof = _identified(llm)
+    reply = a.respond(conv, "متاح سترابرونكس")
+    assert conv.order["step"] == "confirm_item" and "تقصده" in reply
+    reply = a.respond(conv, "✅ نعم، هذا")
+    assert conv.order["step"] == "qty" and "كم علبة" in reply
+
+
+@live
+def test_correction_at_quantity_step_researches_instead_of_looping(shop):
+    llm = ScriptLLM([_search_call("بنادول اكسترا")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "ابغى بنادول اكسترا")               # clearly named -> straight to quantity
+    assert conv.order["step"] == "qty"
+    reply = a.respond(conv, "اقصد بنادول كولد")          # a correction, not a count
+    assert "اكتب الكمية" not in reply                   # no longer loops the quantity prompt
+    assert "كولد" in reply                              # re-searched for the new product
+
+
+@live
+def test_cancel_word_cancels_mid_order(shop):
+    llm = ScriptLLM([_search_call("بنادول اكسترا")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "ابغى بنادول اكسترا")
+    reply = a.respond(conv, "الغاء")                    # typed cancel, not the button
+    assert conv.order is None and "إلغاء" in reply

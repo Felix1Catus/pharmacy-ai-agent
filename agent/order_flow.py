@@ -19,6 +19,10 @@ from rapidfuzz import fuzz
 MAX_QTY = 10
 MAX_CHOICES = 5
 
+# a message during the wizard that means "cancel" or "I meant a different product"
+_CANCEL = re.compile(r"(?<!\w)(الغاء|إلغاء|الغي|إلغي|انهاء|إنهاء|انهي|إنهي|توقف|خروج|cancel|stop|abort|quit)(?!\w)")
+_CORRECTION = re.compile(r"(اقصد|قصدي|ليس هذا|ليس هو|مو هذا|مو هو|مب هذا|مش هذا|مش ده|غلط|خطا|غير هذا|غيره|not this|wrong|i mean|instead|different|other one)")
+
 T = {
     "ar": {
         "list": "لقيت لك 🔎\n{rows}\n\nاختر رقم المنتج أو اضغط عليه 👇",
@@ -28,6 +32,9 @@ T = {
         "alt_head": "بنفس المادة الفعالة:",
         "not_found": "ما لقيت «{q}» في منتجاتنا 🙁\nاكتب الاسم بطريقة ثانية، أو المادة الفعالة المكتوبة على العلبة.",
         "picked": "✅ {name} — {price}",
+        "confirm_item": "لقيت: {name} — {price}\nهذا اللي تقصده؟",
+        "yes_item": "✅ نعم، هذا", "no_item": "🔎 لا، دوّر غيره",
+        "ask_name": "تمام، اكتب اسم الدواء اللي تبغاه 🛒",
         "ask_qty": "كم علبة تبغى؟",
         "bad_qty": "اكتب الكمية رقماً من 1 إلى {max}.",
         "ask_fulfil": "توصيل أو استلام من الفرع؟",
@@ -55,6 +62,9 @@ T = {
         "alt_head": "Same active ingredient:",
         "not_found": "I couldn't find “{q}” in our products 🙁\nTry another spelling, or the active ingredient written on the box.",
         "picked": "✅ {name} — {price}",
+        "confirm_item": "I found: {name} — {price}\nIs this the one you mean?",
+        "yes_item": "✅ Yes, this one", "no_item": "🔎 No, search again",
+        "ask_name": "OK, type the name of the medicine you want 🛒",
         "ask_qty": "How many boxes?",
         "bad_qty": "Type the quantity as a number from 1 to {max}.",
         "ask_fulfil": "Delivery or pickup from a branch?",
@@ -221,8 +231,10 @@ class OrderFlow:
             for c in choices])
         conv.order = order
         exact = [c for c in cands if c.get("match") == "exact"]
-        if len(choices) == 1 or clear or (len(exact) == 1 and len(cands) == 1):
+        if clear or (len(exact) == 1 and len(cands) == 1):
             return self._pick(conv, 0, prefix="")
+        if len(choices) == 1:                    # a single, weak/sound-alike match: confirm first
+            return self._confirm_item(conv, 0)
         rows, n = [], 1
         for i, c in enumerate(order["choices"]):
             if i == len(cands) and alts:
@@ -241,9 +253,22 @@ class OrderFlow:
         (then the agent hands it to the model as usual)."""
         o, t = conv.order, self._t(conv)
         step = o.get("step")
-        if _pressed(raw, "cancel"):
+        if _pressed(raw, "cancel") or _CANCEL.search(normalize(raw)):
             conv.order = None
             return self.a._say(conv, t["cancelled"], guard="order_flow")
+        if step == "confirm_item":
+            if _pressed(raw, "yes_item") or is_affirmation(raw):
+                return self._pick(conv, o.pop("confirm_idx", 0), prefix="")
+            o.pop("confirm_idx", None)
+            if _pressed(raw, "no_item"):
+                o["step"] = "await_name"
+                return self.a._say(conv, t["ask_name"], guard="order_flow")
+            return self._research(conv, raw)     # they typed a different medicine
+        if step == "await_name":
+            core = _core(raw)
+            if not core:
+                return self.a._say(conv, t["ask_name"], guard="order_flow")
+            return self.present(conv, self.a.gw.search_product(query=core), raw)
         if step == "choose":
             labels = [normalize(f"{i + 1}. {c['name']}"[:24]) for i, c in enumerate(o["choices"])]
             idx = labels.index(normalize(raw)) if normalize(raw) in labels else parse_choice(raw, len(o["choices"]))
@@ -255,13 +280,15 @@ class OrderFlow:
             return self._pick(conv, idx, prefix="")
         if step == "qty":
             q = parse_qty(raw)
-            if q is None:
-                return self.a._say(conv, t["bad_qty"].format(max=MAX_QTY), guard="order_flow") \
-                    if len(raw.split()) <= 3 else None
-            if not 1 <= q <= MAX_QTY:
+            if q is not None and 1 <= q <= MAX_QTY:
+                o["current"]["qty"] = q
+                return self._next(conv)
+            if self._wants_other_product(raw):   # "اقصد X" / a different medicine, not a count
+                return self._research(conv, raw)
+            if q is not None:                     # a number, but outside 1..MAX_QTY
                 return self.a._say(conv, t["bad_qty"].format(max=MAX_QTY), guard="order_flow")
-            o["current"]["qty"] = q
-            return self._next(conv)
+            return self.a._say(conv, t["bad_qty"].format(max=MAX_QTY), guard="order_flow") \
+                if len(raw.split()) <= 3 else None
         if step == "fulfil":
             f = "delivery" if _pressed(raw, "delivery") else "pickup" if _pressed(raw, "pickup") \
                 else parse_fulfilment(raw)
@@ -308,6 +335,31 @@ class OrderFlow:
                 return self.a._say(conv, t["add_prompt"], guard="order_flow")
             return None
         return None
+
+    def _confirm_item(self, conv, idx):
+        o, t = conv.order, self._t(conv)
+        c = o["choices"][idx]
+        o["step"], o["confirm_idx"] = "confirm_item", idx
+        return self.a._say(conv, t["confirm_item"].format(name=c["name"], price=self._price(t, c)),
+                           guard="order_flow", buttons=self._btns(conv, "yes_item", "no_item"))
+
+    def _wants_other_product(self, raw):
+        """At the quantity step, tell a correction / different-medicine message from a count."""
+        if _CORRECTION.search(normalize(raw)):
+            return True
+        core = _core(raw)
+        return bool(core) and parse_qty(raw) is None and any(len(w) >= 3 for w in core.split())
+
+    def _research(self, conv, raw):
+        """Customer named a different product mid-order: search again from their words."""
+        o, t = conv.order, self._t(conv)
+        o["current"] = None
+        n = _CORRECTION.sub(" ", normalize(raw))
+        core = _core(n)
+        if core:
+            return self.present(conv, self.a.gw.search_product(query=core), raw)
+        o["step"] = "await_name"
+        return self.a._say(conv, t["ask_name"], guard="order_flow")
 
     def _pick(self, conv, idx, prefix):
         o, t = conv.order, self._t(conv)
