@@ -25,7 +25,18 @@ from faster_whisper import WhisperModel  # noqa: E402
 from rapidfuzz.distance import Levenshtein  # noqa: E402
 
 from fuzzy_search import normalize, sound_key  # noqa: E402
-from voice import decode  # noqa: E402
+from voice import catalogue_hotwords, decode  # noqa: E402
+
+
+def _cuda():
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+HOTWORDS = catalogue_hotwords()
 
 GULF_PROMPT = ("محادثة واتساب مع صيدلية في السعودية باللهجة الخليجية: ابغى، ابي، وش، عندكم، "
                "كم سعره، علبة، علبتين، حبوب، بنادول، بروفين، ادفيل، اسبرين، اوجمنتين، سنتروم، "
@@ -55,22 +66,24 @@ def drug_hit(ref: str, hyp: str) -> bool | None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", default=str(ROOT / "evals/datasets/audio_synthetic/manifest.json"))
-    ap.add_argument("--models", nargs="+", default=["small", "large-v3-turbo"])
+    ap.add_argument("--models", nargs="+", default=["small", "large-v3"])
     ap.add_argument("--out", default=str(ROOT / "results/asr_bench.json"))
     a = ap.parse_args()
     items = json.loads(Path(a.manifest).read_text(encoding="utf-8"))
     report = {}
     for name in a.models:
         t0 = time.time()
-        model = WhisperModel(name, device="cpu", compute_type="int8", cpu_threads=4)
+        dev, ct = ("cuda", "float16") if _cuda() else ("cpu", "int8")
+        model = WhisperModel(name, device=dev, compute_type=ct, cpu_threads=4)
         load_s = time.time() - t0
-        for prompt_name, prompt in (("plain", None), ("gulf_prompt", GULF_PROMPT)):
+        for prompt_name, prompt, hw in (("plain", None, None), ("gulf_prompt", GULF_PROMPT, None),
+                                        ("gulf+hotwords", GULF_PROMPT, HOTWORDS)):
             rows = []
             for it in items:
                 t1 = time.time()
                 audio, total_s = decode((ROOT / it["audio_path"]).read_bytes(), it["audio_path"])
                 segs, info = model.transcribe(audio, language="ar", beam_size=5, vad_filter=True,
-                                              initial_prompt=prompt)
+                                              initial_prompt=prompt, hotwords=hw)
                 hyp = " ".join(s.text.strip() for s in segs)
                 dt = time.time() - t1
                 rows.append({"id": it["id"], "ref": it["reference_transcript"], "hyp": hyp,

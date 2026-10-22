@@ -22,10 +22,13 @@ import time
 from pathlib import Path
 
 MAX_SECONDS = int(os.environ.get("ASR_MAX_SECONDS", "120"))
-# small + the Gulf prompt measured best on this 4-vCPU server: 2.4 s/note, 7.9% character errors,
-# 91% drug names (large-v3-turbo: 6.9 s/note, no better on drug names) - results/asr_bench.json
-MODEL_NAME = os.environ.get("ASR_MODEL", "small")
+# On the GPU box: large-v3 on CUDA (fp16) + catalogue brand names as hotwords + no_repeat_ngram
+# to stop short-clip looping. On NAMAA-voiced Gulf order sentences, drug-name recall went 61%
+# (small) -> 83% (large-v3+hotwords); turbo was weaker (67%) and hallucinated on short clips.
+# Falls back to small/int8 on CPU. - results/asr_bench.json
+MODEL_NAME = os.environ.get("ASR_MODEL", "large-v3")
 CPU_THREADS = int(os.environ.get("ASR_THREADS") or os.cpu_count() or 4)
+ASR_DEVICE = os.environ.get("ASR_DEVICE", "auto")          # auto -> cuda if available else cpu
 
 GULF_PROMPT = ("محادثة واتساب مع صيدلية في السعودية باللهجة الخليجية: ابغى، ابي، وش، عندكم، "
                "كم سعره، علبة، علبتين، حبوب، شراب، بنادول، بروفين، ادفيل، اسبرين، اوجمنتين، "
@@ -112,6 +115,50 @@ def spoken_digits_to_numbers(text: str, min_run: int = 4) -> str:
     return re.sub(r"(?<=\d) (?=\d)", "", " ".join(out))
 
 
+def _cuda_available() -> bool:
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+_hotwords_cache = None
+_hotwords_lock = threading.Lock()
+
+
+def catalogue_hotwords(max_terms: int = 150) -> str:
+    """Distinct brand-name heads from the Odoo catalogue (Arabic first) to bias Whisper toward
+    real product names. Built once; falls back to the curated vocabulary if Odoo is down."""
+    global _hotwords_cache
+    with _hotwords_lock:
+        if _hotwords_cache is not None:
+            return _hotwords_cache
+        terms, seen = [], set()
+        try:
+            from gateway import Gateway
+            rows = Gateway().c.search_read("product.template", [], ["x_name_ar", "x_brand"],
+                                           limit=5000)
+            for r in rows:
+                for f in ("x_name_ar", "x_brand"):
+                    v = (r.get(f) or "").strip()
+                    if not v:
+                        continue
+                    head = v.split()[0]
+                    key = _norm(head)
+                    if len(key) >= 3 and key not in seen:
+                        seen.add(key)
+                        terms.append(head)
+        except Exception:
+            pass
+        for w in _VOCAB:                       # always keep the curated med words
+            if len(_norm(w)) >= 3 and _norm(w) not in seen:
+                seen.add(_norm(w))
+                terms.append(w)
+        _hotwords_cache = " ".join(terms[:max_terms])
+        return _hotwords_cache
+
+
 class Transcriber:
     """Thread-safe, lazily loaded faster-whisper model (one transcription at a time on CPU)."""
 
@@ -123,6 +170,13 @@ class Transcriber:
     def _load(self):
         if self._model is None:
             from faster_whisper import WhisperModel
+            if ASR_DEVICE == "cuda" or (ASR_DEVICE == "auto" and _cuda_available()):
+                try:
+                    self._model = WhisperModel(self.model_name, device="cuda",
+                                               compute_type="float16")
+                    return self._model
+                except Exception:
+                    pass                       # no CUDA runtime -> fall back to CPU
             self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8",
                                        cpu_threads=CPU_THREADS)
         return self._model
@@ -150,7 +204,8 @@ class Transcriber:
                 segs, _info = model.transcribe(
                     audio, language=language, beam_size=5, vad_filter=vad,
                     initial_prompt=GULF_PROMPT if language == "ar" else None,
-                    condition_on_previous_text=False)
+                    hotwords=catalogue_hotwords() if language == "ar" else None,
+                    no_repeat_ngram_size=3, condition_on_previous_text=False)
                 text = " ".join(s.text.strip() for s in segs).strip()
                 if len(re.sub(r"\W", "", text)) >= 2:
                     break

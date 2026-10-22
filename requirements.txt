@@ -15,3 +15,6 @@ faster-whisper==1.2.1 # voice notes -> text on CPU (adapter/voice.py; audio deco
 edge-tts==7.3.1       # only for SYNTHETIC test voice notes (evals/datasets/make_synthetic_voice.py)
 piper-tts==1.8.0      # spoken replies (adapter/tts.py), Arabic voice ar_JO-kareem downloaded by bootstrap
 num2words==0.5.14     # prices / quantities read as words (adapter/speech_text.py)
+# GPU runtime for faster-whisper (ctranslate2); harmless to install, used only on CUDA
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9,<10
