@@ -10,7 +10,7 @@ Rebuild elsewhere: `docs/RESTORE.md`. Customer / ordering flow: `docs/customer-f
 | **Agent LLM** | `Qwen3-4B-Instruct-2507` (Q4_K_M GGUF, non-thinking) via Ollama on CPU — all logical CPUs, kept loaded, warmed at start |
 | **Agent** (`agent/`) | tool-calling loop over an 8-action contract + fixed-logic layers: opening menu, customer recognition/registration, safety guards, prescription checks, audit log |
 | **Odoo 18** (Docker) | db `pharmacy`, ~4,000 products (SFDA + 42 sample), 3 branches; public on :8069; module `pharmacy_agent` **18.0.1.7.0** (Prescriptions, WhatsApp orders, contact WhatsApp number) |
-| **Test chat** | http://155.138.193.148:8090 (password in `.env`), systemd `pharmacy-webchat`; simulated WhatsApp number field |
+| **Test chat** | http://155.138.193.148:8090 · **https://155.138.193.148:8443** (Caddy, self-signed; needed for 🎤) (password in `.env`), systemd `pharmacy-webchat`; simulated WhatsApp number field |
 | **WhatsApp channel** | `channels/whatsapp/webhook.py` built and tested in **dry run** (no Meta credentials yet; not running as a service) |
 | **Voice notes** | faster-whisper `small` on CPU + Gulf pharmacy prompt (2.4 s/note) → same agent; WhatsApp voice notes + 🎤 in the test chat (needs https) — `docs/voice.md` |
 | **SFDA Update List** | Inventory → Products → Update List (manual button + auto every N days, **auto OFF**) |

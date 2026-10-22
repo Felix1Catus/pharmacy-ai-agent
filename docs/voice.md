@@ -44,8 +44,18 @@ voice notes (noise, speed, real Gulf speakers) are needed — see `evals/dataset
 - **WhatsApp:** `audio` messages (voice notes) are downloaded from Meta and transcribed
   (`channels/whatsapp/webhook.py`).
 - **Test chat:** 🎤 records in the browser (tap to start, tap again to send). Browsers only allow
-  the microphone on **https** (or localhost); on the plain-http test page attach an audio file with
-  📎 instead. The debug line shows the transcript and how long speech-to-text took.
+  the microphone on **https**: use **https://155.138.193.148:8443** (see below). On the plain-http
+  page (:8090) attach an audio file with 📎 instead. The debug line shows the transcript and how
+  long speech-to-text took.
+
+### https for the test chat (Caddy, self-signed)
+Caddy (`/etc/caddy/Caddyfile`, systemd `caddy`) serves **https://155.138.193.148:8443** with a
+certificate from its own local authority (`tls internal`) and forwards to the chat on :8090
+(same login). Because the certificate is self-signed the browser warns once: *Advanced → Proceed
+to 155.138.193.148*, then allow the microphone. Firewall: `ufw allow 8443/tcp`.
+With a domain: replace the site address with the domain and remove `tls internal` — Caddy then
+gets a real Let's Encrypt certificate automatically (also the way to put Odoo / the WhatsApp
+webhook behind https).
 
 ## Evaluate
 ```bash

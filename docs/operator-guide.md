@@ -269,6 +269,8 @@ runs in its own container). Manual test script: `odoo/addons/pharmacy_agent/test
 ---
 
 ## 5. WhatsApp-style test chat page
+**https (microphone / voice notes): https://155.138.193.148:8443** — self-signed certificate,
+accept the browser warning once (Caddy, see `docs/voice.md`).
 **http://155.138.193.148:8090** — browser login: user `WEBCHAT_USER`, password `WEBCHAT_PASSWORD`
 (both in `/home/pharmacy-ai-agent/.env`). Runs the **real agent** (guards → Qwen via Ollama →
 tools → live Odoo sample data) with one conversation per browser tab.
