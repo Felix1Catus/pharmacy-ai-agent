@@ -12,6 +12,7 @@ Rebuild elsewhere: `docs/RESTORE.md`. Customer / ordering flow: `docs/customer-f
 | **Odoo 18** (Docker) | db `pharmacy`, ~4,000 products (SFDA + 42 sample), 3 branches; public on :8069; module `pharmacy_agent` **18.0.1.7.0** (Prescriptions, WhatsApp orders, contact WhatsApp number) |
 | **Test chat** | http://155.138.193.148:8090 (password in `.env`), systemd `pharmacy-webchat`; simulated WhatsApp number field |
 | **WhatsApp channel** | `channels/whatsapp/webhook.py` built and tested in **dry run** (no Meta credentials yet; not running as a service) |
+| **Voice notes** | faster-whisper `small` on CPU + Gulf pharmacy prompt (2.4 s/note) → same agent; WhatsApp voice notes + 🎤 in the test chat (needs https) — `docs/voice.md` |
 | **SFDA Update List** | Inventory → Products → Update List (manual button + auto every N days, **auto OFF**) |
 
 ## Headline results (agent end-to-end eval, 106 dialect messages)
@@ -73,7 +74,8 @@ customer flow). Automated tests: 159 passing on the server.
 1. **Meta WhatsApp Cloud API** test number + credentials (`WHATSAPP_*` in `.env`) and a **domain
    with HTTPS** (Meta only calls https webhooks).
 2. **Real prescriptions** (personal data blurred) to tune OCR on real phone photos / layouts.
-3. **Real voice notes** with correct transcripts (50+) — for Whisper / voice testing.
+3. **Real voice notes** with correct transcripts (50+) — the voice pipeline is built and measured on
+   synthetic Saudi voices only; real Gulf recordings decide its accuracy (`evals/datasets/recording_script.md`).
 4. **Native-speaker review** of the machine-drafted Arabic eval + training data.
 5. **Pharmacist review of catalogue flags** (e.g. some amoxicillin brands are not marked prescription-only).
 
@@ -89,4 +91,5 @@ customer flow). Automated tests: 159 passing on the server.
    delivered) — `sale.order.dispatch_status` already carries the hand-off states.
 5. **Agent quality:** grow the eval set (Egyptian, multi-turn order flows); re-validate the parked
    `wip/clarify-once` branch.
-6. **Voice (Sprint C):** WhatsApp voice notes → Whisper → same agent.
+6. **Voice (Sprint C):** ✅ voice notes → speech-to-text → same agent (2026-10-22). Next: measure on real
+   recordings, HTTPS for browser recording, spoken replies later.

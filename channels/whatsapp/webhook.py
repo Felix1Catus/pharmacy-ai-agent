@@ -121,6 +121,8 @@ def parse_messages(payload: dict) -> list[dict]:
                 elif kind in ("image", "document"):
                     media, text = m[kind].get("id"), m[kind].get("caption", "")
                     fname = m[kind].get("filename")
+                elif kind == "audio":                 # voice note (Opus .ogg) or audio file
+                    media, fname = m["audio"].get("id"), "voice-note.ogg"
                 out.append({"id": m.get("id"), "wa_id": m.get("from"), "name": names.get(m.get("from")),
                             "type": kind, "text": text, "media_id": media, "filename": fname})
     return out
@@ -131,15 +133,22 @@ def handle(msg: dict) -> None:
     lock = _locks.setdefault(msg["wa_id"], threading.Lock())
     with lock:
         conv = conversation(msg["wa_id"])
-        image = download_media(msg["media_id"]) if msg.get("media_id") else None
-        if msg["type"] not in ("text", "interactive", "button", "image", "document"):
-            reply = ("أرسل رسالة نصية أو صورة/ملف الوصفة من فضلك." if (conv.lang or "ar") == "ar"
-                     else "Please send a text message or a photo/PDF of the prescription.")
+        media = download_media(msg["media_id"]) if msg.get("media_id") else None
+        if msg["type"] not in ("text", "interactive", "button", "image", "document", "audio"):
+            reply = ("أرسل رسالة نصية أو صوتية، أو صورة/ملف الوصفة من فضلك." if (conv.lang or "ar") == "ar"
+                     else "Please send a text or voice message, or a photo/PDF of the prescription.")
             send(msg["wa_id"], reply, None)
+            return
+        if msg["type"] == "audio":
+            # voice note -> Gulf-tuned speech-to-text -> the same agent; the reply quotes what
+            # was understood so the customer can correct a mishearing
+            reply = (agent().respond_voice(conv, media, msg.get("filename")) if media is not None
+                     else agent().respond(conv, ""))
+            send(msg["wa_id"], reply, conv.last_menu, conv.menu_shown)
             return
         # first contact / after 6 h idle: respond() greets (by name if the number is a known
         # contact) and shows the menu; otherwise it continues the conversation
-        reply = agent().respond(conv, msg["text"], image=image, image_name=msg.get("filename"))
+        reply = agent().respond(conv, msg["text"], image=media, image_name=msg.get("filename"))
         send(msg["wa_id"], reply, conv.last_menu, conv.menu_shown)
 
 

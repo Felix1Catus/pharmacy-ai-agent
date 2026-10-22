@@ -54,6 +54,17 @@ _sessions: dict[str, dict] = {}
 threading.Thread(target=lambda: LLMClient(model=DEFAULT_MODEL).warm_up(), daemon=True).start()
 
 
+def _warm_asr():
+    try:
+        from voice import transcriber
+        transcriber().warm_up()           # speech-to-text model for voice notes
+    except Exception:                     # faster-whisper missing: voice notes report an error
+        pass
+
+
+threading.Thread(target=_warm_asr, daemon=True).start()
+
+
 def auth(c: HTTPBasicCredentials = Depends(security)):
     ok = secrets.compare_digest(c.username.encode(), USER.encode()) and \
         secrets.compare_digest(c.password.encode(), PASSWORD.encode())
@@ -192,6 +203,7 @@ def start(m: StartIn):
 def chat(m: ChatIn):
     text = (m.text or "").strip()[:2000]
     image = None
+    audio = None
     if m.image:
         try:
             image = base64.b64decode(m.image.split(",", 1)[-1], validate=True)
@@ -199,14 +211,21 @@ def chat(m: ChatIn):
             raise HTTPException(400, "bad image data")
         if len(image) > MAX_IMAGE:
             raise HTTPException(413, "image too large (max 8 MB)")
-    if not text and not image:
+        # a recorded / attached voice note arrives as data:audio/... (or an audio file name)
+        if m.image.startswith("data:audio/") or (m.image_name or "").lower().endswith(
+                (".ogg", ".opus", ".webm", ".m4a", ".mp3", ".wav", ".aac", ".amr")):
+            audio, image = image, None
+    if not text and not image and not audio:
         raise HTTPException(400, "empty message")
     model = m.model or DEFAULT_MODEL
     sid, conv = _session(m.session_id, model)
     before = len(conv.messages)
     t0 = time.time()
     # model calls queue inside LLMClient; menu/guard replies are instant even while busy
-    reply = agent_for(model).respond(conv, text, image=image, image_name=m.image_name)
+    if audio is not None:
+        reply = agent_for(model).respond_voice(conv, audio, m.image_name)
+    else:
+        reply = agent_for(model).respond(conv, text, image=image, image_name=m.image_name)
     new = conv.messages[before:]
     tools, results = [], [x for x in new if x.get("role") == "tool"]
     for i, call in enumerate([x for x in new if x.get("tool_calls")]):
@@ -214,6 +233,11 @@ def chat(m: ChatIn):
         res = results[i]["content"] if i < len(results) else ""
         tools.append({"name": fn["name"], "args": fn.get("arguments") or {},
                       "result": res[:600] + ("..." if len(res) > 600 else "")})
+    if audio is not None and conv.last_voice:
+        v = conv.last_voice
+        tools.insert(0, {"name": "speech_to_text", "args": {"language": v.get("language")},
+                         "result": f"{v.get('text', '')!r} - {v.get('seconds')}s for "
+                                   f"{v.get('audio_seconds')}s of audio"})
     if image and new and str(new[0].get("content", "")).startswith("[Prescription verified]"):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})

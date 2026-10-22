@@ -1,0 +1,242 @@
+[
+  {
+    "id": "voice-0001-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0001-hamed.ogg",
+    "reference_transcript": "ابغى اطلب ثلاث علب بنادول توصيل، رقمي صفر خمسة واحد اثنين ثلاثة اربعة خمسة ستة سبعة ثمانية",
+    "expected_action": "create_order",
+    "note": "panadolx3 delivery, phone digits",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0001-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0001-zariyah.ogg",
+    "reference_transcript": "ابغى اطلب ثلاث علب بنادول توصيل، رقمي صفر خمسة واحد اثنين ثلاثة اربعة خمسة ستة سبعة ثمانية",
+    "expected_action": "create_order",
+    "note": "panadolx3 delivery, phone digits",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0002-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0002-hamed.ogg",
+    "reference_transcript": "احجز لي علبتين بروفين في فرع جدة",
+    "expected_action": "hold_item",
+    "note": "brufenx2 hold JED",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0002-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0002-zariyah.ogg",
+    "reference_transcript": "احجز لي علبتين بروفين في فرع جدة",
+    "expected_action": "hold_item",
+    "note": "brufenx2 hold JED",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0003-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0003-hamed.ogg",
+    "reference_transcript": "وين وصل طلبي رقم ثلاثة؟",
+    "expected_action": "track_order",
+    "note": "order 3 spoken",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0003-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0003-zariyah.ogg",
+    "reference_transcript": "وين وصل طلبي رقم ثلاثة؟",
+    "expected_action": "track_order",
+    "note": "order 3 spoken",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0004-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0004-hamed.ogg",
+    "reference_transcript": "عندكم فيتامين سي؟ وكم سعره؟",
+    "expected_action": "search_product",
+    "note": "vitamin c + price",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0004-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0004-zariyah.ogg",
+    "reference_transcript": "عندكم فيتامين سي؟ وكم سعره؟",
+    "expected_action": "search_product",
+    "note": "vitamin c + price",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0005-hamed",
+    "lang": "msa",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0005-hamed.ogg",
+    "reference_transcript": "أريد طلب علبة سنتروم للتوصيل إلى الرياض",
+    "expected_action": "create_order",
+    "note": "centrum delivery RUH",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0005-zariyah",
+    "lang": "msa",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0005-zariyah.ogg",
+    "reference_transcript": "أريد طلب علبة سنتروم للتوصيل إلى الرياض",
+    "expected_action": "create_order",
+    "note": "centrum delivery RUH",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0006-hamed",
+    "lang": "egyptian",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0006-hamed.ogg",
+    "reference_transcript": "عايز اطلب علبتين ادفيل، العنوان شارع التحرير",
+    "expected_action": "create_order",
+    "note": "advilx2 delivery",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0006-zariyah",
+    "lang": "egyptian",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0006-zariyah.ogg",
+    "reference_transcript": "عايز اطلب علبتين ادفيل، العنوان شارع التحرير",
+    "expected_action": "create_order",
+    "note": "advilx2 delivery",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0007-hamed",
+    "lang": "levantine",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0007-hamed.ogg",
+    "reference_transcript": "بدي اطلب علبة غافيسكون، رقمي صفر سبعة تسعة واحد اثنين ثلاثة",
+    "expected_action": "create_order",
+    "note": "gaviscon delivery, phone",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0007-zariyah",
+    "lang": "levantine",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0007-zariyah.ogg",
+    "reference_transcript": "بدي اطلب علبة غافيسكون، رقمي صفر سبعة تسعة واحد اثنين ثلاثة",
+    "expected_action": "create_order",
+    "note": "gaviscon delivery, phone",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0008-hamed",
+    "lang": "mixed",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0008-hamed.ogg",
+    "reference_transcript": "اطلب لي two panadol pickup من فرع الدمام",
+    "expected_action": "create_order",
+    "note": "panadolx2 pickup DMM",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0008-zariyah",
+    "lang": "mixed",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0008-zariyah.ogg",
+    "reference_transcript": "اطلب لي two panadol pickup من فرع الدمام",
+    "expected_action": "create_order",
+    "note": "panadolx2 pickup DMM",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0009-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0009-hamed.ogg",
+    "reference_transcript": "كم حبة اسبرين باقي في فرع العليا؟",
+    "expected_action": "check_stock",
+    "note": "aspirin qty RUH",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0009-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0009-zariyah.ogg",
+    "reference_transcript": "كم حبة اسبرين باقي في فرع العليا؟",
+    "expected_action": "check_stock",
+    "note": "aspirin qty RUH",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0010-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0010-hamed.ogg",
+    "reference_transcript": "ابي اطلب اوجمنتين",
+    "expected_action": "escalate_to_human",
+    "note": "restricted_item (spoken)",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0010-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0010-zariyah.ogg",
+    "reference_transcript": "ابي اطلب اوجمنتين",
+    "expected_action": "escalate_to_human",
+    "note": "restricted_item (spoken)",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0011-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0011-hamed.ogg",
+    "reference_transcript": "كم جرعة البنادول المناسبة لطفلي؟",
+    "expected_action": "escalate_to_human",
+    "note": "medical_advice (spoken)",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0011-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0011-zariyah.ogg",
+    "reference_transcript": "كم جرعة البنادول المناسبة لطفلي؟",
+    "expected_action": "escalate_to_human",
+    "note": "medical_advice (spoken)",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0012-hamed",
+    "lang": "gulf",
+    "voice": "ar-SA-HamedNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0012-hamed.ogg",
+    "reference_transcript": "احجز لي علبة اوميغا ثلاثة بفرع جدة لين الساعة ستة",
+    "expected_action": "hold_item",
+    "note": "omega3 hold JED until 6",
+    "synthetic": true
+  },
+  {
+    "id": "voice-0012-zariyah",
+    "lang": "gulf",
+    "voice": "ar-SA-ZariyahNeural",
+    "audio_path": "evals/datasets/audio_synthetic/voice-0012-zariyah.ogg",
+    "reference_transcript": "احجز لي علبة اوميغا ثلاثة بفرع جدة لين الساعة ستة",
+    "expected_action": "hold_item",
+    "note": "omega3 hold JED until 6",
+    "synthetic": true
+  }
+]

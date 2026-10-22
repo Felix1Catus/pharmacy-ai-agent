@@ -52,6 +52,11 @@
   #send:disabled { opacity: .5; cursor: default; }
   #attach { width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent; font-size: 22px; cursor: pointer; flex: none; color: var(--muted); }
   #attach:disabled { opacity: .5; cursor: default; }
+  #mic { width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent; font-size: 22px; cursor: pointer; flex: none; color: var(--muted); }
+  #mic.rec { background: #e53935; color: #fff; animation: pulse 1s infinite; }
+  #mic:disabled { opacity: .5; cursor: default; }
+  @keyframes pulse { 50% { opacity: .6; } }
+  .bubble audio { display: block; width: 240px; max-width: 100%; margin-bottom: 4px; }
   .bubble .file { padding: 8px 10px; margin-bottom: 4px; background: rgba(0,0,0,.05); border-radius: 6px; direction: ltr; }
   .bubble img { display: block; max-width: 260px; max-height: 320px; border-radius: 6px; margin-bottom: 4px; }
   @media (max-width: 560px) { #chat { padding: 12px 10px 6px; } .bubble { max-width: 88%; } .tools label span { display: none; } }
@@ -72,8 +77,9 @@
   <div id="chat"><div class="day"><span>اليوم · Today — test chat (sample data only)</span></div></div>
   <div class="chips" id="chips"></div>
   <footer>
-    <button id="attach" title="إرفاق صورة أو PDF للوصفة · attach prescription photo or PDF">📎</button>
-    <input type="file" id="file" accept="image/*,application/pdf,.pdf" hidden>
+    <button id="attach" title="إرفاق صورة أو PDF للوصفة، أو ملف صوتي · attach prescription photo/PDF or a voice file">📎</button>
+    <input type="file" id="file" accept="image/*,application/pdf,.pdf,audio/*,.ogg,.opus,.m4a,.mp3,.wav,.webm" hidden>
+    <button id="mic" title="رسالة صوتية: اضغط للتسجيل واضغط مرة ثانية للإرسال · voice note: tap to record, tap again to send">🎤</button>
     <textarea id="msg" rows="1" dir="auto" placeholder="اكتب رسالة · Type a message"></textarea>
     <button id="send" title="send">➤</button>
   </footer>
@@ -93,7 +99,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 function bubble(who, text, debug, img, imgName) {
   const row = document.createElement("div");
   row.className = "row " + who;
-  let html = `<div class="bubble" dir="auto">${img ? (img.startsWith("data:application/pdf") ? `<div class="file">📄 ${esc(imgName || "prescription.pdf")}</div>` : `<img src="${img}" alt="prescription">`) : ""}${esc(text)}<span class="meta">${now()}${who === "me" ? '<span class="tick">✓✓</span>' : ""}</span>`;
+  const att = !img ? "" : img.startsWith("data:audio/") ? `<audio controls src="${img}"></audio>`
+    : img.startsWith("data:application/pdf") ? `<div class="file">📄 ${esc(imgName || "prescription.pdf")}</div>`
+    : `<img src="${img}" alt="prescription">`;
+  let html = `<div class="bubble" dir="auto">${att}${esc(text)}<span class="meta">${now()}${who === "me" ? '<span class="tick">✓✓</span>' : ""}</span>`;
   if (debug) html += `<div class="debug">${debug}</div>`;
   row.innerHTML = html + "</div>";
   chat.appendChild(row); chat.scrollTop = chat.scrollHeight;
@@ -139,9 +148,11 @@ async function api(path, body) {
 }
 async function sendText(text, image, imageName) {
   text = text.trim(); if ((!text && !image) || send.disabled) return;
+  if (image && image.startsWith("data:audio/")) text = "";   // a voice note carries no typed text
   bubble("me", text, null, image, imageName); msg.value = ""; msg.style.height = "auto";
-  send.disabled = true; $("#attach").disabled = true;
-  statusEl.textContent = image ? "يقرأ الوصفة… · reading prescription…" : "يكتب… · typing…";
+  send.disabled = true; $("#attach").disabled = true; $("#mic").disabled = true;
+  statusEl.textContent = !image ? "يكتب… · typing…" : image.startsWith("data:audio/")
+    ? "يسمع الرسالة الصوتية… · listening…" : "يقرأ الوصفة… · reading prescription…";
   const typing = bubble("bot typing", "…");
   const t0 = Date.now(), tick = setInterval(() => {      // the CPU model can take a while
     typing.querySelector(".bubble").firstChild.nodeValue = `… ${Math.round((Date.now() - t0) / 1000)}s`;
@@ -154,18 +165,48 @@ async function sendText(text, image, imageName) {
     typing.remove(); bubble("bot", "⚠️ " + e.message);
   } finally {
     clearInterval(tick);
-    send.disabled = false; $("#attach").disabled = false;
+    send.disabled = false; $("#attach").disabled = false; $("#mic").disabled = false;
     statusEl.textContent = "متصل · online" + (statusEl.dataset.who ? " — " + statusEl.dataset.who : ""); msg.focus();
   }
 }
 send.onclick = () => sendText(msg.value);
 $("#attach").onclick = () => $("#file").click();
+// 🎤 voice note (like WhatsApp): tap to record, tap again to send. Browsers only allow the
+// microphone on HTTPS (or localhost); on plain http, attach an audio file with 📎 instead.
+let rec = null, recChunks = [];
+$("#mic").onclick = async () => {
+  if (rec && rec.state === "recording") { rec.stop(); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices || !window.MediaRecorder) {
+    bubble("bot", "🎤 التسجيل من المتصفح يحتاج اتصالاً آمناً (https). أرفق ملفاً صوتياً من زر 📎 بدلاً من ذلك. · Recording needs https here — attach an audio file with 📎 instead.");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const type = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+    rec = new MediaRecorder(stream, type ? {mimeType: type} : undefined);
+    recChunks = [];
+    rec.ondataavailable = e => e.data.size && recChunks.push(e.data);
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      $("#mic").classList.remove("rec");
+      const blob = new Blob(recChunks, {type: rec.mimeType || "audio/webm"});
+      if (blob.size < 1000) return;                    // tapped twice by accident
+      const ext = (rec.mimeType || "audio/webm").includes("ogg") ? "ogg" : (rec.mimeType || "").includes("mp4") ? "m4a" : "webm";
+      const r = new FileReader();
+      r.onload = () => sendText(msg.value, r.result, "voice-note." + ext);
+      r.readAsDataURL(blob);
+    };
+    rec.start();
+    $("#mic").classList.add("rec");
+    setTimeout(() => rec && rec.state === "recording" && rec.stop(), 120000);   // 2 min max
+  } catch (e) { bubble("bot", "⚠️ " + e.message); }
+};
 $("#file").onchange = e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f) return;
   if (f.size > 8 * 1024 * 1024) { bubble("bot", "⚠️ الملف كبير جداً (الحد 8MB) · file too large (max 8 MB)"); return; }
   const r = new FileReader();
-  r.onload = () => sendText(msg.value, r.result, f.name);   // any typed text goes with the photo
+  r.onload = () => sendText(msg.value, r.result, f.name);   // any typed text goes with the photo / audio
   r.readAsDataURL(f);
 };
 msg.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(msg.value); } });

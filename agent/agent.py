@@ -146,6 +146,7 @@ class Conversation:
         self.flow: dict | None = None    # active identify/register step (agent/customer.py)
         self.awaiting_rx_order: int | None = None      # quotation waiting for a prescription photo
         self.awaiting_confirm_order: int | None = None # approved quotation waiting for "confirm & pay"
+        self.last_voice: dict | None = None            # last voice-note transcription (debug)
         self.order: dict | None = None   # order wizard state (agent/order_flow.py)
         self.started = False
         self.last_ts = 0.0
@@ -441,6 +442,37 @@ class PharmacyAgent:
             return self._say(conv, prefix + format_orders(res if "orders" in res else {},
                                                           conv.lang or "ar"), guard="menu")
         return self._say(conv, prefix + t[choice], guard="menu")      # new_order / questions
+
+    # ---- voice notes ------------------------------------------------------------
+    VOICE_TEXT = {
+        "ar": {"heard": "🎤 «{text}»", "unclear": "🎤 ما قدرت أسمع الرسالة الصوتية بوضوح، ممكن "
+                                                  "تعيدها بصوت أوضح أو تكتب طلبك؟",
+               "long": "(سمعت أول دقيقتين فقط من الرسالة)"},
+        "en": {"heard": "🎤 “{text}”", "unclear": "🎤 I couldn't hear the voice note clearly — "
+                                                 "could you record it again or type your request?",
+               "long": "(I only heard the first two minutes)"},
+    }
+
+    def respond_voice(self, conv: Conversation, audio: bytes, filename: str | None = None,
+                      transcriber=None) -> str:
+        """A voice note: transcribe it (Gulf-tuned Whisper, adapter/voice.py), then answer the
+        transcript exactly like a typed message. The reply starts with what was understood
+        («...») so the customer can correct a mishearing."""
+        if transcriber is None:
+            from voice import transcriber as default_transcriber
+            transcriber = default_transcriber()
+        tr = transcriber.transcribe(audio, filename)
+        self._audit(conv.conv_id, "voice", {k: v for k, v in tr.items() if k != "error"})
+        conv.last_voice = tr
+        if not conv.lang and conv.customer_facing:
+            conv.lang = "en" if tr.get("language") == "en" else "ar"
+        vt = self.VOICE_TEXT["en" if (conv.lang or "ar") == "en" else "ar"]
+        if tr["empty"]:
+            conv.messages.append({"role": "user", "content": "[voice note: not understood]"})
+            return self._say(conv, vt["unclear"], guard="voice_unclear")
+        reply = self.respond(conv, tr["text"])
+        head = vt["heard"].format(text=tr["text"]) + (("\n" + vt["long"]) if tr["truncated"] else "")
+        return head + "\n\n" + reply
 
     # ---- main entry -----------------------------------------------------------
     def respond(self, conv: Conversation, user_text: str, image: bytes | None = None,
