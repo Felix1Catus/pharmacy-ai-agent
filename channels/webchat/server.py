@@ -65,6 +65,18 @@ def _warm_asr():
 threading.Thread(target=_warm_asr, daemon=True).start()
 
 
+def _warm_tts():
+    try:
+        import tts
+        for _lg in ("ar", "en"):
+            tts.prewarm(_lg)               # pre-voice fixed prompts so read-back is instant
+    except Exception:
+        pass
+
+
+threading.Thread(target=_warm_tts, daemon=True).start()
+
+
 def auth(c: HTTPBasicCredentials = Depends(security)):
     ok = secrets.compare_digest(c.username.encode(), USER.encode()) and \
         secrets.compare_digest(c.password.encode(), PASSWORD.encode())

@@ -16,6 +16,7 @@ Engines (TTS_ENGINE in .env):
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import subprocess
@@ -41,6 +42,81 @@ EXPRESSIVE = float(os.environ.get("TTS_EXPRESSIVE", "0.667"))  # Piper noise_sca
 RHYTHM = float(os.environ.get("TTS_RHYTHM", "0.8"))          # Piper noise_w_scale
 PITCH = float(os.environ.get("TTS_PITCH", "1.0"))
 JOB_TTL_S = 600
+
+
+# ---- synthesis cache: a given (engine, lang, text) is voiced once, then served instantly ------
+# Most spoken replies are fixed strings (menu, wizard steps, confirmations); caching makes their
+# read-back instant instead of paying the model's first-sentence latency on every reply.
+_CACHE_DIR = Path(os.environ.get("TTS_CACHE_DIR",
+                                 str(Path(__file__).resolve().parent.parent / "results" / "tts_cache")))
+_CACHE_MAX = int(os.environ.get("TTS_CACHE_MAX", "4000"))
+_cache_mem: dict[str, bytes] = {}
+_cache_lock = threading.Lock()
+
+
+def _cache_key(text: str, lang: str) -> str:
+    return hashlib.sha1(f"{ENGINE}|{lang}|{text}".encode("utf-8")).hexdigest()
+
+
+def synth_cached(text: str, lang: str = "ar") -> bytes:
+    """engine().synth(text, lang), cached on disk + in memory so repeated/known lines are instant."""
+    eng = engine()
+    if eng is None:
+        return b""
+    key = _cache_key(text, lang)
+    with _cache_lock:
+        hit = _cache_mem.get(key)
+    if hit is not None:
+        return hit
+    f = _CACHE_DIR / f"{key}.wav"
+    try:
+        if f.exists():
+            data = f.read_bytes()
+            with _cache_lock:
+                _cache_mem[key] = data
+            return data
+    except OSError:
+        pass
+    data = eng.synth(text, lang)
+    if data:
+        try:
+            _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_name(f.name + ".tmp")
+            tmp.write_bytes(data)
+            tmp.replace(f)                        # atomic: a half-written file is never served
+        except OSError:
+            pass
+        with _cache_lock:
+            _cache_mem[key] = data
+            if len(_cache_mem) > _CACHE_MAX:
+                _cache_mem.clear()
+    return data
+
+
+def _fixed_prompts(lang: str) -> list:
+    """Static (no-placeholder) wizard strings worth pre-voicing."""
+    out = []
+    try:
+        import order_flow as _of
+        tt = _of.T.get(lang, {})
+        out += [v for v in tt.values() if isinstance(v, str) and "{" not in v]
+        if "bad_qty" in tt:
+            out.append(tt["bad_qty"].format(max=_of.MAX_QTY))
+    except Exception:
+        pass
+    return out
+
+
+def prewarm(lang: str = "ar", extra: list | None = None) -> None:
+    """Voice the common fixed prompts into the cache (call from a background thread at startup)."""
+    if engine() is None:
+        return
+    for s in _fixed_prompts(lang) + list(extra or []):
+        for sent in sentences(s, lang):
+            try:
+                synth_cached(sent, lang)
+            except Exception:
+                pass
 
 
 class PiperEngine:
@@ -145,8 +221,7 @@ class SpeechJob:
         def work():
             try:
                 if not self.cancelled:
-                    eng = engine()
-                    self._audio[i] = eng.synth(self.sentences[i], self.lang) if eng else b""
+                    self._audio[i] = synth_cached(self.sentences[i], self.lang)
             except Exception:
                 self._audio[i] = b""
             finally:
@@ -192,7 +267,7 @@ def whole_reply_ogg(text: str, lang: str = "ar") -> bytes | None:
     eng = engine()
     if eng is None:
         return None
-    parts = [eng.synth(s, lang) for s in sentences(text, lang)]
+    parts = [synth_cached(s, lang) for s in sentences(text, lang)]
     parts = [p for p in parts if p]
     if not parts:
         return None
