@@ -125,3 +125,13 @@ def test_chat_speech_endpoints_and_interrupt_note():
     conv = server._sessions[d["session_id"]]["conv"]
     assert conv.interrupt_note and "interrupted" in conv.interrupt_note
     assert c.get(f"/api/tts/{sp['job']}/1", auth=auth).status_code == 204
+
+
+@piper
+def test_pitch_shift_keeps_a_valid_wav_of_the_same_length():
+    import tts
+    plain = tts.engine().synth("أهلاً وسهلاً بك في الصيدلية")
+    shifted = tts.pitch_shift(plain, 1.05)
+    with wave.open(io.BytesIO(plain)) as a, wave.open(io.BytesIO(shifted)) as b:
+        la, lb = a.getnframes() / a.getframerate(), b.getnframes() / b.getframerate()
+    assert abs(la - lb) < 0.15 and lb < 30

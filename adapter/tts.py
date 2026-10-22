@@ -34,6 +34,12 @@ ENGINE = os.environ.get("TTS_ENGINE", "piper")
 PIPER_MODEL = os.environ.get("TTS_PIPER_MODEL", "/opt/tts/piper/ar_JO-kareem-medium.onnx")
 PIPER_MODEL_EN = os.environ.get("TTS_PIPER_MODEL_EN", "")        # optional English voice
 NAMAA_URL = os.environ.get("TTS_NAMAA_URL", "http://127.0.0.1:8095")
+# Piper voice character (.env): speed <1 = faster; expressive/rhythm = livelier intonation and
+# timing; pitch >1 = brighter. Defaults = the voice as shipped.
+SPEED = float(os.environ.get("TTS_SPEED", "1.0"))           # Piper length_scale
+EXPRESSIVE = float(os.environ.get("TTS_EXPRESSIVE", "0.667"))  # Piper noise_scale
+RHYTHM = float(os.environ.get("TTS_RHYTHM", "0.8"))          # Piper noise_w_scale
+PITCH = float(os.environ.get("TTS_PITCH", "1.0"))
 JOB_TTL_S = 600
 
 
@@ -46,14 +52,34 @@ class PiperEngine:
         self._lock = threading.Lock()
 
     def synth(self, text: str, lang: str = "ar") -> bytes:
+        from piper import SynthesisConfig
         voice = self._voices.get(lang) or self._voices["ar"]
+        cfg = SynthesisConfig(length_scale=SPEED, noise_scale=EXPRESSIVE, noise_w_scale=RHYTHM)
         buf = io.BytesIO()
         with self._lock, wave.open(buf, "wb") as w:
-            if hasattr(voice, "synthesize_wav"):
-                voice.synthesize_wav(text, w)
-            else:
-                voice.synthesize(text, w)
-        return buf.getvalue()
+            voice.synthesize_wav(text, w, syn_config=cfg)
+        data = buf.getvalue()
+        return pitch_shift(data, PITCH) if abs(PITCH - 1.0) > 0.005 else data
+
+
+def pitch_shift(wav_bytes: bytes, factor: float) -> bytes:
+    """Raise/lower the voice without changing its speed (resample + tempo correction)."""
+    with wave.open(io.BytesIO(wav_bytes)) as r:
+        rate = r.getframerate()
+    af = f"asetrate={int(rate * factor)},aresample={rate},atempo={1 / factor:.4f}"
+    # raw samples out (a WAV written to a pipe has no real length in its header), header added here
+    p = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "wav", "-i", "-", "-af", af,
+                        "-ac", "1", "-ar", str(rate), "-f", "s16le", "-"],
+                       input=wav_bytes, capture_output=True, timeout=30)
+    if p.returncode != 0 or not p.stdout:
+        return wav_bytes
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(p.stdout)
+    return out.getvalue()
 
 
 class NamaaEngine:
