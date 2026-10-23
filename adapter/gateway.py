@@ -585,6 +585,10 @@ class Gateway:
                                             ["state", "in", ["draft", "sent"]]]):
             return err("not_found", "no open quotation for this customer")
         self.c.write("sale.order", [order_id], {"customer_confirmed": True})
+        try:                                 # approved quote -> confirmed sales order, then payment
+            self.c.execute_kw("sale.order", "action_confirm", [[order_id]])
+        except OdooError:
+            pass                             # keep the confirmation recorded even if confirm validates
         return {**self.order_summary(order_id), "payment_link": self.payment_link(order_id)}
 
     def customer_cancels(self, order_id: int, customer_id: int) -> dict:
