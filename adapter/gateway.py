@@ -320,6 +320,7 @@ class Gateway:
         # resolve + guardrail restricted
         rx_used: set[int] = set()
         rx_review = False
+        rx_pids: list[int] = []
         for it in items:
             flags = self._product_flags(it["product_id"])
             if not flags:
@@ -335,6 +336,7 @@ class Gateway:
                     rx_used.add(rid)             # already pharmacist-approved for this customer
                 else:
                     rx_review = True             # quotation goes to the pharmacist for review
+                    rx_pids.append(it["product_id"])
         # choose branch
         if fulfillment == "pickup":
             if not branch_id:
@@ -382,11 +384,16 @@ class Gateway:
                          {"sale_order_id": oid, "state": "used"})
         review = "none"
         if rx_review:
-            # attach the prescription(s) the customer already sent (not yet on an order); a
-            # pharmacist approves/rejects in Odoo (Pharmacy > Prescription review)
+            # Only attach a prescription the customer sent JUST NOW for one of THIS order's
+            # rx products (photo-first flow); never a stale or unrelated one - otherwise ask
+            # for the photo for this order. A pharmacist then approves/rejects it in Odoo.
+            import datetime as _dt
+            cutoff = (_dt.datetime.utcnow() - _dt.timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
             sent = self.c.search("pharmacy.prescription", [
                 ["partner_id", "=", customer_id], ["sale_order_id", "=", False],
-                ["state", "in", ["submitted", "auto_verified"]]], order="id desc", limit=3)
+                ["state", "in", ["submitted", "auto_verified"]],
+                ["create_date", ">=", cutoff],
+                ["matched_product_ids", "in", rx_pids]], order="id desc", limit=3) if rx_pids else []
             if sent:
                 self.c.write("pharmacy.prescription", sent, {"sale_order_id": oid, "state": "submitted"})
             review = "pending" if sent else "awaiting_photo"
