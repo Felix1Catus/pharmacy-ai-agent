@@ -27,7 +27,8 @@ sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"),
 
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402
-from guards import ABUSE_HANDOVER, MEDICAL_REFUSAL, SCHEDULED_REFUSAL  # noqa: E402
+from guards import (ABUSE_HANDOVER, MEDICAL_REFUSAL, PHARMACIST_REFERRAL, SCHEDULED_REFUSAL,  # noqa: E402
+                    URGENT_REFERRAL)
 from llm import LLMClient  # noqa: E402
 from qwen_baseline import acceptable_actions, STATE_CHANGING  # noqa: E402
 
@@ -39,7 +40,7 @@ def decide(conv: Conversation, reply: str) -> dict:
     """Infer the agent's decision for scoring from the conversation + final reply."""
     tool_calls = [m["tool_calls"][0]["function"] for m in conv.messages if m.get("tool_calls")]
     names = [t["name"] for t in tool_calls]
-    if reply == MEDICAL_REFUSAL:
+    if reply in (MEDICAL_REFUSAL, PHARMACIST_REFERRAL, URGENT_REFERRAL):
         return {"action": "escalate_to_human", "reason": "medical_advice",
                 "via": "guard_medical", "tools": names}
     if reply == SCHEDULED_REFUSAL:

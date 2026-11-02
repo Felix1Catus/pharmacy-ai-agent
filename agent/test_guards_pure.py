@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from guards import abusive_intent, injection_attempt, is_affirmation, looks_in_scope, order_status_intent  # noqa: E402
+from guards import (abusive_intent, injection_attempt, is_affirmation, looks_in_scope,  # noqa: E402
+                    order_status_intent, pharmacist_complaint)
 from menu import detect_lang, localize, match_menu, menu_text, wants_menu  # noqa: E402
 
 INJECTIONS = [
@@ -161,3 +162,16 @@ def test_order_status_intent(text):
                                   "عندكم سنتروم؟", "متى تفتحون؟", "وين فرعكم في جدة"])
 def test_order_status_intent_ignores_new_orders_and_questions(text):
     assert not order_status_intent(text)
+
+
+@pytest.mark.parametrize("text,tier", [("بطني يوجعني", "refer"), ("عندي مغص", "refer"), ("معدتي تعورني من الصبح", "refer"),
+                                       ("my stomach hurts", "refer"), ("صدري يوجعني", "urgent"),
+                                       ("عندي ضيق في التنفس", "urgent"), ("ابوي يستفرغ دم", "urgent"), ("he fainted", "urgent")])
+def test_pharmacist_complaint(text, tier):
+    assert pharmacist_complaint(text) == tier
+
+
+@pytest.mark.parametrize("text", ["عندي ضغط", "جهاز قياس ضغط الدم", "فحص دم", "ابغي دوا للصداع", "عندي حموضة",
+                                  "بطانية للطفل", "ميزان حرارة", "صدر دجاج"])
+def test_pharmacist_complaint_leaves_ordinary_messages(text):
+    assert pharmacist_complaint(text) is None

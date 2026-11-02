@@ -31,6 +31,7 @@ T = {
         "no_price": "السعر عند الصيدلي",
         "alt_head": "بنفس المادة الفعالة:",
         "not_found": "ما لقيت «{q}» في منتجاتنا 🙁\nاكتب الاسم بطريقة ثانية، أو المادة الفعالة المكتوبة على العلبة.",
+        "need_note": "هذي منتجات بدون وصفة عندنا تخص {need}.\nللجرعة أو أي واحد يناسبك، اسأل الصيدلي 👨‍⚕️",
         "picked": "✅ {name} — {price}",
         "confirm_item": "لقيت: {name} — {price}\nهذا اللي تقصده؟",
         "yes_item": "✅ نعم، هذا", "no_item": "🔎 لا، دوّر غيره",
@@ -61,6 +62,7 @@ T = {
         "no_price": "price at the pharmacy",
         "alt_head": "Same active ingredient:",
         "not_found": "I couldn't find “{q}” in our products 🙁\nTry another spelling, or the active ingredient written on the box.",
+        "need_note": "These are our over-the-counter products for {need}.\nFor the dose or which one suits you, ask our pharmacist 👨‍⚕️",
         "picked": "✅ {name} — {price}",
         "confirm_item": "I found: {name} — {price}\nIs this the one you mean?",
         "yes_item": "✅ Yes, this one", "no_item": "🔎 No, search again",
@@ -234,9 +236,10 @@ class OrderFlow:
             for c in choices])
         conv.order = order
         exact = [c for c in cands if c.get("match") == "exact"]
-        if clear or (len(exact) == 1 and len(cands) == 1):
+        need = result.get("need")                # "something for a headache": the customer chooses
+        if not need and (clear or (len(exact) == 1 and len(cands) == 1)):
             return self._pick(conv, 0, prefix="")
-        if len(choices) == 1:                    # a single, weak/sound-alike match: confirm first
+        if len(choices) == 1 and not need:       # a single, weak/sound-alike match: confirm first
             return self._confirm_item(conv, 0)
         rows, n = [], 1
         for i, c in enumerate(order["choices"]):
@@ -246,6 +249,9 @@ class OrderFlow:
                                         rx=t["rx"] if c["rx"] else ""))
             n += 1
         note = ("\n" + result["note"]) if result.get("note") else ""
+        if need and result.get("need_label"):
+            label = result["need_label"].get(conv.lang or "ar") or result["need_label"]["en"]
+            note += "\n\n" + t["need_note"].format(need=label)
         buttons = [{"id": f"pick{i}", "label": f"{i + 1}. {c['name']}"[:24]} for i, c in enumerate(order["choices"])]
         return self.a._say(conv, t["list"].format(rows="\n".join(rows)) + note, guard="search_list",
                            buttons=buttons)

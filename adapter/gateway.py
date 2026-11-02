@@ -15,6 +15,7 @@ import json
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from itertools import zip_longest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,6 +23,7 @@ sys.path.insert(0, str(ROOT / "odoo"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from odoo_client import OdooClient, OdooError  # noqa: E402
 from fuzzy_search import FuzzyIndex, normalize  # noqa: E402
+from needs import NEEDS, detect_need  # noqa: E402
 import ingredients as ingr  # noqa: E402
 import prescription as rx  # noqa: E402
 
@@ -185,7 +187,60 @@ class Gateway:
         return [rows[i] for i in ids if i in rows]
 
     def search_product(self, query: str = "", branch_id: int | None = None, limit: int = 5,
-                       active_ingredient: str | None = None):
+                       active_ingredient: str | None = None, need: str | None = None):
+        """Find what the customer means: by name or active ingredient (_find), and - when nothing
+        is named - by NEED ("something for a headache"): the model passes `need` (or the customer's
+        words reveal one, needs.detect_need) and the fixed NEEDS table picks over-the-counter products.
+        A named product always wins; the model never chooses a medicine for a need itself."""
+        need = need if need in NEEDS else None
+        if (query or "").strip() in NEEDS:       # the model put the need's name in query
+            need, query = need or query.strip(), ""
+        if not (query and query.strip()) and not active_ingredient:
+            if not need:
+                return err("invalid_input", "query or need is required")
+            return self._need_search(need, branch_id, limit)
+        found = self._find(query, branch_id, limit, active_ingredient)
+        # a real match (exact name or active ingredient) wins; loose sound-alikes don't beat a need
+        strong = any(c.get("match") in ("exact", "active ingredient")
+                     for c in (found.get("candidates") or []) + (found.get("alternatives") or []))
+        if strong or active_ingredient:
+            return found
+        key = need or detect_need(query)
+        if not key and (found.get("candidates") or found.get("alternatives")):
+            return found
+        if key:
+            by_need = self._need_search(key, branch_id, limit)
+            if by_need.get("candidates"):
+                return by_need
+        return found
+
+    def _need_search(self, key: str, branch_id: int | None, limit: int) -> dict:
+        """Over-the-counter products for a customer need, from the fixed NEEDS table: each term's
+        direct matches, interleaved (paracetamol, ibuprofen, paracetamol, ...), never Rx/scheduled."""
+        lim = max(1, min(limit, 20))
+        per_term = []
+        for term in NEEDS[key]["terms"]:
+            r = self._find(term, branch_id, lim, None)
+            per_term.append([c for c in (r.get("candidates") or [])
+                             if c.get("match") in ("exact", "active ingredient")
+                             and not (c.get("requires_prescription") or c.get("is_restricted")
+                                      or c.get("is_scheduled"))])
+        cands, seen = [], set()
+        for row in zip_longest(*per_term):
+            for c in row:
+                if c and c["product_id"] not in seen:
+                    seen.add(c["product_id"])
+                    cands.append(c)
+        label = {"ar": NEEDS[key]["ar"], "en": NEEDS[key]["en"]}
+        if not cands:
+            return {"candidates": [], "need": key, "need_label": label,
+                    "hint": "Nothing over-the-counter in stock for this need - offer the pharmacist."}
+        return {"candidates": cands[:lim], "need": key, "need_label": label,
+                "hint": (f"Over-the-counter products we carry for {label['en']}. Show them; never say which "
+                         f"one to take or how much - dose and suitability questions go to the pharmacist.")}
+
+    def _find(self, query: str = "", branch_id: int | None = None, limit: int = 5,
+              active_ingredient: str | None = None):
         """Find what the customer means, by name OR by active ingredient.
 
         - A brand/name query ("augmentin", "بندول") returns name matches (exact, then sound-alike)
@@ -201,7 +256,7 @@ class Gateway:
             # branch id (the model guessed one) is ignored, and if nothing is in stock at a real
             # branch the products are still returned with a note
             b = self._branch(branch_id)
-            unfiltered = self.search_product(query, None, limit, active_ingredient)
+            unfiltered = self._find(query, None, limit, active_ingredient)
             if not b:
                 unfiltered["note_branch"] = (f"branch_id {branch_id} does not exist - call "
                                              f"list_branches; results are for all branches")

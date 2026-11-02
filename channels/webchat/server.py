@@ -130,7 +130,7 @@ def reset(body: dict):
 GUARD_LABELS = {
     "menu": "menu (fixed reply)", "injection": "prompt-injection guard",
     "off_topic": "off-topic guard", "output_filter": "output filter (leak blocked)",
-    "medical": "medical-advice guard", "scheduled": "scheduled-medicine guard",
+    "medical": "medical-advice guard", "pharmacist_referral": "symptom -> pharmacist referral", "scheduled": "scheduled-medicine guard",
     "scheduled_tool": "scheduled-medicine guard", "scheduled_search": "scheduled-medicine guard",
     "scheduled_prescription": "scheduled-medicine guard (prescription)",
     "prescription_tool": "prescription needed -> asked for photo",

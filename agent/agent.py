@@ -37,9 +37,11 @@ sys.path.insert(0, str(ROOT / "agent"))
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
 from gateway import err  # noqa: E402
+from needs import detect_need  # noqa: E402
 from guards import (ScheduledDenylist, abusive_intent, injection_attempt, is_affirmation,  # noqa: E402
                     looks_in_scope, medical_advice_intent, order_status_intent, prescription_rejected,
-                    reply_gives_medical_advice, ABUSE_HANDOVER,
+                    reply_gives_medical_advice, pharmacist_complaint, ABUSE_HANDOVER,
+                    PHARMACIST_REFERRAL, URGENT_REFERRAL,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E402
 from llm import LLMClient  # noqa: E402
@@ -76,9 +78,12 @@ SYSTEM_PROMPT = (
     "6. Insults, swearing or abuse aimed at us or our staff: use the escalate_to_human tool with "
     "reason abusive; never argue or reply in kind.\n"
     "WHAT TO DO:\n"
-    "- Any product or medicine mentioned (name, brand, ingredient, symptom product): call "
-    "search_product at once with the product words only. The system then shows the options and "
-    "takes the order (quantity, pickup/delivery, confirmation) itself.\n"
+    "- Any product or medicine mentioned (name, brand, ingredient): call search_product at once "
+    "with the product words only. Something wanted FOR a symptom or purpose with no product named "
+    "(\"دوا للصداع\", \"something for a blocked nose\"): call search_product with need set to that "
+    "need and the customer's words as query - the system picks the products; never choose a "
+    "medicine or ingredient yourself. The system then shows the options and takes the order "
+    "(quantity, pickup/delivery, confirmation) itself.\n"
     "- Questions about an existing order (where it is, when it arrives, whether it shipped): "
     "track_order - never create_order or hold_item.\n"
     "- Branches: list_branches. Stock question about a product already "
@@ -302,6 +307,10 @@ class PharmacyAgent:
             asked = self.gw._ingr.resolve_name(args.get("active_ingredient") or args.get("query") or "")
             if said and len(said) > len(asked):
                 args["active_ingredient"] = ", ".join(sorted(said))
+            if not args.get("need"):              # the customer's words reveal a need the model left out
+                need = detect_need(conv.last_user_text)
+                if need:
+                    args["need"] = need
         if name == "search_product" and args.get("active_ingredient") \
                 and not self._grounded(conv, args["active_ingredient"]):
             # the model's own drug knowledge is not trusted (it once mapped Hibiotic to
@@ -378,7 +387,7 @@ class PharmacyAgent:
         out = {"candidates": [row(x) for x in (result.get("candidates") or [])[:5]]}
         if result.get("alternatives"):
             out["alternatives"] = [row(x) for x in result["alternatives"][:3]]
-        for k in ("note", "note_branch", "hint", "active_ingredient"):
+        for k in ("note", "note_branch", "hint", "active_ingredient", "need"):
             if result.get(k):
                 out[k] = result[k]
         return out
@@ -566,6 +575,12 @@ class PharmacyAgent:
             self._escalate(conv, "restricted_item",
                            f"deterministic scheduled-med guard matched {hit!r}: {raw}")
             return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled", matched=hit)
+        # vague or possibly serious complaints ("بطني يوجعني", chest pain) go to the pharmacist, never a list
+        complaint = pharmacist_complaint(raw)
+        if complaint:
+            self._escalate(conv, "medical_advice", f"symptom for the pharmacist ({complaint}): {raw}")
+            return self._say(conv, URGENT_REFERRAL if complaint == "urgent" else PHARMACIST_REFERRAL,
+                             guard="pharmacist_referral", escalated=True)
         if abusive_intent(raw):
             self._escalate(conv, "abusive", f"deterministic abuse guard: {raw}")
             return self._say(conv, ABUSE_HANDOVER, guard="abusive", escalated=True)
@@ -613,7 +628,8 @@ class PharmacyAgent:
         elif conv.order and conv.order.get("step") not in (None, "add") and (
                 reply := self.order.handle(conv, raw)) is not None:
             return reply                         # next step of the order wizard (no model)
-        elif conv.customer_facing and not looks_in_scope(raw):
+        elif conv.customer_facing and not looks_in_scope(raw) and not detect_need(raw):
+            # (a symptom / need statement - "عندي حموضة من امس" - is in scope: it asks for a product)
             # mid-flow answers (a quantity, a short address) pass; long off-topic questions don't
             prev = next((m["content"] for m in reversed(conv.messages[:-1])
                          if m["role"] == "assistant"), "")
@@ -754,7 +770,7 @@ class PharmacyAgent:
                 # the model often shortens the query ("بنادول" for "بنادول اكسترا"): also search the
                 # customer's own product words and merge, so the exact product is in the list
                 core = " ".join(fuzzy_words(raw))
-                if core and normalize(core) != normalize(args.get("query") or ""):
+                if core and normalize(core) != normalize(args.get("query") or "") and not result.get("need"):
                     extra = self.gw.search_product(query=core)
                     if isinstance(extra, dict) and "error" not in extra:
                         seen = {c["product_id"] for c in result.get("candidates") or []}

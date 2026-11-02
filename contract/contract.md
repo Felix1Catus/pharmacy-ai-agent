@@ -14,7 +14,7 @@ pickup/delivery). The agent must confirm before calling them.
 
 | Action | Confirmed intent | State-changing | Notes |
 |---|---|---|---|
-| `search_product` | no | no | resolve the product first; never guess between candidates |
+| `search_product` | no | no | resolve the product first; never guess between candidates. `need` (fixed list) = what the customer wants something FOR when no product is named; the system picks over-the-counter products (adapter/needs.py), never the model |
 | `check_stock` | no | no | never invent stock numbers |
 | `create_order` | **yes** | yes | restricted/prescription items → escalate, do **not** order |
 | `create_dispatch` | **yes** | yes | only after a successful `create_order` |
