@@ -110,7 +110,10 @@ def page():
 
 @app.get("/api/models", dependencies=[Depends(auth)])
 def models():
-    names = [m["name"] for m in requests.get(f"{OLLAMA}/api/tags", timeout=10).json()["models"]]
+    try:   # Ollama lists its models; llama-server (LLM_API=openai) serves only the one it loaded
+        names = [m["name"] for m in requests.get(f"{OLLAMA}/api/tags", timeout=10).json()["models"]]
+    except Exception:  # noqa: BLE001
+        names = []
     usable = [n for n in names if "Qwen3-4B-Instruct-2507" in n or n.startswith("pharmacy-")]
     return {"default": DEFAULT_MODEL, "models": [DEFAULT_MODEL] + [n for n in usable if n != DEFAULT_MODEL]}
 

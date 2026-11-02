@@ -106,7 +106,8 @@ _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:
 # Only escalations are recovered from text (the safe direction); any other tool-like text stays a leak.
 _TEXT_ESCALATION = re.compile(r"escalate_to_human\b.{0,80}?\breason\s*[=:]\s*[\"']?(medical_advice|"
                               r"restricted_item|low_confidence|abusive|unclear|out_of_scope)\b", re.S)
-_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
+_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|branch_id|branch id|customer_id|"
+                         r"handover_id|hold_id|id|رقم المنتج|معرف المنتج|رقم الفرع|معرف الفرع)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
 # a model reply claiming an order exists ("تم تأكيد طلبك", "رقم الطلب: 10452") - only allowed if
 # create_order/hold_item really succeeded this turn (the model once invented order 10452)
