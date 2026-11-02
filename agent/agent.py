@@ -55,7 +55,7 @@ _VOICE_REFINE_SYS = ("أنت تصحّح نصاً ناتجاً عن تحويل ك
 
 CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
 from rapidfuzz import fuzz  # noqa: E402
-from menu import (TEXTS, detect_lang, format_orders, localize, match_menu,  # noqa: E402
+from menu import (TEXTS, detect_lang, format_orders, is_greeting, localize, match_menu,  # noqa: E402
                   menu_items, menu_text, wants_menu)
 
 AUDIT = ROOT / "results" / "audit.jsonl"
@@ -560,10 +560,12 @@ class PharmacyAgent:
 
         # --- opening menu / menu choices (customer-facing channels) ---
         if conv.customer_facing and not resumed:
-            choice = match_menu(raw, conv.menu_shown) if raw.strip() else None
+            # a bare 1-5 is a quantity only inside the order wizard; anywhere else it is the menu
+            in_wizard = bool(conv.order and conv.order.get("step") not in (None, "add"))
+            choice = match_menu(raw, conv.menu_shown or not in_wizard) if raw.strip() else None
             if choice:
                 return self._menu_choice(conv, choice)
-            if (new_session and not image) or wants_menu(raw):
+            if (new_session and not image) or wants_menu(raw) or (is_greeting(raw) and not in_wizard):
                 return self._say(conv, self.menu_text_for(conv), guard="menu", menu=True)
 
         # --- deterministic guards BEFORE the LLM (do not depend on the model) ---
