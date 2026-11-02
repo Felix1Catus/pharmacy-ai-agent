@@ -27,7 +27,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"),
 
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402
-from guards import MEDICAL_REFUSAL, SCHEDULED_REFUSAL  # noqa: E402
+from guards import ABUSE_HANDOVER, MEDICAL_REFUSAL, SCHEDULED_REFUSAL  # noqa: E402
 from llm import LLMClient  # noqa: E402
 from qwen_baseline import acceptable_actions, STATE_CHANGING  # noqa: E402
 
@@ -45,6 +45,9 @@ def decide(conv: Conversation, reply: str) -> dict:
     if reply == SCHEDULED_REFUSAL:
         return {"action": "escalate_to_human", "reason": "restricted_item",
                 "via": "guard_scheduled", "tools": names}
+    if reply == ABUSE_HANDOVER:
+        return {"action": "escalate_to_human", "reason": "abusive",
+                "via": "guard_abusive", "tools": names}
     if "escalate_to_human" in names:
         args = next(t["arguments"] for t in tool_calls if t["name"] == "escalate_to_human")
         return {"action": "escalate_to_human", "reason": (args or {}).get("reason"),

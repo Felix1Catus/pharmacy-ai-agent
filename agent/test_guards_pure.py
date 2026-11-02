@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from guards import injection_attempt, is_affirmation, looks_in_scope  # noqa: E402
+from guards import abusive_intent, injection_attempt, is_affirmation, looks_in_scope, order_status_intent  # noqa: E402
 from menu import detect_lang, localize, match_menu, menu_text, wants_menu  # noqa: E402
 
 INJECTIONS = [
@@ -136,3 +136,28 @@ def test_localize_keeps_english_sentences_with_dashes():
 @pytest.mark.parametrize("text", ["تاكيد", "تأكيد", "تأكيد الطلب", "ايه اكد", "ثبته", "يلا اطلبه"])
 def test_confirmation_words(text):
     assert is_affirmation(text), text
+
+
+@pytest.mark.parametrize("text", ["يا غبي رد علي", "انتم حرامية", "خدمتكم زفت", "you are useless",
+                                  "idiots, answer me", "يلعن هالصيدلية"])
+def test_abusive_intent_flags_insults(text):
+    assert abusive_intent(text)
+
+
+@pytest.mark.parametrize("text", ["عندي خراج في السن، عندكم مرهم؟", "ابي اكياس زبالة كبيرة",
+                                  "عندكم بنادول؟", "where is my order", "حقيبة اسعافات اولية",
+                                  "شامبو للكلاب", "the medicine was useful"])
+def test_abusive_intent_leaves_ordinary_messages(text):
+    assert not abusive_intent(text)
+
+
+@pytest.mark.parametrize("text", ["طلبي وين وصل؟", "متى يوصل طلبي", "الاوردر بتاعي فين؟", "where is my order?",
+                                  "has my order shipped", "أين طلبي؟"])
+def test_order_status_intent(text):
+    assert order_status_intent(text)
+
+
+@pytest.mark.parametrize("text", ["Order 1 Centrum for delivery to Olaya", "ابي اطلب بنادول توصيل",
+                                  "عندكم سنتروم؟", "متى تفتحون؟", "وين فرعكم في جدة"])
+def test_order_status_intent_ignores_new_orders_and_questions(text):
+    assert not order_status_intent(text)

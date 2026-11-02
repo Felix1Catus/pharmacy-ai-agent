@@ -193,7 +193,46 @@ class ScheduledDenylist:
         return None
 
 
+# ---- 1b. abuse --------------------------------------------------------------
+# Insults/swearing aimed at the pharmacy or staff -> fixed polite reply + handover (reason=abusive).
+# The model prefers to de-escalate and rarely escalates abuse itself, so this is deterministic too.
+# Whole words only (with Arabic prefixes/suffixes): "خراج" (abscess) must not match "خرا", and
+# product words such as "زبالة" (أكياس زبالة, trash bags) are deliberately not listed.
+_ABUSE_AR = ["غبي", "اغبيا", "حمار", "حمير", "كلب", "كلاب", "حيوان", "حقير", "تافه", "زفت", "خرا", "فاشل",
+             "حرامي", "حراميه", "حراميه", "نصاب", "نصابين", "لصوص", "هباب", "وسخ", "قذر", "منحط", "سافل",
+             "يلعن", "لعنه", "انقلع", "اخرس", "اخرسي", "تفو", "متخلف", "متخلفين", "ابله", "اهبل", "هبل"]
+_ABUSE_AR_RE = re.compile(r"(?<![\w])(?:و|ف|ب|ال|وال|يا ?)?(?:" + "|".join(_ABUSE_AR) + r")(?:ين|ون|ات|ه|ها|كم|كن)?(?![\w])")
+_ABUSE_EN_RE = re.compile(r"\b(idiots?|stupid|useless|morons?|dumb|fuck\w*|shit\w*|bastards?|scam(mers?)?|"
+                          r"thie(f|ves)|incompetent|pathetic|you suck|losers?|damn you|go to hell)\b")
+
+
+def abusive_intent(text: str) -> bool:
+    n = normalize(text)
+    return bool(_ABUSE_AR_RE.search(n) or _ABUSE_EN_RE.search(n))
+
+
+# ---- 1c. order status -------------------------------------------------------
+# "Where is my order / has it shipped?" is answered with track_order by fixed logic: given all tools the
+# model often reached for create_order instead. Needs BOTH the customer's own order ("طلبي", "my order")
+# and a status word, so a new order ("Order 1 Centrum for delivery") is never routed here.
+_MY_ORDER = (r"(طلبي|طلبيتي|طلباتي|اوردري|الطلب (تبعي|بتاعي|حقي|مالي|تاعي)|الاوردر (تبعي|بتاعي|حقي|مالي)|"
+             r"my orders?\b|order status|status of (my )?order|track (my )?order|my delivery|my parcel)")
+_STATUS = (r"(وين|فين|اين|متي|امتي|ايمتي|وصل|يوصل|توصل|وصلو|شحن|اتشحن|انشحن|تاخر|اتاخر|متاخر|حال|صار|"
+           r"where|when|arriv|ship|track|late|delay|status|deliver|order)")
+
+
+def order_status_intent(text: str) -> bool:
+    n = normalize(text)
+    return bool(re.search(_MY_ORDER, n) and re.search(_STATUS, n))
+
+
 # ---- canned replies ------------------------------------------------------
+ABUSE_HANDOVER = (
+    "نعتذر إن كانت تجربتك غير مرضية. حوّلت محادثتك لأحد زملائنا وسيتواصل معك قريباً. "
+    "— We're sorry your experience wasn't good. I've passed your conversation to a colleague, "
+    "who will contact you shortly."
+)
+
 MEDICAL_REFUSAL = (
     "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. "
     "يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة). "

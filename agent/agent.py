@@ -37,9 +37,9 @@ sys.path.insert(0, str(ROOT / "agent"))
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
 from gateway import err  # noqa: E402
-from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noqa: E402
-                    looks_in_scope, medical_advice_intent, prescription_rejected,
-                    reply_gives_medical_advice,
+from guards import (ScheduledDenylist, abusive_intent, injection_attempt, is_affirmation,  # noqa: E402
+                    looks_in_scope, medical_advice_intent, order_status_intent, prescription_rejected,
+                    reply_gives_medical_advice, ABUSE_HANDOVER,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E402
 from llm import LLMClient  # noqa: E402
@@ -73,17 +73,21 @@ SYSTEM_PROMPT = (
     "4. Never state anything a tool did not return: no invented products, prices, stock, order "
     "numbers, links or times.\n"
     "5. Scheduled/controlled medicines (is_scheduled): call escalate_to_human reason=restricted_item.\n"
+    "6. Insults, swearing or abuse aimed at us or our staff: use the escalate_to_human tool with "
+    "reason abusive; never argue or reply in kind.\n"
     "WHAT TO DO:\n"
     "- Any product or medicine mentioned (name, brand, ingredient, symptom product): call "
     "search_product at once with the product words only. The system then shows the options and "
     "takes the order (quantity, pickup/delivery, confirmation) itself.\n"
-    "- Order status: track_order. Branches: list_branches. Stock question about a product already "
+    "- Questions about an existing order (where it is, when it arrives, whether it shipped): "
+    "track_order - never create_order or hold_item.\n"
+    "- Branches: list_branches. Stock question about a product already "
     "found: check_stock.\n"
     "- Never ask for the customer's name, phone or address - the system has or collects them.\n"
     "- Prescription-only medicines are ordered normally; a pharmacist reviews the prescription.\n"
     "- If create_order is available: call it only after the customer confirmed the exact items, "
     "quantities and pickup branch or delivery.\n"
-    "- Unclear message: ask one short question. Abusive: escalate_to_human reason=abusive."
+    "- Unclear message: ask one short question."
 )
 LANG_HINT = {"ar": "\n\n(Reply only in Arabic, Saudi dialect.)",
              "en": "\n\n(Reply only in English.)"}
@@ -97,6 +101,11 @@ SESSION_GAP_S = 6 * 3600             # a WhatsApp chat idle this long starts ove
 _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:", "tool_call",
                  "<|im_", "search_product", "check_stock", "create_order", "create_dispatch",
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
+# the model sometimes WRITES an escalation as text ("call escalate_to_human reason=abusive summary=...")
+# instead of calling the tool; the leak filter would then drop it and the handover never happens.
+# Only escalations are recovered from text (the safe direction); any other tool-like text stays a leak.
+_TEXT_ESCALATION = re.compile(r"escalate_to_human\b.{0,80}?\breason\s*[=:]\s*[\"']?(medical_advice|"
+                              r"restricted_item|low_confidence|abusive|unclear|out_of_scope)\b", re.S)
 _ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
 # a model reply claiming an order exists ("تم تأكيد طلبك", "رقم الطلب: 10452") - only allowed if
@@ -556,6 +565,23 @@ class PharmacyAgent:
             self._escalate(conv, "restricted_item",
                            f"deterministic scheduled-med guard matched {hit!r}: {raw}")
             return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled", matched=hit)
+        if abusive_intent(raw):
+            self._escalate(conv, "abusive", f"deterministic abuse guard: {raw}")
+            return self._say(conv, ABUSE_HANDOVER, guard="abusive", escalated=True)
+        # "where is my order?" -> track_order by fixed logic (the model often reached for create_order)
+        if order_status_intent(raw) and not image:
+            if not conv.customer_id:
+                return self.customer.start(conv, pending={"kind": "menu", "choice": "track_order"})
+            args = {"customer_id": conv.customer_id}
+            res = self.gw.track_order(**args)
+            conv.messages.append({"role": "assistant", "content": "",
+                                  "tool_calls": [{"function": {"name": "track_order", "arguments": args}}]})
+            conv.messages.append({"role": "tool", "tool_name": "track_order",
+                                  "content": json.dumps(self._compact("track_order", res), ensure_ascii=False)})
+            self._audit(conv.conv_id, "tool_call", {"action": "track_order", "via": "order_status_guard",
+                                                    "result": res})
+            return self._say(conv, format_orders(res if "orders" in res else {}, conv.lang or "ar"),
+                             guard="order_status")
 
         # --- attached prescription photo/PDF: OCR + deterministic checks (not the model) ---
         if image and conv.customer_facing and not conv.customer_id:
@@ -624,6 +650,11 @@ class PharmacyAgent:
                 msgs[turn] = {**msgs[turn], "content": msgs[turn]["content"] + hint}
             out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + msgs,
                                 tools=self.tools_cf if conv.customer_facing else self.tools)
+            text_esc = None if out["tool_calls"] else _TEXT_ESCALATION.search(out["content"] or "")
+            if text_esc:
+                self._audit(conv.conv_id, "text_escalation", {"model_text": out["content"][:300]})
+                out = {"content": "", "tool_calls": [{"name": "escalate_to_human", "arguments": {
+                    "reason": text_esc.group(1), "summary": "model wrote the escalation as text"}}]}
             fake_order = (not out["tool_calls"]
                           and bool(_CLAIMS_ORDER.search(normalize(out["content"] or ""))))
             if fake_order and nudged:            # still claiming an order that doesn't exist
