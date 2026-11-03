@@ -1,6 +1,6 @@
 {
   "name": "escalate_to_human",
-  "description": "Hand the conversation to a pharmacist (medical advice, restricted item, abusive, unclear).",
+  "description": "Hand the conversation to a pharmacist or colleague (medical advice, restricted item, complaint, abusive, unclear).",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
@@ -13,7 +13,8 @@
           "low_confidence",
           "abusive",
           "unclear",
-          "out_of_scope"
+          "out_of_scope",
+          "complaint"
         ]
       },
       "summary": {
