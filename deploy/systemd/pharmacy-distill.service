@@ -1,0 +1,17 @@
+[Unit]
+Description=Pharmacy agent - distillation data pipeline (Claude Code teacher, resumes after usage limits)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=@REPO@/distill
+# the teacher's own Claude Code login: CLAUDE_CONFIG_DIR=/opt/claude-distill /opt/claude-cli/claude, then /login
+Environment=CLAUDE_CONFIG_DIR=/opt/claude-distill
+Environment=TEACHER=claude TEACHER_MODEL=opus TARGET_VALID=5000 DISTILL_REPO=@SNAPSHOT@ DISTILL_LOG=@REPO@/distill/distill.log
+ExecStart=@REPO@/.venv/bin/python @REPO@/distill/distill.py run
+Restart=on-failure
+RestartSec=60
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

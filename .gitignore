@@ -23,3 +23,9 @@ results/ft_4b_r3/adapter/
 results/ft_4b_r3/checkpoints/
 results/release/
 results/webchat_sessions/
+# distillation working files (the dataset lives in distill/data/)
+distill/state.db
+distill/out/
+distill/work/
+distill/test/
+distill/*.log

@@ -1,0 +1,23 @@
+# Public HTTPS for the test chat and Odoo. @IP@ / @DASHED@ are filled in by deploy/bootstrap_gpu.sh.
+# sslip.io names resolve to the IP and get real Let's Encrypt certificates (needs ports 80 and 443 open).
+chat.@DASHED@.sslip.io {
+	bind @IP@
+	reverse_proxy 127.0.0.1:8090
+}
+
+odoo.@DASHED@.sslip.io {
+	bind @IP@
+	reverse_proxy 127.0.0.1:8069
+}
+
+# fallbacks with a self-signed certificate (the browser warns once)
+https://@IP@:8443 {
+	tls internal
+	reverse_proxy 127.0.0.1:8090
+}
+
+https://@IP@:8069 {
+	bind @IP@
+	tls internal
+	reverse_proxy 127.0.0.1:8069
+}

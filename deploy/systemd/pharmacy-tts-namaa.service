@@ -1,0 +1,13 @@
+[Unit]
+Description=Pharmacy agent - NAMAA-Saudi-TTS service (adapter/tts_server.py) on GPU0
+After=network-online.target
+
+[Service]
+WorkingDirectory=@REPO@
+Environment=CUDA_VISIBLE_DEVICES=0
+ExecStart=/opt/tts/namaa-venv/bin/uvicorn --app-dir adapter tts_server:app --host 127.0.0.1 --port 8095
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
