@@ -36,4 +36,4 @@ The bootstrap seeds sample data and imports the SFDA file. To carry the live Odo
 ## Not automated
 - WhatsApp Cloud API credentials (`WHATSAPP_*` in `.env`) and the webhook service.
 - The distillation teacher's Claude Code login (`distill/README.md`).
-- Fine-tuned models: see `train/` (the dataset is in `distill/data/`).
+- Fine-tuned models: see `train/README.md` (the dataset is in `distill/data/`; `train/pipeline_v2.sh` runs labels -> train -> eval unattended).

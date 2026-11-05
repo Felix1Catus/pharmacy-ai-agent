@@ -1,0 +1,18 @@
+[Unit]
+Description=Pharmacy agent - unattended v2 fine-tune (Claude follow-up labels -> train -> merge -> eval -> restore live)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/bench/train/pipeline_v2.sh
+# exits 0 when every stage is done (stays stopped); any failure retries after 10 minutes, resuming at the
+# stage it stopped in (training from its last checkpoint)
+Restart=on-failure
+RestartSec=600
+TimeoutStopSec=120
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

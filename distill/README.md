@@ -35,5 +35,11 @@ python3 -I distill/dashboard.py                                   # live progres
 ```
 The CLI binary: copy the `claude` executable to `/opt/claude-cli/claude` (any Claude Code install).
 
+## The step after a tool result (`followup.py`)
+`distill.py` labels only the first action. `followup.py` replays each first-step `track_order` / `list_branches`
+label through the real agent (scripted model, real Odoo), records the next model request and has the teacher
+label it; output `out/followup_{train,val}.jsonl` (same id-hash split). Without these examples a fine-tuned
+model loops tool calls (see `train/README.md`, v1).
+
 ## Review page
 `review_page/` (index.html + items.json) is the round-1 review tool (published as a private claude.ai artifact).
