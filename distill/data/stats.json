@@ -1,0 +1,30 @@
+{
+ "updated": "2026-11-04T17:14:35",
+ "counts": {
+  "handled": 4142,
+  "label_failed": 20,
+  "model": 3,
+  "review": 475,
+  "valid": 5000
+ },
+ "train": 4712,
+ "val": 288,
+ "review": 475,
+ "valid_by_category": {
+  "fuzzy_product": 276,
+  "injection": 59,
+  "medical_advice": 490,
+  "order_first": 135,
+  "order_status": 784,
+  "out_of_scope": 294,
+  "reserve_first": 76,
+  "restricted": 326,
+  "rude": 334,
+  "stock_price": 112,
+  "store_info": 823,
+  "symptom_need": 947,
+  "unclear": 344
+ },
+ "calls_ok": 865,
+ "calls_failed": 16
+}

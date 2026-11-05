@@ -193,7 +193,93 @@ class ScheduledDenylist:
         return None
 
 
+# ---- 1b. abuse --------------------------------------------------------------
+# Insults/swearing aimed at the pharmacy or staff -> fixed polite reply + handover (reason=abusive).
+# The model prefers to de-escalate and rarely escalates abuse itself, so this is deterministic too.
+# Whole words only (with Arabic prefixes/suffixes): "خراج" (abscess) must not match "خرا", and
+# product words such as "زبالة" (أكياس زبالة, trash bags) are deliberately not listed.
+_ABUSE_AR = ["غبي", "اغبيا", "حمار", "حمير", "كلب", "كلاب", "حيوان", "حقير", "تافه", "زفت", "خرا", "فاشل",
+             "حرامي", "حراميه", "حراميه", "نصاب", "نصابين", "لصوص", "هباب", "وسخ", "قذر", "منحط", "سافل",
+             "يلعن", "لعنه", "انقلع", "اخرس", "اخرسي", "تفو", "متخلف", "متخلفين", "ابله", "اهبل", "هبل"]
+_ABUSE_AR_RE = re.compile(r"(?<![\w])(?:و|ف|ب|ال|وال|يا ?)?(?:" + "|".join(_ABUSE_AR) + r")(?:ين|ون|ات|ه|ها|كم|كن)?(?![\w])")
+_ABUSE_EN_RE = re.compile(r"\b(idiots?|stupid|useless|morons?|dumb|fuck\w*|shit\w*|bastards?|scam(mers?)?|"
+                          r"thie(f|ves)|incompetent|pathetic|you suck|losers?|damn you|go to hell)\b")
+
+
+def abusive_intent(text: str) -> bool:
+    n = normalize(text)
+    return bool(_ABUSE_AR_RE.search(n) or _ABUSE_EN_RE.search(n))
+
+
+# ---- 1e. complaints for the pharmacist ----------------------------------------
+# Vague or possibly serious complaints never get a product list: the pharmacist has to ask about them
+# first ("بطني يوجعني" has many causes). Urgent ones (chest pain, breathing, bleeding, fainting) also
+# get emergency advice. Kept tight: "عندي ضغط" (blood pressure), "جهاز قياس ضغط الدم", "فحص دم" don't match.
+_BODY_STOMACH = r"(بطن|بطني|بطنه|بطنها|بطنك|معده|معدتي|معدته|معدتها)"
+_HURTS = r"(يوجع|توجع|يعور|تعور|يالم|تالم|الم|وجع|اوجاع|واجع|واجعني|واجعه|بيوجع|بتوجع|مقطع|مولع)"
+_REFER = [
+    rf"{_BODY_STOMACH}.{{0,25}}{_HURTS}|{_HURTS}.{{0,25}}{_BODY_STOMACH}",
+    r"(?<![\w])(مغص|مغصه|ومغص)(?![\w])",
+    r"stomach ?(ache|pain|hurts|cramps?)|abdominal pain|tummy ache|belly (ache|pain)|my stomach (hurts|is killing)",
+]
+_URGENT = [
+    r"(الم|وجع|ضيق|ضغط|نغزه|نغزات) (في |ب)?(ال)?صدر|صدري (يوجعني|يعورني|ضايق|ضاغط|واجعني|يالمني)",
+    r"ضيق (في |ب)?(ال)?(تنفس|نفس)|ما (اقدر|اقدرش|قادر|قادره) (ا|ات)?تنفس|صعوبه (في |ب)?(ال)?تنفس|مخنوق|اختناق",
+    r"(?<![\w])(نزيف|ينزف|تنزف|نزف)(?![\w])|(يستفرغ|تستفرغ|استفراغ|ترجيع|يرجع|يكح|كحه|براز|بول) (فيه |مع |معه )?دم",
+    r"(?<![\w])(اغمي|اغماء|انغمي|فقد الوعي|فقدت الوعي|غايب عن الوعي)(?![\w])",
+    r"chest (pain|tightness|pressure)|can'?t breathe|short(ness)? of breath|trouble breathing|bleeding|"
+    r"(vomiting|coughing) blood|blood in (my )?(stool|urine|vomit)|faint(ed|ing)|unconscious|passed out",
+]
+_REFER_RE = [re.compile(p) for p in _REFER]
+_URGENT_RE = [re.compile(p) for p in _URGENT]
+
+
+def pharmacist_complaint(text: str) -> str | None:
+    """"urgent" (emergency advice + pharmacist), "refer" (pharmacist), or None."""
+    n = normalize(text)
+    if any(rx.search(n) for rx in _URGENT_RE):
+        return "urgent"
+    if any(rx.search(n) for rx in _REFER_RE):
+        return "refer"
+    return None
+
+
+# ---- 1c. order status -------------------------------------------------------
+# "Where is my order / has it shipped?" is answered with track_order by fixed logic: given all tools the
+# model often reached for create_order instead. Needs BOTH the customer's own order ("طلبي", "my order")
+# and a status word, so a new order ("Order 1 Centrum for delivery") is never routed here.
+_MY_ORDER = (r"(طلبي|طلبيتي|طلباتي|اوردري|الطلب (تبعي|بتاعي|حقي|مالي|تاعي)|الاوردر (تبعي|بتاعي|حقي|مالي)|"
+             r"my orders?\b|order status|status of (my )?order|track (my )?order|my delivery|my parcel)")
+_STATUS = (r"(وين|فين|اين|متي|امتي|ايمتي|وصل|يوصل|توصل|وصلو|شحن|اتشحن|انشحن|تاخر|اتاخر|متاخر|حال|صار|"
+           r"where|when|arriv|ship|track|late|delay|status|deliver|order)")
+
+
+def order_status_intent(text: str) -> bool:
+    n = normalize(text)
+    return bool(re.search(_MY_ORDER, n) and re.search(_STATUS, n))
+
+
 # ---- canned replies ------------------------------------------------------
+PHARMACIST_REFERRAL = (
+    "سلامتك 🙏 هذي الأعراض يحتاج الصيدلي يسألك عنها أولاً، فحوّلت محادثتك له وبيتواصل معك قريباً. "
+    "وإذا تبغى منتج معيّن تقدر تكتب اسمه. "
+    "— Sorry you're unwell. A pharmacist needs to ask you about these symptoms first, so I've passed your "
+    "chat to one; they'll contact you shortly. If you want a specific product, you can type its name."
+)
+
+URGENT_REFERRAL = (
+    "سلامتك 🙏 إذا الأعراض شديدة أو مفاجئة، اتصل على الإسعاف 997 أو توجّه لأقرب طوارئ فوراً. "
+    "حوّلت محادثتك للصيدلي أيضاً وبيتواصل معك. "
+    "— If the symptoms are severe or sudden, call an ambulance on 997 or go to the nearest emergency "
+    "department now. I've also passed your chat to a pharmacist, who will contact you."
+)
+
+ABUSE_HANDOVER = (
+    "نعتذر إن كانت تجربتك غير مرضية. حوّلت محادثتك لأحد زملائنا وسيتواصل معك قريباً. "
+    "— We're sorry your experience wasn't good. I've passed your conversation to a colleague, "
+    "who will contact you shortly."
+)
+
 MEDICAL_REFUSAL = (
     "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. "
     "يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة). "

@@ -100,6 +100,19 @@ def wants_menu(text: str) -> bool:
     return normalize(text).translate(_DIGITS).strip(" .!؟?") in _MENU_WORDS
 
 
+# a message that is ONLY a greeting ("هلا والله", "السلام عليكم", "hi there") gets the real menu: sent to
+# the model, it typed a look-alike menu as text, and the customer's next "4" no longer meant the menu
+_GREETING_WORDS = {normalize(w) for w in
+                   ["هلا", "هلاا", "والله", "السلام", "سلام", "عليكم", "ورحمه", "الله", "وبركاته", "مرحبا",
+                    "مرحبتين", "اهلا", "وسهلا", "اهلين", "صباح", "مساء", "الخير", "النور", "يا", "حياك",
+                    "hi", "hello", "hey", "there", "good", "morning", "evening", "afternoon", "salam"]}
+
+
+def is_greeting(text: str) -> bool:
+    words = re.sub(r"[^\w\s]", " ", normalize(text)).split()
+    return bool(words) and len(words) <= 6 and all(w in _GREETING_WORDS for w in words)
+
+
 def match_menu(text: str, menu_just_shown: bool) -> str | None:
     """Menu item chosen by this message, or None. A bare digit 1-5 counts only right after the
     menu was shown (otherwise "1" may be a quantity); labels/keywords count in short messages."""

@@ -37,9 +37,11 @@ sys.path.insert(0, str(ROOT / "agent"))
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
 from gateway import err  # noqa: E402
-from guards import (ScheduledDenylist, injection_attempt, is_affirmation,  # noqa: E402
-                    looks_in_scope, medical_advice_intent, prescription_rejected,
-                    reply_gives_medical_advice,
+from needs import detect_need  # noqa: E402
+from guards import (ScheduledDenylist, abusive_intent, injection_attempt, is_affirmation,  # noqa: E402
+                    looks_in_scope, medical_advice_intent, order_status_intent, prescription_rejected,
+                    reply_gives_medical_advice, pharmacist_complaint, ABUSE_HANDOVER,
+                    PHARMACIST_REFERRAL, URGENT_REFERRAL,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
 from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E402
 from llm import LLMClient  # noqa: E402
@@ -53,7 +55,7 @@ _VOICE_REFINE_SYS = ("أنت تصحّح نصاً ناتجاً عن تحويل ك
 
 CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
 from rapidfuzz import fuzz  # noqa: E402
-from menu import (TEXTS, detect_lang, format_orders, localize, match_menu,  # noqa: E402
+from menu import (TEXTS, detect_lang, format_orders, is_greeting, localize, match_menu,  # noqa: E402
                   menu_items, menu_text, wants_menu)
 
 AUDIT = ROOT / "results" / "audit.jsonl"
@@ -70,20 +72,50 @@ SYSTEM_PROMPT = (
     "mention tools or ids.\n"
     "3. No medical advice (dosage, use, interactions, diagnosis): call escalate_to_human "
     "reason=medical_advice.\n"
-    "4. Never state anything a tool did not return: no invented products, prices, stock, order "
-    "numbers, links or times.\n"
+    "4. Never state anything a tool did not return or STORE FACTS below do not say: no invented "
+    "products, prices, stock, order numbers, links or times.\n"
     "5. Scheduled/controlled medicines (is_scheduled): call escalate_to_human reason=restricted_item.\n"
+    "6. Insults, swearing or abuse aimed at us or our staff with no concrete problem: ask what went "
+    "wrong; if it continues, use the escalate_to_human tool with reason abusive. Never argue or "
+    "reply in kind.\n"
+    "7. Complaints about a concrete problem (wrong or damaged item, late delivery, price "
+    "difference, staff, refund, cancelled order): if it is about an order, call track_order "
+    "first; otherwise, or after tracking, use escalate_to_human with reason complaint and a "
+    "one-line summary. Wanting a human, or threatening to report us: escalate_to_human reason "
+    "complaint.\n"
     "WHAT TO DO:\n"
-    "- Any product or medicine mentioned (name, brand, ingredient, symptom product): call "
-    "search_product at once with the product words only. The system then shows the options and "
-    "takes the order (quantity, pickup/delivery, confirmation) itself.\n"
-    "- Order status: track_order. Branches: list_branches. Stock question about a product already "
+    "- Any product or medicine mentioned (name, brand, ingredient): call search_product at once "
+    "with the product words only. Something wanted FOR a symptom or purpose with no product named "
+    "(\"دوا للصداع\", \"something for a blocked nose\"): call search_product with need set to that "
+    "need and the customer's words as query - the system picks the products; never choose a "
+    "medicine or ingredient yourself. The system then shows the options and takes the order "
+    "(quantity, pickup/delivery, confirmation) itself.\n"
+    "- Questions about an existing order (where it is, when it arrives, whether it shipped): "
+    "track_order - never create_order or hold_item.\n"
+    "- Branches: list_branches. Stock question about a product already "
     "found: check_stock.\n"
     "- Never ask for the customer's name, phone or address - the system has or collects them.\n"
     "- Prescription-only medicines are ordered normally; a pharmacist reviews the prescription.\n"
     "- If create_order is available: call it only after the customer confirmed the exact items, "
     "quantities and pickup branch or delivery.\n"
-    "- Unclear message: ask one short question. Abusive: escalate_to_human reason=abusive."
+    "- Unclear message: ask one short question. \"The same as last time\": track_order so they "
+    "can pick from their recent orders. A half-remembered product name: ask for the full name.\n"
+    "- Store questions: answer from STORE FACTS in one or two short sentences, never hand over.\n"
+    "STORE FACTS:\n"
+    "- Ordering is on WhatsApp only (no app or website). All branches are open 24/7.\n"
+    "- Payment: cash on delivery or the payment link sent with the quotation; card payments are "
+    "accepted. Other methods (Apple Pay, Tabby, Tamara, specific card brands): say we are "
+    "confirming and a colleague will reply.\n"
+    "- Delivery: no minimum order; the fee is given when the order is finalised; same-day "
+    "delivery is often possible, depending on availability and distance. For an area or city "
+    "outside our branches: list_branches so they can pick the closest.\n"
+    "- Pickup of a prescription medicine: bring the original prescription.\n"
+    "- Pharmacists at every branch advise and sell.\n"
+    "- Refunds go back to the card or as store credit, within 5 to 7 business days of the refund "
+    "request. Returns and exchanges: sealed box in good condition with proof of purchase.\n"
+    "- Insurance providers and branch phone numbers are not in the system yet: say a colleague "
+    "will confirm.\n"
+    "- Not about the pharmacy (parking, other shops): say politely that you are not sure."
 )
 LANG_HINT = {"ar": "\n\n(Reply only in Arabic, Saudi dialect.)",
              "en": "\n\n(Reply only in English.)"}
@@ -97,7 +129,13 @@ SESSION_GAP_S = 6 * 3600             # a WhatsApp chat idle this long starts ove
 _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:", "tool_call",
                  "<|im_", "search_product", "check_stock", "create_order", "create_dispatch",
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
-_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|id|رقم المنتج|معرف المنتج)"
+# the model sometimes WRITES an escalation as text ("call escalate_to_human reason=abusive summary=...")
+# instead of calling the tool; the leak filter would then drop it and the handover never happens.
+# Only escalations are recovered from text (the safe direction); any other tool-like text stays a leak.
+_TEXT_ESCALATION = re.compile(r"escalate_to_human\b.{0,80}?\breason\s*[=:]\s*[\"']?(medical_advice|"
+                              r"restricted_item|low_confidence|abusive|unclear|out_of_scope|complaint)\b", re.S)
+_ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|branch_id|branch id|customer_id|"
+                         r"handover_id|hold_id|id|رقم المنتج|معرف المنتج|رقم الفرع|معرف الفرع)"
                          r"\s*[:=#]?\s*\d+\s*[\)\]]?", re.I)
 # a model reply claiming an order exists ("تم تأكيد طلبك", "رقم الطلب: 10452") - only allowed if
 # create_order/hold_item really succeeded this turn (the model once invented order 10452)
@@ -130,6 +168,15 @@ def _strip_promises(text: str) -> str:
 
 _ACK = {"ar": "حوّلت طلبك إلى صيدلي/موظف وسيتواصل معك قريبًا.",
         "en": "I've handed you over to a pharmacist; they'll follow up shortly."}
+# words of a store question (payment, delivery, refunds, hours); direct catalogue search ignores them
+_SERVICE_WORD = re.compile(
+    r"(و|ف|ب|ال|بال|وال|لل)?(دفع|الدفع|استلام|الاستلام|توصيل|التوصيل|رسوم|مبلغ|المبلغ|فلوس|استرجاع|ارجاع|"
+    r"استرداد|استبدال|دوام|الدوام|تفتحون|تسكرون|تقبلون|بطاقه|البطاقه|مدي|كاش|نقدا|تقسيط|تابي|تمارا|فيزا|"
+    r"تطبيق|موقع|فرع|فروع|الفرع|عند|عن|طريق|كم|متي|وين|هل|في|من|لو|او|ولا)|"
+    r"payment|pay|cash|delivery|deliver|fee|fees|refund|return|hours|open|app|card|visa|mada", re.I)
+# a complaint gets an apology, not the plain handover line (until the Odoo complaints module gives a number)
+_COMPLAINT_ACK = {"ar": "نعتذر منك على اللي صار 🙏 سجّلت ملاحظتك وبيتواصل معك أحد زملائنا قريبًا لحلها.",
+                  "en": "We're sorry about this. I've recorded your complaint and a colleague will contact you shortly to sort it out."}
 
 
 class Conversation:
@@ -292,6 +339,10 @@ class PharmacyAgent:
             asked = self.gw._ingr.resolve_name(args.get("active_ingredient") or args.get("query") or "")
             if said and len(said) > len(asked):
                 args["active_ingredient"] = ", ".join(sorted(said))
+            if not args.get("need"):              # the customer's words reveal a need the model left out
+                need = detect_need(conv.last_user_text)
+                if need:
+                    args["need"] = need
         if name == "search_product" and args.get("active_ingredient") \
                 and not self._grounded(conv, args["active_ingredient"]):
             # the model's own drug knowledge is not trusted (it once mapped Hibiotic to
@@ -329,7 +380,9 @@ class PharmacyAgent:
     def _direct_search(self, conv, raw):
         """Search without the model when the customer's own words strongly match a product name
         (score >= 85). Recorded in the history like a model tool call. None = ask the model."""
-        core = order_core(raw)
+        # service words never name a product: "تقبلون الدفع عند الاستلام" once fuzzy-matched a tablet.
+        # Product words around them still search directly ("ابي بنادول توصيل" -> بنادول).
+        core = " ".join(w for w in order_core(raw).split() if not _SERVICE_WORD.fullmatch(w))
         if len(core.replace(" ", "")) < 3:
             return None
         res = self.gw.search_product(query=core)
@@ -368,7 +421,7 @@ class PharmacyAgent:
         out = {"candidates": [row(x) for x in (result.get("candidates") or [])[:5]]}
         if result.get("alternatives"):
             out["alternatives"] = [row(x) for x in result["alternatives"][:3]]
-        for k in ("note", "note_branch", "hint", "active_ingredient"):
+        for k in ("note", "note_branch", "hint", "active_ingredient", "need"):
             if result.get(k):
                 out[k] = result[k]
         return out
@@ -541,10 +594,12 @@ class PharmacyAgent:
 
         # --- opening menu / menu choices (customer-facing channels) ---
         if conv.customer_facing and not resumed:
-            choice = match_menu(raw, conv.menu_shown) if raw.strip() else None
+            # a bare 1-5 is a quantity only inside the order wizard; anywhere else it is the menu
+            in_wizard = bool(conv.order and conv.order.get("step") not in (None, "add"))
+            choice = match_menu(raw, conv.menu_shown or not in_wizard) if raw.strip() else None
             if choice:
                 return self._menu_choice(conv, choice)
-            if (new_session and not image) or wants_menu(raw):
+            if (new_session and not image) or wants_menu(raw) or (is_greeting(raw) and not in_wizard):
                 return self._say(conv, self.menu_text_for(conv), guard="menu", menu=True)
 
         # --- deterministic guards BEFORE the LLM (do not depend on the model) ---
@@ -556,6 +611,29 @@ class PharmacyAgent:
             self._escalate(conv, "restricted_item",
                            f"deterministic scheduled-med guard matched {hit!r}: {raw}")
             return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled", matched=hit)
+        # vague or possibly serious complaints ("بطني يوجعني", chest pain) go to the pharmacist, never a list
+        complaint = pharmacist_complaint(raw)
+        if complaint:
+            self._escalate(conv, "medical_advice", f"symptom for the pharmacist ({complaint}): {raw}")
+            return self._say(conv, URGENT_REFERRAL if complaint == "urgent" else PHARMACIST_REFERRAL,
+                             guard="pharmacist_referral", escalated=True)
+        if abusive_intent(raw):
+            self._escalate(conv, "abusive", f"deterministic abuse guard: {raw}")
+            return self._say(conv, ABUSE_HANDOVER, guard="abusive", escalated=True)
+        # "where is my order?" -> track_order by fixed logic (the model often reached for create_order)
+        if order_status_intent(raw) and not image:
+            if not conv.customer_id:
+                return self.customer.start(conv, pending={"kind": "menu", "choice": "track_order"})
+            args = {"customer_id": conv.customer_id}
+            res = self.gw.track_order(**args)
+            conv.messages.append({"role": "assistant", "content": "",
+                                  "tool_calls": [{"function": {"name": "track_order", "arguments": args}}]})
+            conv.messages.append({"role": "tool", "tool_name": "track_order",
+                                  "content": json.dumps(self._compact("track_order", res), ensure_ascii=False)})
+            self._audit(conv.conv_id, "tool_call", {"action": "track_order", "via": "order_status_guard",
+                                                    "result": res})
+            return self._say(conv, format_orders(res if "orders" in res else {}, conv.lang or "ar"),
+                             guard="order_status")
 
         # --- attached prescription photo/PDF: OCR + deterministic checks (not the model) ---
         if image and conv.customer_facing and not conv.customer_id:
@@ -586,7 +664,8 @@ class PharmacyAgent:
         elif conv.order and conv.order.get("step") not in (None, "add") and (
                 reply := self.order.handle(conv, raw)) is not None:
             return reply                         # next step of the order wizard (no model)
-        elif conv.customer_facing and not looks_in_scope(raw):
+        elif conv.customer_facing and not looks_in_scope(raw) and not detect_need(raw):
+            # (a symptom / need statement - "عندي حموضة من امس" - is in scope: it asks for a product)
             # mid-flow answers (a quantity, a short address) pass; long off-topic questions don't
             prev = next((m["content"] for m in reversed(conv.messages[:-1])
                          if m["role"] == "assistant"), "")
@@ -624,6 +703,11 @@ class PharmacyAgent:
                 msgs[turn] = {**msgs[turn], "content": msgs[turn]["content"] + hint}
             out = self.llm.chat([{"role": "system", "content": SYSTEM_PROMPT}] + msgs,
                                 tools=self.tools_cf if conv.customer_facing else self.tools)
+            text_esc = None if out["tool_calls"] else _TEXT_ESCALATION.search(out["content"] or "")
+            if text_esc:
+                self._audit(conv.conv_id, "text_escalation", {"model_text": out["content"][:300]})
+                out = {"content": "", "tool_calls": [{"name": "escalate_to_human", "arguments": {
+                    "reason": text_esc.group(1), "summary": "model wrote the escalation as text"}}]}
             fake_order = (not out["tool_calls"]
                           and bool(_CLAIMS_ORDER.search(normalize(out["content"] or ""))))
             if fake_order and nudged:            # still claiming an order that doesn't exist
@@ -649,7 +733,10 @@ class PharmacyAgent:
                 # the model answered a product question from memory ("لا، عندنا سنتروم فقط...")
                 # instead of searching: search ourselves and show the real catalogue
                 if conv.customer_facing and not any(m.get("tool_calls") for m in conv.messages[turn:]):
-                    found = self.gw.search_product(query=raw) if raw.strip() else {}
+                    # product words only: a store question ("تقبلون الدفع عند الاستلام؟") answered from
+                    # STORE FACTS must not be swapped for a fuzzy product list
+                    words = " ".join(w for w in order_core(raw).split() if not _SERVICE_WORD.fullmatch(w))
+                    found = self.gw.search_product(query=words) if len(words.replace(" ", "")) >= 3 else {}
                     if isinstance(found, dict) and (found.get("candidates") or found.get("alternatives")):
                         self._audit(conv.conv_id, "forced_search", {"model_text": reply[:200]})
                         found["candidates"] = [c for c in found.get("candidates") or [] if not c.get("is_scheduled")]
@@ -722,7 +809,7 @@ class PharmacyAgent:
                 # the model often shortens the query ("بنادول" for "بنادول اكسترا"): also search the
                 # customer's own product words and merge, so the exact product is in the list
                 core = " ".join(fuzzy_words(raw))
-                if core and normalize(core) != normalize(args.get("query") or ""):
+                if core and normalize(core) != normalize(args.get("query") or "") and not result.get("need"):
                     extra = self.gw.search_product(query=core)
                     if isinstance(extra, dict) and "error" not in extra:
                         seen = {c["product_id"] for c in result.get("candidates") or []}
@@ -738,7 +825,8 @@ class PharmacyAgent:
                     and ("order_id" in result or "hold_id" in result):
                 return self.customer.confirmation(conv, name, args, result)
             if name == "escalate_to_human" and isinstance(result, dict) and "handover_id" in result:
-                reply = (_ACK[conv.lang] if conv.lang else
+                acks = _COMPLAINT_ACK if args.get("reason") == "complaint" else _ACK
+                reply = (acks[conv.lang] if conv.lang else
                          result.get("acknowledgement", "تم تحويلك إلى موظف."))
                 return self._say(conv, reply, guard="handover", escalated=True)
             # otherwise loop so the model can read the tool result and continue

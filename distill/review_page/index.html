@@ -1,0 +1,222 @@
+<title>Teacher Label Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working review queue - sticky summary + filters on top, one card per teacher label, form beside the evidence */
+:root {
+  --bg: #f4f6f5; --surface: #ffffff; --ink: #18211f; --muted: #5d6b67; --line: #d9e1de;
+  --accent: #0d6b62; --accent-soft: #e2f1ee;
+  --ok: #217a3c; --ok-soft: #e3f3e7; --bad: #b4372c; --bad-soft: #fae6e3; --warn: #93650a; --warn-soft: #fbf0d7;
+  --f-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-ar: "Noto Naskh Arabic", "Geeza Pro", "Arabic Typesetting", serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --surface: #18211f; --ink: #e6efec; --muted: #9db0aa; --line: #2b3835;
+  --accent: #4fc2b4; --accent-soft: #163a35;
+  --ok: #6fd18b; --ok-soft: #173826; --bad: #f08a7e; --bad-soft: #3d1d19; --warn: #e8bb5c; --warn-soft: #3a2e12;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #18211f; --ink: #e6efec; --muted: #9db0aa; --line: #2b3835;
+  --accent: #4fc2b4; --accent-soft: #163a35;
+  --ok: #6fd18b; --ok-soft: #173826; --bad: #f08a7e; --bad-soft: #3d1d19; --warn: #e8bb5c; --warn-soft: #3a2e12;
+  color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-ui); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+header .wrap { padding-block: 14px 12px; display: grid; gap: 10px }
+h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; text-wrap: balance }
+.sub { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 70ch }
+.progress { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-variant-numeric: tabular-nums; font-size: 13.5px }
+.bar { flex: 1 1 200px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; min-width: 120px }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s }
+.tally { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted) }
+.tally b { color: var(--ink); font-weight: 600 }
+.filters { display: flex; flex-wrap: wrap; gap: 8px }
+select, input[type=text], textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.filters select { font-size: 13.5px }
+main .wrap { padding-block: 16px 48px; display: grid; gap: 14px }
+.state { color: var(--muted); padding: 24px 0 }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); }
+.card[data-verdict] { border-left-width: 4px }
+.card[data-verdict="right"] { border-left-color: var(--ok) }
+.card[data-verdict="wrong"] { border-left-color: var(--bad) }
+.card[data-verdict="unsure"], .card[data-verdict="bad_message"] { border-left-color: var(--warn) }
+@media (max-width: 720px) { .card { grid-template-columns: minmax(0, 1fr) } }
+.evidence { display: grid; gap: 10px; min-width: 0 }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px }
+.chip { padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; letter-spacing: .02em }
+.chip.plain { background: var(--bg); color: var(--muted); font-weight: 500 }
+.chip.flag { background: var(--warn-soft); color: var(--warn) }
+.num { color: var(--muted); font-family: var(--f-mono); font-size: 12px }
+.msg { font-family: var(--f-ar); font-size: 19px; line-height: 1.7; margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); overflow-wrap: anywhere }
+.label-k { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; margin: 0 0 4px }
+.teacher { font-family: var(--f-mono); font-size: 13px; background: var(--bg); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 }
+.teacher .ar { font-family: var(--f-ar); font-size: 15px }
+.form { display: grid; gap: 10px; align-content: start; min-width: 0 }
+.verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px }
+.verdicts button { font: inherit; font-size: 13.5px; font-weight: 600; padding: 7px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer }
+.verdicts button:hover { border-color: var(--accent) }
+.verdicts button[aria-pressed="true"][data-v="right"] { background: var(--ok-soft); border-color: var(--ok); color: var(--ok) }
+.verdicts button[aria-pressed="true"][data-v="wrong"] { background: var(--bad-soft); border-color: var(--bad); color: var(--bad) }
+.verdicts button[aria-pressed="true"][data-v="unsure"], .verdicts button[aria-pressed="true"][data-v="bad_message"] { background: var(--warn-soft); border-color: var(--warn); color: var(--warn) }
+.form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); font-weight: 600 }
+.form select, .form input, .form textarea { width: 100%; font-weight: 400; font-size: 14px }
+textarea { resize: vertical; min-height: 64px; font-family: var(--f-ui) }
+textarea:dir(rtl), input:dir(rtl) { font-family: var(--f-ar) }
+.saved { font-size: 12px; color: var(--muted); min-height: 1.2em }
+.saved.err { color: var(--bad) }
+.correct[hidden] { display: none !important }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none } }
+</style>
+
+<header>
+  <div class="wrap">
+    <h1>Teacher Label Review</h1>
+    <p class="sub">Labels the distillation teacher flagged: it wasn't sure, or its action didn't fit the intended intent. Mark each one, give the right action when it's wrong, and say what went wrong. Every change saves by itself.</p>
+    <div class="progress">
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <span id="count">Loading…</span>
+      <span class="tally" id="tally"></span>
+    </div>
+    <div class="filters">
+      <select id="f-status" aria-label="Show"><option value="todo">Not reviewed yet</option><option value="all">All labels</option><option value="done">Reviewed</option><option value="wrong">Marked wrong</option></select>
+      <select id="f-intent" aria-label="Intent"><option value="">All intents</option></select>
+      <select id="f-why" aria-label="Why flagged"><option value="">Any reason</option></select>
+    </div>
+  </div>
+</header>
+<main><div class="wrap" id="list"><p class="state" id="state">Loading the labels…</p></div></main>
+
+<script>
+const INTENTS = {
+  symptom_need: "Product for a symptom", fuzzy_product: "Misspelt / transliterated product", store_info: "Store info",
+  stock_price: "Stock or price", order_first: "First order request", reserve_first: "First reserve request",
+  order_status: "Order status", medical_advice: "Medical advice", restricted: "Restricted medicine",
+  rude: "Rude or abusive", unclear: "Unclear", out_of_scope: "Out of scope", injection: "Manipulation attempt"
+};
+const ACTIONS = [
+  ["search_product", "Search the catalogue"], ["check_stock", "Check stock"], ["list_branches", "List branches"],
+  ["track_order", "Track their order"], ["escalate_to_human:medical_advice", "Hand over: medical advice"],
+  ["escalate_to_human:restricted_item", "Hand over: restricted medicine"], ["escalate_to_human:abusive", "Hand over: abusive"],
+  ["escalate_to_human:unclear", "Hand over: unclear"], ["escalate_to_human:out_of_scope", "Hand over: out of scope"],
+  ["reply", "Reply in text (no tool)"], ["other", "Something else (explain)"]
+];
+const VERDICTS = [["right", "Teacher is right"], ["wrong", "Teacher is wrong"], ["unsure", "Not sure"], ["bad_message", "Bad message"]];
+let items = [], reviews = {}, db = null, uid = null;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const isAr = s => /[؀-ۿ]/.test(s || "");
+
+function teacherText(t) {
+  if (t.kind === "reply") return `<span class="label-k">Reply</span><span class="${isAr(t.reply) ? "ar" : ""}" dir="auto">${esc(t.reply)}</span>`;
+  const args = Object.entries(t.args || {}).map(([k, v]) => `  ${k}: <span class="${isAr(String(v)) ? "ar" : ""}" dir="auto">${esc(typeof v === "string" ? v : JSON.stringify(v))}</span>`).join("\n");
+  return `${esc(t.tool)}${args ? "\n" + args : ""}`;
+}
+
+function card(it) {
+  const r = reviews[it.id] || {};
+  const el = document.createElement("article");
+  el.className = "card"; el.id = "item-" + it.id;
+  if (r.verdict) el.dataset.verdict = r.verdict;
+  el.innerHTML = `
+    <div class="evidence">
+      <div class="meta"><span class="num">#${it.id}</span><span class="chip">${esc(INTENTS[it.intent] || it.intent)}</span>
+        <span class="chip plain">${esc(it.dialect)}</span><span class="chip flag">${esc(it.why)}</span>
+        <span class="chip plain">confidence ${esc(it.confidence)}</span></div>
+      <p class="msg" dir="auto">${esc(it.text)}</p>
+      <div><p class="label-k">Teacher's first action</p><pre class="teacher">${teacherText(it.teacher)}</pre></div>
+    </div>
+    <div class="form">
+      <div class="verdicts" role="group" aria-label="Verdict">${VERDICTS.map(([v, l]) =>
+        `<button type="button" data-v="${v}" aria-pressed="${r.verdict === v}">${l}</button>`).join("")}</div>
+      <div class="correct" ${r.verdict === "wrong" ? "" : "hidden"}>
+        <label>Correct action<select id="act-${it.id}"><option value="">Choose…</option>${ACTIONS.map(([v, l]) =>
+          `<option value="${v}" ${r.correct_action === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label style="margin-top:8px">Correct search words or reply<input type="text" dir="auto" id="args-${it.id}" value="${esc(r.correct_text || "")}" placeholder="optional"></label>
+      </div>
+      <label>What went wrong<textarea id="note-${it.id}" dir="auto" placeholder="e.g. this asks for advice, so hand over; the dialect word means…">${esc(r.comment || "")}</textarea></label>
+      <div class="saved" aria-live="polite"></div>
+    </div>`;
+  const saved = $(".saved", el);
+  const pending = {};
+  let timer = null, writing = false;
+  const flush = async () => {
+    if (writing || !Object.keys(pending).length) return;
+    if (!db) { saved.textContent = "Can't save: sign in to claude.ai to keep reviews."; saved.classList.add("err"); return; }
+    writing = true;
+    const data = { ...reviews[it.id], ...pending, id: it.id, intent: it.intent, reviewer: uid, updated: Date.now() };
+    for (const k in pending) delete pending[k];
+    try { await db.doc("reviews/r" + it.id).set(data); reviews[it.id] = data; saved.textContent = "Saved"; saved.classList.remove("err"); }
+    catch (e) { saved.textContent = "Not saved: " + (e?.code === "permission_denied" ? "you can view but not edit this page." : "try again in a moment."); saved.classList.add("err"); }
+    writing = false; if (Object.keys(pending).length) flush();
+    summary();
+  };
+  const queue = (patch, now) => { Object.assign(pending, patch); saved.textContent = "Saving…"; clearTimeout(timer); timer = setTimeout(flush, now ? 0 : 700); };
+  el.querySelectorAll(".verdicts button").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.v;
+    el.querySelectorAll(".verdicts button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    el.dataset.verdict = v; $(".correct", el).hidden = v !== "wrong";
+    queue({ verdict: v }, true);
+  }));
+  $(`#act-${it.id}`, el).addEventListener("change", e => queue({ correct_action: e.target.value }, true));
+  $(`#args-${it.id}`, el).addEventListener("input", e => queue({ correct_text: e.target.value }));
+  $(`#note-${it.id}`, el).addEventListener("input", e => queue({ comment: e.target.value }));
+  return el;
+}
+
+function visible() {
+  const st = $("#f-status").value, intent = $("#f-intent").value, why = $("#f-why").value;
+  return items.filter(it => {
+    const v = reviews[it.id]?.verdict;
+    if (st === "todo" && v) return false;
+    if (st === "done" && !v) return false;
+    if (st === "wrong" && v !== "wrong") return false;
+    return (!intent || it.intent === intent) && (!why || it.why === why);
+  });
+}
+
+function render() {
+  const list = $("#list"), shown = visible();
+  list.replaceChildren();
+  if (!items.length) { list.innerHTML = '<p class="state">No labels to review.</p>'; return; }
+  if (!shown.length) { list.innerHTML = '<p class="state">Nothing matches these filters. Pick "All labels" to see everything.</p>'; return; }
+  shown.forEach(it => list.appendChild(card(it)));
+}
+
+function summary() {
+  const done = items.filter(it => reviews[it.id]?.verdict);
+  const c = v => done.filter(it => reviews[it.id].verdict === v).length;
+  $("#count").textContent = `${done.length} of ${items.length} reviewed`;
+  $("#bar").style.width = items.length ? (100 * done.length / items.length) + "%" : "0";
+  $("#tally").innerHTML = `<span><b>${c("right")}</b> right</span><span><b>${c("wrong")}</b> wrong</span><span><b>${c("unsure")}</b> not sure</span><span><b>${c("bad_message")}</b> bad message</span>`;
+}
+
+async function start() {
+  try { items = await (await fetch("items.json")).json(); }
+  catch { $("#state").textContent = "The label file didn't load. Reload the page."; return; }
+  const opts = (sel, vals, label) => vals.forEach(v => sel.add(new Option(label ? label(v) : v, v)));
+  opts($("#f-intent"), [...new Set(items.map(i => i.intent))], v => INTENTS[v] || v);
+  opts($("#f-why"), [...new Set(items.map(i => i.why))]);
+  ["#f-status", "#f-intent", "#f-why"].forEach(s => $(s).addEventListener("change", render));
+  summary(); render();
+  const timeout = setTimeout(() => { if (!db) { $("#count").textContent += " · saving is off (sign in to claude.ai to keep reviews)"; } }, 10000);
+  db = await window.claude?.use?.("db") ?? null;
+  const user = await window.claude?.use?.("user") ?? null;
+  if (user) { try { uid = await user.id(); } catch { uid = null; } }
+  if (!db) { clearTimeout(timeout); return; }
+  let first = true;
+  db.collection("reviews").onSnapshot(snap => {
+    clearTimeout(timeout);
+    snap.docs.forEach(d => { const x = d.data(); if (x && x.id != null) reviews[x.id] = x; });
+    summary();
+    if (first) { first = false; render(); }
+  }, () => { clearTimeout(timeout); $("#count").textContent += " · saved reviews couldn't load"; });
+}
+start();
+</script>

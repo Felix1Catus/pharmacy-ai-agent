@@ -1,0 +1,14 @@
+[Unit]
+Description=Pharmacy agent - WhatsApp-style test chat page (channels/webchat)
+After=network-online.target docker.service pharmacy-tts-namaa.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=@REPO@
+Environment=LD_LIBRARY_PATH=@REPO@/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:@REPO@/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:@REPO@/.venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib
+ExecStart=@REPO@/.venv/bin/uvicorn --app-dir channels/webchat server:app --host 127.0.0.1 --port 8090
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

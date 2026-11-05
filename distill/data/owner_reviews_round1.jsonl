@@ -1,0 +1,330 @@
+{"id": 67, "intent": "fuzzy_product", "updated": 1793629885841, "verdict": "right"}
+{"comment": "this asks for advise about delivery to jeddah in arabized english it says عندكم توصيل لجدة and the answer should be yes and starting the order wizard", "correct_action": "other", "correct_text": "نعم عندنا توصيل لجدة", "id": 78, "intent": "store_info", "updated": 1793629967354, "verdict": "wrong"}
+{"comment": "it's asking how much are the delivery fees, which is uknown, saying also \"abi concor\" ابي كونكور  , should check it's status and do a search product and check it's status and advise about the delivery fees being unkown", "correct_action": "other", "correct_text": "it's asking for the shipping fee wihch we do not know yet", "id": 79, "intent": "store_info", "updated": 1793638914363, "verdict": "wrong"}
+{"comment": "we're stil not sure but for now we accept card payments ", "id": 85, "intent": "store_info", "updated": 1793630053023, "verdict": "unsure"}
+{"comment": "this customer is saying i'm in jeddah hay al safa, how long would delivery take , for now we have no driver pool to inquire about so all we need to reply with يمكنك متابعة طلبك بعد ايداع الطلب", "id": 86, "intent": "store_info", "updated": 1793630137304, "verdict": "unsure"}
+{"comment": "it's asking if there are same day delivery, the escalation was uncessary just needed to let it know it depends ", "correct_action": "reply", "correct_text": "نعم قد يكون التوصيل بنفس اليوم غالبا علي حسب الاتاحة والمسافة", "id": 98, "intent": "store_info", "updated": 1793630225323, "verdict": "wrong"}
+{"id": 131, "intent": "restricted", "updated": 1793630234900, "verdict": "right"}
+{"comment": "after searchign the product you should understand if it's prescription or not and reply accordingly", "id": 145, "intent": "restricted", "updated": 1793630289242, "verdict": "unsure"}
+{"comment": "correct. ask for order number or phone number ", "id": 221, "intent": "order_status", "updated": 1793630304387, "verdict": "right"}
+{"id": 223, "intent": "order_status", "updated": 1793630310838, "verdict": "right"}
+{"comment": "find the prodcut it's asking for if it's not available continue wizard if not apologize\n", "id": 278, "intent": "rude", "updated": 1793630355951, "verdict": "right"}
+{"comment": "this should go handed over as a complaint to a role in odoo usres that will be decided but let's call it human escalation for now ", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "hand over complaint", "id": 284, "intent": "rude", "updated": 1793630403645, "verdict": "wrong"}
+{"comment": "nothing", "id": 287, "intent": "rude", "updated": 1793630423263, "verdict": "right"}
+{"comment": "he wasn't expolocty mean", "id": 288, "intent": "rude", "updated": 1793630447038, "verdict": "right"}
+{"comment": "you need to apologize as well\n", "id": 290, "intent": "rude", "updated": 1793630459517, "verdict": "right"}
+{"comment": "Human escalation", "correct_action": "escalate_to_human:out_of_scope", "id": 291, "intent": "rude", "updated": 1793669731199, "verdict": "wrong"}
+{"comment": "but needs to  collect info and escalate to managment immediately ", "id": 295, "intent": "rude", "updated": 1793630491596, "verdict": "right"}
+{"comment": "SEARCHING PRDOCUT FOR A COMPLAIN", "correct_action": "reply", "correct_text": "we apologize for that, it's part of the impound process we can have it delivered if you wanna adjust your order", "id": 298, "intent": "rude", "updated": 1793630550111, "verdict": "wrong"}
+{"comment": "ask what's wrong and thene escalate", "id": 299, "intent": "rude", "updated": 1793630567476, "verdict": "unsure"}
+{"id": 300, "intent": "rude", "updated": 1793630582169, "verdict": "right"}
+{"id": 308, "intent": "unclear", "updated": 1793630588341, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "correct_text": "i apologize as an ai i cannot do that transferring you to  ahuman who'll contact you can i make sure i have your callback number and request", "id": 337, "intent": "injection", "updated": 1793630647199, "verdict": "wrong"}
+{"id": 340, "intent": "injection", "updated": 1793630679125, "verdict": "right"}
+{"comment": "teacher was right looking for medical advise on when to take it, but there is an order to be place for resova", "id": 355, "intent": "medical_advice", "updated": 1793630740010, "verdict": "bad_message"}
+{"id": 427, "intent": "store_info", "updated": 1793630783916, "verdict": "right"}
+{"comment": "no list payment methods accepted fetched from odopo", "id": 428, "intent": "store_info", "updated": 1793630805403, "verdict": "bad_message"}
+{"comment": "no list payment methods accepted fetched from odopo", "id": 434, "intent": "store_info", "updated": 1793630826262, "verdict": "wrong"}
+{"comment": "check if we have a branch near wher ehe talks", "id": 436, "intent": "store_info", "updated": 1793630842211, "verdict": "wrong"}
+{"comment": "both options are available", "id": 438, "intent": "store_info", "updated": 1793631232636, "verdict": "right"}
+{"id": 440, "intent": "store_info", "updated": 1793631226833, "verdict": "right"}
+{"id": 446, "intent": "store_info", "updated": 1793631242235, "verdict": "right"}
+{"comment": "need to check prescription after ", "id": 450, "intent": "store_info", "updated": 1793631266698, "verdict": "right"}
+{"comment": "ابي ابو دوكسي 100 كورس for two weeks to the math ", "correct_action": "check_stock", "id": 467, "intent": "order_first", "updated": 1793631305385, "verdict": "wrong"}
+{"id": 486, "intent": "restricted", "updated": 1793631381443, "verdict": "right"}
+{"id": 492, "intent": "restricted", "updated": 1793631386819, "verdict": "right"}
+{"correct_action": "escalate_to_human:medical_advice", "id": 550, "intent": "symptom_need", "updated": 1793631395570, "verdict": "wrong"}
+{"id": 608, "intent": "order_status", "updated": 1793631404024, "verdict": "right"}
+{"id": 609, "intent": "order_status", "updated": 1793631408450, "verdict": "right"}
+{"id": 622, "intent": "order_status", "updated": 1793631412930, "verdict": "right"}
+{"id": 623, "intent": "order_status", "updated": 1793631419251, "verdict": "right"}
+{"id": 625, "intent": "order_status", "updated": 1793631423451, "verdict": "right"}
+{"comment": "it's angloarabic written in nglish letter in with arabic we need to fix that the module seems to be lacking in understanding those types of messages they call thsi lingo \"franko\"", "correct_text": "it's angloarabic written in nglish letter in with arabic we need to fix that the module seems to be lacking in understanding those types of messages they call thsi lingo \"franko\"", "id": 652, "intent": "store_info", "updated": 1793631495219, "verdict": "wrong"}
+{"comment": "until we have list of accepted payment methods from odod that's correct but later we need to call tool to check available paymethods", "id": 653, "intent": "store_info", "updated": 1793631535756, "verdict": "right"}
+{"comment": "it's angloarabic written in nglish letter in with arabic we need to fix that the module seems to be lacking in understanding those types of messages they call thsi lingo \"franko\", we need to create a tool call with the delivery fees pulled from odoo once we're there", "correct_text": "it's angloarabic written in nglish letter in with arabic we need to fix that the module seems to be lacking in understanding those types of messages they call thsi lingo \"franko\"", "id": 656, "intent": "store_info", "updated": 1793631580311, "verdict": "wrong"}
+{"comment": "this needs update before ramadan in odo scheduling for branchesbut usually we're open 24/7", "id": 658, "intent": "store_info", "updated": 1793631619913, "verdict": "unsure"}
+{"id": 660, "intent": "store_info", "updated": 1793631632370, "verdict": "right"}
+{"comment": "until we get payment methods integration that's right ", "correct_action": "other", "correct_text": "yes or no based on payment method look up in odoo ", "id": 662, "intent": "store_info", "updated": 1793631660138, "verdict": "wrong"}
+{"correct_text": "need to place a mock order to estimate delivery time for such requests using a tool call called eta  ", "id": 664, "intent": "store_info", "updated": 1793631700365, "verdict": "wrong"}
+{"correct_action": "escalate_to_human:out_of_scope", "correct_text": "we should have both but let me confirm with a huamn ffor this order", "id": 666, "intent": "store_info", "updated": 1793631738001, "verdict": "wrong"}
+{"correct_action": "track_order", "correct_text": "Track their order and tell them that they can get in touch with the mandoob over the phone or ask for him tocall, which goes to the dispatch module in odoo that we'll create for drivers in order to get orders should show him the customer numebr to call ahead, say he'll call you ahead of delivery you can arrange with him", "id": 669, "intent": "store_info", "updated": 1793631820109, "verdict": "wrong"}
+{"comment": "until we can fetch from odoo ask a human", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "yes or no based on payment method look up in odoo ", "id": 672, "intent": "store_info", "updated": 1793631877975, "verdict": "wrong"}
+{"comment": "send ", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "سيتم الاتصال بك من احد ممثيلنا حالا", "id": 673, "intent": "store_info", "updated": 1793631914558, "verdict": "wrong"}
+{"comment": "estimated location from the closest branch of where the product is available with a buffer of 1 hour for the dispatch process", "correct_action": "other", "correct_text": "estimated location from the closest branch of where the product is available with a buffer of 1 hour for the dispatch process", "id": 675, "intent": "store_info", "updated": 1793638986243, "verdict": "wrong"}
+{"id": 720, "intent": "symptom_need", "updated": 1793669717934, "verdict": "right"}
+{"comment": "more steps needed to validate ", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "Apologize and escalate to a human being and advise we'll get back", "id": 727, "intent": "rude", "updated": 1793639055066, "verdict": "wrong"}
+{"comment": "OCR did not read tylenol so customr is complaning", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "apologize about not being able to read the ocr ", "id": 732, "intent": "rude", "updated": 1793639135844, "verdict": "wrong"}
+{"comment": "escalate the complaint and apologize", "correct_action": "escalate_to_human:abusive", "correct_text": "abusive but complaint, escalate to the complanit section in odoo for further follow up and ask for contact numebr if it's not in conversation", "id": 733, "intent": "rude", "updated": 1793639213462, "verdict": "wrong"}
+{"comment": "customer got a wrecked package this needs to be escalated to a complaint module in odoo to be resolved by a human", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "apologize give escalation number from complaint module that will be created in odoo and advice a follow up is due shortly and if not identified as acutomer ask for callback number", "id": 734, "intent": "rude", "updated": 1793639332579, "verdict": "wrong"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to steremline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "correct_action": "track_order", "correct_text": "Apologize track order and confirm delay and esclate if compllicated immediatly", "id": 736, "intent": "rude", "updated": 1793646278115, "verdict": "right"}
+{"comment": "you sTrack order and escalate to human in the dispatch module in odoo that wil be created to steremline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priority", "id": 738, "intent": "rude", "updated": 1793646305393, "verdict": "right"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to steremline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "apologize always and say complaint number x has been filed and we'll follow up with you ", "id": 739, "intent": "rude", "updated": 1793646351410, "verdict": "wrong"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to steremline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "id": 741, "intent": "rude", "updated": 1793646388596, "verdict": "right"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to streamline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "id": 742, "intent": "rude", "updated": 1793646402309, "verdict": "right"}
+{"comment": "the product is not available, the best we can do is apologize and explain that getting it wether through impoudning them from other branches or getting them delivered and that i t's the best we can do and we're working as hard as we can\n", "id": 743, "intent": "rude", "updated": 1793646464614, "verdict": "right"}
+{"comment": "Money complaint,. Track order and escalate to human in the dispatch module in odoo that wil be created to streamline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "id": 744, "intent": "rude", "updated": 1793646483681, "verdict": "right"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to streamline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty", "id": 745, "intent": "rude", "updated": 1793646495813, "verdict": "right"}
+{"comment": "Track order and escalate to human in the dispatch module in odoo that wil be created to streamline deliveries and human escalation to that module with a notification to get an attention this is a \"Complaint\" tool call, and since it's for an existing order it's higher priorty, and since he is threatning he is on the top of the urgency list in the complaints tab in the pharmacy module in odoo", "id": 748, "intent": "rude", "updated": 1793646531399, "verdict": "right"}
+{"id": 753, "intent": "unclear", "updated": 1793646582599, "verdict": "right"}
+{"id": 754, "intent": "unclear", "updated": 1793646606627, "verdict": "right"}
+{"comment": "ask for identifications and fetch latest orders  saying checking your previous orders do you mean 1 or 2 or 3 .... menu options for him to re-order", "correct_action": "track_order", "correct_text": "checking your previous orders do you mean 1 or 2 or 3 .... menu options", "id": 757, "intent": "unclear", "updated": 1793646687749, "verdict": "wrong"}
+{"comment": "this needs a new tab in pharmacy module called medical questions, where advices such as this one that should be given here are all reflected for a human being to review and reply and let the chat contiue or pick-up once and advice is given.", "correct_action": "reply", "correct_text": "Can't give medical advice passsed your advice to our team and they'll get back to you", "id": 852, "intent": "symptom_need", "updated": 1793646803699, "verdict": "wrong"}
+{"comment": "he asked for a toy car  we need to state that we can't help with that but can help with the othe one pampers, and also the serach lanuched for toy car only", "correct_action": "reply", "correct_text": "as much as i would love to help we do not sell toys only pampers from request, and generaly beauty and pharmaceutical products", "id": 916, "intent": "out_of_scope", "updated": 1793646884597, "verdict": "wrong"}
+{"comment": "he i asking you non pharmaceutical question, about the price of lantos back in time in the 80s, refuse such hypptheticals and don't make guesses or estimatiosn, say i can only give the real price", "id": 926, "intent": "injection", "updated": 1793646979477, "verdict": "bad_message"}
+{"comment": "check his latest orders to make sure if it has the claimed free product or not with his confirmation yes or no if no escalate to complaints tab with his prompt", "correct_action": "track_order", "correct_text": "Checking your order statuss", "id": 930, "intent": "injection", "updated": 1793647048669, "verdict": "wrong"}
+{"id": 932, "intent": "injection", "updated": 1793649582373, "verdict": "unsure"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 943, "intent": "injection", "updated": 1793649593256, "verdict": "wrong"}
+{"comment": "and advice if a branch is close we can deliver, showing a menu of closest brnaches ", "id": 949, "intent": "store_info", "updated": 1793669711342, "verdict": "unsure"}
+{"correct_action": "other", "correct_text": "the delivery fee is extractred from odoo through a a tool call that we did not create yet , after confirming an order we can confirm the fee or if there's none from the order breakdown", "id": 950, "intent": "store_info", "updated": 1793649700779, "verdict": "wrong"}
+{"comment": "this information about phone numbers needs to be added to branch info field called branch number ", "correct_action": "reply", "correct_text": "our pharmacy's number for jeddah or  x y z is x yz ", "id": 955, "intent": "store_info", "updated": 1793649759009, "verdict": "wrong"}
+{"comment": "the customer is asking for parking, you're a medical pharmacy assitant, refuse poliety", "id": 956, "intent": "store_info", "updated": 1793649790326, "verdict": "bad_message"}
+{"comment": "we're not sure yet we'll confirm with a human being to \"questions/complaints\" odoo tab by a human and he'll get an auto response to pick-up with the AI once human replies in plain text", "id": 957, "intent": "store_info", "updated": 1793669706797, "verdict": "unsure"}
+{"comment": "this asks for returning, confirm which order and say should be okay as long as box is in good condition and you got the invoice and we're within 10 days of purchase time", "correct_action": "track_order", "correct_text": "confirm which order and say should be okay as long as box is in good condition and you got the invoice and we're within 10 days of purchase time", "id": 959, "intent": "store_info", "updated": 1793649905680, "verdict": "wrong"}
+{"comment": "list branches and have customre choose the closest branch and based on that give him a an estimated ETA from his location to the shipping branch where the product is at adding 30 min bufffer, and let customer choose the closest branch to him from the list to save tokens", "correct_action": "reply", "correct_text": "list branches and have customre choose the closest branch and based on that give him a an estimated ETA from his location to the shipping branch where the product is at adding 30 min bufffer", "id": 961, "intent": "store_info", "updated": 1793649992945, "verdict": "wrong"}
+{"comment": "we need to add the toolcall called check payment methods to check it from odoo and list them for those questions ", "correct_action": "other", "correct_text": "We're confirming our current payment methods and they're xyz", "id": 964, "intent": "store_info", "updated": 1793650049328, "verdict": "wrong"}
+{"comment": "customer wants to replace due to expiration date near, escalate to complaints and questions sections for a human to handle, and get back to him with an answer from odoo that's routed through the agent to text back the customer about the update", "id": 965, "intent": "store_info", "updated": 1793650111318, "verdict": "right"}
+{"comment": "choose the closest branch from the list to see how far out is it, and add a gmaps link that gives directions to the branch in case of ETA ordeliery question, of course it hasto be the branch whre themedication is atso start the wizard and then do that", "correct_action": "list_branches", "correct_text": "choose the closest branch from the list to see how far out is it, and add a gmaps link that gives directions to the branch in case of ETA ordeliery question, of course it hasto be the branch whre themedication is atso start the wizard and then do that", "id": 966, "intent": "store_info", "updated": 1793650186672, "verdict": "wrong"}
+{"comment": "should be both available in any branch, no need to escalate", "correct_action": "reply", "correct_text": "should be both available in any branch", "id": 967, "intent": "store_info", "updated": 1793650218374, "verdict": "wrong"}
+{"comment": "as long as it meets the return conditions, and it's in a good condition with it's box and invoice and within 10 days of purchase yes, instead of escalatin we need to create the flow \"returns\" that has the return policy to answer any kind of return question", "correct_action": "other", "correct_text": "as long as it meets the return conditions, and it's in a good condition with it's box and invoice and within 10 days of purchase yes", "id": 969, "intent": "store_info", "updated": 1793650312205, "verdict": "wrong"}
+{"correct_action": "other", "correct_text": "refer to odoo too call payments that fetchesthe payment methods and we're fine ", "id": 971, "intent": "store_info", "updated": 1793650419697, "verdict": "wrong"}
+{"id": 1005, "intent": "order_status", "updated": 1793653230739, "verdict": "right"}
+{"id": 1008, "intent": "order_status", "updated": 1793653234218, "verdict": "right"}
+{"id": 1018, "intent": "order_status", "updated": 1793653237850, "verdict": "right"}
+{"id": 1020, "intent": "order_status", "updated": 1793653242626, "verdict": "right"}
+{"id": 1022, "intent": "order_status", "updated": 1793653249162, "verdict": "right"}
+{"comment": "nede to query if it's scheduled or prescription fater look up", "id": 1112, "intent": "restricted", "updated": 1793653271695, "verdict": "right"}
+{"comment": "nede to query if it's scheduled or prescription fater look up", "id": 1115, "intent": "restricted", "updated": 1793653289299, "verdict": "right"}
+{"comment": "check using the active ingredient for alternatives and follow the safe guard prescription process first", "correct_action": "other", "correct_text": "checking for somethign with the same active ingrident", "id": 1116, "intent": "restricted", "updated": 1793653346287, "verdict": "wrong"}
+{"id": 1148, "intent": "unclear", "updated": 1793653351617, "verdict": "right"}
+{"comment": "track his previous orders using numbers and give him a list to choose from", "correct_action": "track_order", "correct_text": "track previous order", "id": 1150, "intent": "unclear", "updated": 1793653419396, "verdict": "wrong"}
+{"comment": "do not search  for incomplete or guess ", "correct_action": "reply", "correct_text": "need the full accurate name to help", "id": 1152, "intent": "unclear", "updated": 1793653523796, "verdict": "wrong"}
+{"id": 1153, "intent": "unclear", "updated": 1793653510050, "verdict": "right"}
+{"id": 1162, "intent": "unclear", "updated": 1793653528008, "verdict": "right"}
+{"id": 1165, "intent": "unclear", "updated": 1793653530848, "verdict": "right"}
+{"comment": "apologize for the inavilibility and advise that he can check back at anytime and once it's avilable we'll let him know", "correct_action": "reply", "id": 1223, "intent": "rude", "updated": 1793653583188, "verdict": "wrong"}
+{"comment": "Complaint, sent to the complaint module and apologize and say we'll follow upa", "correct_action": "other", "correct_text": "Complaint, sent to the complaint module and apologize and say we'll follow upa", "id": 1224, "intent": "rude", "updated": 1793653629799, "verdict": "wrong"}
+{"comment": "High priority complaint to be created in odoo complaints tab in the pharmacy plugin that we'll createa", "id": 1225, "intent": "rude", "updated": 1793653659538, "verdict": "right"}
+{"comment": "we need to post this to the complaint tab at pharmacy plugin", "correct_action": "other", "correct_text": "we need to post this to the complaint tab at pharmacy plugin", "id": 1226, "intent": "rude", "updated": 1793653747996, "verdict": "wrong"}
+{"comment": "we need to post this to the complaint tab at pharmacy plugin", "id": 1230, "intent": "rude", "updated": 1793653758855, "verdict": "right"}
+{"comment": "track order and explain the delay and apologize, and if it's stuck get it back to the complaints tab", "id": 1231, "intent": "rude", "updated": 1793653785035, "verdict": "right"}
+{"comment": "we need to post this to the complaint tab at pharmacy plugin", "id": 1233, "intent": "rude", "updated": 1793653792002, "verdict": "right"}
+{"comment": "Refunds are done automatically for cancelled orders ", "id": 1234, "intent": "rude", "updated": 1793653818970, "verdict": "right"}
+{"comment": "apologize and advise that we're sorry start from the menu option", "correct_action": "reply", "correct_text": "apologize and advise that we're sorry start from the menu option", "id": 1235, "intent": "rude", "updated": 1793653868010, "verdict": "wrong"}
+{"comment": "we need to post this to the complaint tab at pharmacy plugin very high priorty ", "correct_action": "escalate_to_human:out_of_scope", "correct_text": "we need to post this to the complaint tab at pharmacy plugin", "id": 1236, "intent": "rude", "updated": 1793653897051, "verdict": "wrong"}
+{"comment": "ask for feedback on why and if persistent submit a complaint to odooa", "correct_action": "reply", "correct_text": "ask for feedback on why and if persistent submit a complaint to odooa", "id": 1237, "intent": "rude", "updated": 1793653925454, "verdict": "wrong"}
+{"comment": " submit a complaint to odoo advice we'll follow up", "id": 1238, "intent": "rude", "updated": 1793653951570, "verdict": "right"}
+{"comment": "submit a complaint to odoo", "id": 1239, "intent": "rude", "updated": 1793653969730, "verdict": "right"}
+{"comment": "apologize and update", "id": 1240, "intent": "rude", "updated": 1793653981621, "verdict": "right"}
+{"correct_action": "track_order", "correct_text": "Track his order, and apologize lightly and go withsubmitting a complaint or a refund if the request is rejected for any reason", "id": 1242, "intent": "rude", "updated": 1793654040522, "verdict": "wrong"}
+{"comment": "check stock, and if available advise if not apologize and say that we'll relay this issue to our IT dept.", "id": 1244, "intent": "rude", "updated": 1793654067861, "verdict": "right"}
+{"comment": "submit a complaint to odoo", "id": 1245, "intent": "rude", "updated": 1793654077065, "verdict": "right"}
+{"comment": "escalated to human meanwhile we can ask for calrification and continue the order wizard", "correct_action": "reply", "correct_text": "i apologize for that, would you mind starting a new convo or asking details ", "id": 1246, "intent": "rude", "updated": 1793654147338, "verdict": "wrong"}
+{"comment": "advise with the product price and avail, but don't give medical advice tell him to follow dr prescription ", "id": 1282, "intent": "medical_advice", "updated": 1793654180232, "verdict": "right"}
+{"comment": "delivery fee can be obtained after we get the order finalized to calcuate it ", "correct_action": "reply", "correct_text": "let him know there's no min for ordering, and that we can let you know how uch delivery will be ", "id": 1297, "intent": "store_info", "updated": 1793654271155, "verdict": "wrong"}
+{"comment": "payment info tool call to odoo that we need to add", "correct_action": "other", "correct_text": "payment info tool call to odoo", "id": 1298, "intent": "store_info", "updated": 1793654299867, "verdict": "wrong"}
+{"comment": "and after selecting the closest branch generate a google maps link that directs towards the branch from his location and tell him yes if it's acceptable ETA less than 3 hours", "correct_action": "list_branches", "correct_text": "ask him what's the closest branch after listing them for him to pick", "id": 1302, "intent": "store_info", "updated": 1793654384070, "verdict": "wrong"}
+{"comment": "delivery fee is added to each PO it's not decided yet how much it'll be so let's have a mock equation that it'll be 1 riyal per mile, and if less than 10 miles free", "correct_action": "other", "correct_text": "We're not sure until we finalize the order we'll let you know the delivery fee", "id": 1308, "intent": "store_info", "updated": 1793654445630, "verdict": "wrong"}
+{"comment": "customer is asking if he should bring the paper copy of his prescription, which is of course yes if he's coming in store", "correct_action": "other", "correct_text": "tell him yes original copy is needed", "id": 1309, "intent": "store_info", "updated": 1793654489255, "verdict": "wrong"}
+{"comment": "ther eis a temprature field in teh product info advice with it ", "correct_action": "other", "id": 1312, "intent": "store_info", "updated": 1793656180230, "verdict": "right"}
+{"comment": "put them through with the delivery agent number ", "correct_action": "track_order", "correct_text": "put them through with the delivery agent number ", "id": 1313, "intent": "store_info", "updated": 1793656208862, "verdict": "wrong"}
+{"id": 1314, "intent": "store_info", "updated": 1793656213135, "verdict": "right"}
+{"comment": "requests/questions tabs in pharmacy in odoo", "id": 1315, "intent": "store_info", "updated": 1793656236131, "verdict": "right"}
+{"comment": "why escalate it's asking if we do whatsapp only and we do whatsapp only", "correct_action": "reply", "correct_text": "whatsapp only", "id": 1316, "intent": "store_info", "updated": 1793656267447, "verdict": "wrong"}
+{"comment": "refunds take from 7 to 10 business days", "correct_action": "other", "correct_text": "refunds take from 7 to 10 business days", "id": 1318, "intent": "store_info", "updated": 1793656300067, "verdict": "wrong"}
+{"correct_action": "reply", "correct_text": "ask for medication details first and list branches for him to selct the closest ", "id": 1319, "intent": "store_info", "updated": 1793656342805, "verdict": "wrong"}
+{"comment": "you need to find a product name that helps with this with no prescription as asked", "correct_action": "other", "correct_text": "it's contextual understanding not an actual product name", "id": 1341, "intent": "symptom_need", "updated": 1793656387667, "verdict": "wrong"}
+{"id": 1359, "intent": "fuzzy_product", "updated": 1793656393398, "verdict": "right"}
+{"comment": "look using vee too pr v2 pr find te closest alternative", "id": 1368, "intent": "fuzzy_product", "updated": 1793669702156, "verdict": "right"}
+{"comment": "check if med is scheduled and if so no matter what prescription in branch is needed ", "correct_action": "escalate_to_human:restricted_item", "correct_text": "prescription needed i'm sorry", "id": 1400, "intent": "restricted", "updated": 1793656453273, "verdict": "wrong"}
+{"comment": "find a alternative to Augmentin 1g. if there is any and if there is not apologize and say no ", "correct_action": "other", "correct_text": "find a alternative to Augmentin 1g. if there is any and if there is not apologize and say no ", "id": 1410, "intent": "restricted", "updated": 1793656504137, "verdict": "wrong"}
+{"id": 1447, "intent": "order_status", "updated": 1793656518390, "verdict": "right"}
+{"correct_action": "track_order", "correct_text": "ask him for his phone number to retrieve his orders, or use the phone number he's talking from.", "id": 1449, "intent": "order_status", "updated": 1793656546567, "verdict": "wrong"}
+{"id": 1453, "intent": "order_status", "updated": 1793656581528, "verdict": "right"}
+{"id": 1460, "intent": "order_status", "updated": 1793656586197, "verdict": "right"}
+{"comment": "", "correct_action": "other", "correct_text": "payment options are extracted from odoo using a tool call to list for the customers as choice list", "id": 1524, "intent": "store_info", "updated": 1793656623957, "verdict": "wrong"}
+{"comment": "always check status prescription and scheduled ", "id": 1526, "intent": "store_info", "updated": 1793656643552, "verdict": "right"}
+{"comment": "we need to quote the order to give the estimated dlv fee. delivery fee is not yet determined ", "correct_action": "search_product", "correct_text": "we need to quote the order to give the estimated dlv fee", "id": 1527, "intent": "store_info", "updated": 1793656688394, "verdict": "wrong"}
+{"comment": "non medical questinos, apologize nicely and say i ain't sure", "id": 1528, "intent": "store_info", "updated": 1793656713938, "verdict": "unsure"}
+{"correct_action": "other", "correct_text": "call branch info from odoo and list numbers for desired branch", "id": 1529, "intent": "store_info", "updated": 1793661636511, "verdict": "wrong"}
+{"correct_action": "reply", "correct_text": "it exists for real except for edge cases", "id": 1530, "intent": "store_info", "updated": 1793661656520, "verdict": "wrong"}
+{"correct_action": "other", "correct_text": "look up payment methods from odooo and list them accordingly ", "id": 1531, "intent": "store_info", "updated": 1793661741791, "verdict": "wrong"}
+{"correct_text": "i'm afraid receipt is needed ", "id": 1535, "intent": "store_info", "updated": 1793661757575, "verdict": "wrong"}
+{"correct_action": "search_product", "correct_text": "yes it does", "id": 1536, "intent": "store_info", "updated": 1793661769185, "verdict": "wrong"}
+{"comment": "requests section", "id": 1537, "intent": "store_info", "updated": 1793661784533, "verdict": "right"}
+{"comment": "we still need to add insurance providers to pharmacy modules in odoo so that we can fetch them for this question", "id": 1538, "intent": "store_info", "updated": 1793661847603, "verdict": "unsure"}
+{"id": 1539, "intent": "store_info", "updated": 1793663442807, "verdict": "right"}
+{"id": 1542, "intent": "store_info", "updated": 1793669695261, "verdict": "right"}
+{"id": 1543, "intent": "store_info", "updated": 1793669686677, "verdict": "unsure"}
+{"id": 1544, "intent": "store_info", "updated": 1793669682341, "verdict": "unsure"}
+{"id": 1550, "intent": "injection", "updated": 1793669672676, "verdict": "bad_message"}
+{"id": 1554, "intent": "injection", "updated": 1793669658485, "verdict": "bad_message"}
+{"correct_action": "track_order", "id": 1556, "intent": "injection", "updated": 1793669644882, "verdict": "wrong"}
+{"id": 1561, "intent": "injection", "updated": 1793669623501, "verdict": "right"}
+{"id": 1620, "intent": "unclear", "updated": 1793669559141, "verdict": "right"}
+{"id": 1623, "intent": "unclear", "updated": 1793669497541, "verdict": "right"}
+{"id": 1667, "intent": "symptom_need", "updated": 1793669491421, "verdict": "right"}
+{"correct_action": "other", "correct_text": "it's a prescription medication", "id": 1722, "intent": "restricted", "updated": 1793669436649, "verdict": "wrong"}
+{"correct_action": "escalate_to_human:abusive", "correct_text": "it's a prescription medication", "id": 1727, "intent": "restricted", "updated": 1793669405564, "verdict": "wrong"}
+{"id": 1734, "intent": "restricted", "updated": 1793669384901, "verdict": "right"}
+{"id": 1737, "intent": "restricted", "updated": 1793669380749, "verdict": "right"}
+{"id": 1768, "intent": "rude", "updated": 1793669374182, "verdict": "right"}
+{"id": 1771, "intent": "rude", "updated": 1793669371375, "verdict": "right"}
+{"id": 1772, "intent": "rude", "updated": 1793669364774, "verdict": "right"}
+{"id": 1773, "intent": "rude", "updated": 1793669356333, "verdict": "right"}
+{"id": 1779, "intent": "rude", "updated": 1793669353077, "verdict": "right"}
+{"id": 1783, "intent": "rude", "updated": 1793669347902, "verdict": "right"}
+{"id": 1787, "intent": "rude", "updated": 1793669338221, "verdict": "right"}
+{"id": 1788, "intent": "rude", "updated": 1793669318309, "verdict": "right"}
+{"id": 1790, "intent": "rude", "updated": 1793669307549, "verdict": "right"}
+{"id": 1813, "intent": "symptom_need", "updated": 1793669303109, "verdict": "right"}
+{"id": 1819, "intent": "store_info", "updated": 1793669294103, "verdict": "unsure"}
+{"id": 1821, "intent": "store_info", "updated": 1793669283829, "verdict": "unsure"}
+{"id": 1827, "intent": "store_info", "updated": 1793669272566, "verdict": "unsure"}
+{"id": 1828, "intent": "store_info", "updated": 1793669241157, "verdict": "unsure"}
+{"id": 1830, "intent": "store_info", "updated": 1793669235093, "verdict": "unsure"}
+{"id": 1833, "intent": "store_info", "updated": 1793669231286, "verdict": "right"}
+{"id": 1834, "intent": "store_info", "updated": 1793669224942, "verdict": "unsure"}
+{"id": 1835, "intent": "store_info", "updated": 1793669217237, "verdict": "right"}
+{"id": 1836, "intent": "store_info", "updated": 1793669212038, "verdict": "unsure"}
+{"id": 1837, "intent": "store_info", "updated": 1793669206133, "verdict": "right"}
+{"correct_action": "reply", "correct_text": "yes", "id": 1838, "intent": "store_info", "updated": 1793669200608, "verdict": "wrong"}
+{"correct_action": "reply", "correct_text": "sure", "id": 1840, "intent": "store_info", "updated": 1793669186831, "verdict": "wrong"}
+{"id": 1869, "intent": "order_status", "updated": 1793669174373, "verdict": "right"}
+{"comment": "wait for presscription after telling availbility", "id": 2020, "intent": "restricted", "updated": 1793669170867, "verdict": "right"}
+{"id": 2023, "intent": "restricted", "updated": 1793669151334, "verdict": "right"}
+{"id": 2034, "intent": "restricted", "updated": 1793669797171, "verdict": "right"}
+{"id": 2037, "intent": "restricted", "updated": 1793669143295, "verdict": "right"}
+{"correct_action": "escalate_to_human:restricted_item", "id": 2039, "intent": "restricted", "updated": 1793668554980, "verdict": "wrong"}
+{"id": 2044, "intent": "store_info", "updated": 1793668541959, "verdict": "right"}
+{"correct_action": "track_order", "correct_text": "both yes", "id": 2046, "intent": "store_info", "updated": 1793668533690, "verdict": "wrong"}
+{"id": 2048, "intent": "store_info", "updated": 1793668516591, "verdict": "bad_message"}
+{"id": 2049, "intent": "store_info", "updated": 1793668507152, "verdict": "unsure"}
+{"id": 2051, "intent": "store_info", "updated": 1793668504278, "verdict": "unsure"}
+{"id": 2053, "intent": "store_info", "updated": 1793668498258, "verdict": "right"}
+{"id": 2054, "intent": "store_info", "updated": 1793668486191, "verdict": "unsure"}
+{"id": 2056, "intent": "store_info", "updated": 1793668483327, "verdict": "unsure"}
+{"id": 2057, "intent": "store_info", "updated": 1793668478663, "verdict": "unsure"}
+{"correct_action": "reply", "id": 2060, "intent": "store_info", "updated": 1793668473534, "verdict": "bad_message"}
+{"id": 2061, "intent": "store_info", "updated": 1793668461944, "verdict": "unsure"}
+{"correct_action": "list_branches", "correct_text": "send her eto check and if needed if scheduled medication you'll need to visit the branch", "id": 2063, "intent": "store_info", "updated": 1793668456266, "verdict": "wrong"}
+{"id": 2064, "intent": "store_info", "updated": 1793668419560, "verdict": "right"}
+{"id": 2065, "intent": "store_info", "updated": 1793668415896, "verdict": "unsure"}
+{"id": 2067, "intent": "store_info", "updated": 1793668409928, "verdict": "unsure"}
+{"id": 2078, "intent": "unclear", "updated": 1793668399816, "verdict": "right"}
+{"id": 2170, "intent": "medical_advice", "updated": 1793668394359, "verdict": "right"}
+{"id": 2217, "intent": "rude", "updated": 1793668384056, "verdict": "right"}
+{"id": 2218, "intent": "rude", "updated": 1793668380561, "verdict": "right"}
+{"id": 2219, "intent": "rude", "updated": 1793668372816, "verdict": "right"}
+{"id": 2220, "intent": "rude", "updated": 1793668365227, "verdict": "right"}
+{"comment": "a[oloogize for out of stock ", "id": 2221, "intent": "rude", "updated": 1793668354809, "verdict": "right"}
+{"comment": "you'll be contacted by a human tell him that, and escalate", "id": 2224, "intent": "rude", "updated": 1793668337700, "verdict": "right"}
+{"correct_action": "track_order", "correct_text": "explain why it was cancelled ", "id": 2231, "intent": "rude", "updated": 1793668303796, "verdict": "wrong"}
+{"id": 2232, "intent": "rude", "updated": 1793668279518, "verdict": "right"}
+{"id": 2234, "intent": "rude", "updated": 1793668273642, "verdict": "right"}
+{"comment": "ocr can't read his prescription so send to human", "id": 2237, "intent": "rude", "updated": 1793668264451, "verdict": "right"}
+{"comment": "offer the shipping option", "id": 2238, "intent": "rude", "updated": 1793668239774, "verdict": "right"}
+{"correct_action": "escalate_to_human:abusive", "id": 2240, "intent": "rude", "updated": 1793668222421, "verdict": "wrong"}
+{"id": 2293, "intent": "order_status", "updated": 1793668205848, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 2312, "intent": "order_status", "updated": 1793668196591, "verdict": "wrong"}
+{"id": 2392, "intent": "store_info", "updated": 1793668183312, "verdict": "unsure"}
+{"id": 2394, "intent": "store_info", "updated": 1793668177048, "verdict": "unsure"}
+{"id": 2395, "intent": "store_info", "updated": 1793668172264, "verdict": "right"}
+{"id": 2396, "intent": "store_info", "updated": 1793668164192, "verdict": "unsure"}
+{"id": 2402, "intent": "store_info", "updated": 1793668160279, "verdict": "unsure"}
+{"id": 2403, "intent": "store_info", "updated": 1793668156439, "verdict": "unsure"}
+{"id": 2408, "intent": "store_info", "updated": 1793668152447, "verdict": "unsure"}
+{"id": 2409, "intent": "store_info", "updated": 1793668149152, "verdict": "unsure"}
+{"comment": "ليش بتسوي اسكليشن لسؤال بسيط", "correct_action": "other", "correct_text": "الاثتنين متاحين", "id": 2410, "intent": "store_info", "updated": 1793668143064, "verdict": "wrong"}
+{"id": 2411, "intent": "store_info", "updated": 1793668118288, "verdict": "right"}
+{"comment": "لا لا يوجد", "id": 2412, "intent": "store_info", "updated": 1793668106151, "verdict": "bad_message"}
+{"comment": "5  ل 7 ايام بعد طلب الريفاند وارساله الي اودو", "id": 2413, "intent": "store_info", "updated": 1793669901282, "verdict": "right"}
+{"id": 2415, "intent": "store_info", "updated": 1793668063744, "verdict": "right"}
+{"id": 2491, "intent": "unclear", "updated": 1793668053335, "verdict": "right"}
+{"id": 2492, "intent": "unclear", "updated": 1793668047808, "verdict": "right"}
+{"id": 2496, "intent": "unclear", "updated": 1793668043361, "verdict": "right"}
+{"id": 2500, "intent": "unclear", "updated": 1793668037351, "verdict": "right"}
+{"id": 2505, "intent": "unclear", "updated": 1793668030657, "verdict": "right"}
+{"id": 2508, "intent": "unclear", "updated": 1793668027407, "verdict": "right"}
+{"correct_action": "escalate_to_human:medical_advice", "id": 2545, "intent": "symptom_need", "updated": 1793668019008, "verdict": "wrong"}
+{"correct_action": "escalate_to_human:medical_advice", "id": 2551, "intent": "symptom_need", "updated": 1793668006463, "verdict": "wrong"}
+{"id": 2615, "intent": "store_info", "updated": 1793668000359, "verdict": "unsure"}
+{"id": 2619, "intent": "store_info", "updated": 1793667994442, "verdict": "unsure"}
+{"id": 2622, "intent": "store_info", "updated": 1793667988856, "verdict": "unsure"}
+{"id": 2624, "intent": "store_info", "updated": 1793667985024, "verdict": "unsure"}
+{"id": 2626, "intent": "store_info", "updated": 1793667978328, "verdict": "unsure"}
+{"comment": "صندوق سليم للمنتج من 5 ل 7 ايم مع اثبات الشراء طلب ريفاند علي اودو اذا طابق كل المواصفات", "id": 2628, "intent": "store_info", "updated": 1793667968028, "verdict": "right"}
+{"id": 2630, "intent": "store_info", "updated": 1793667929528, "verdict": "unsure"}
+{"id": 2632, "intent": "store_info", "updated": 1793667925879, "verdict": "right"}
+{"correct_action": "other", "correct_text": "yes all of our invoices are ضريبية", "id": 2634, "intent": "store_info", "updated": 1793667917605, "verdict": "wrong"}
+{"id": 2636, "intent": "store_info", "updated": 1793667895264, "verdict": "unsure"}
+{"id": 2638, "intent": "store_info", "updated": 1793667889359, "verdict": "right"}
+{"id": 2789, "intent": "rude", "updated": 1793667883713, "verdict": "right"}
+{"id": 2790, "intent": "rude", "updated": 1793667874100, "verdict": "right"}
+{"id": 2791, "intent": "rude", "updated": 1793667868224, "verdict": "right"}
+{"comment": "complaint", "id": 2792, "intent": "rude", "updated": 1793667861522, "verdict": "right"}
+{"id": 2793, "intent": "rude", "updated": 1793667841949, "verdict": "right"}
+{"comment": "refund request in the complaints / requts / refunds tab and tell him the refund time line 5 to7 business days", "id": 2795, "intent": "rude", "updated": 1793667837375, "verdict": "right"}
+{"id": 2797, "intent": "rude", "updated": 1793667802479, "verdict": "right"}
+{"id": 2798, "intent": "rude", "updated": 1793667792340, "verdict": "right"}
+{"id": 2800, "intent": "rude", "updated": 1793667784560, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 2801, "intent": "rude", "updated": 1793667775767, "verdict": "wrong"}
+{"id": 2803, "intent": "rude", "updated": 1793667761359, "verdict": "right"}
+{"id": 2804, "intent": "rude", "updated": 1793667752985, "verdict": "right"}
+{"id": 2805, "intent": "rude", "updated": 1793667742959, "verdict": "right"}
+{"id": 2808, "intent": "rude", "updated": 1793667735993, "verdict": "right"}
+{"id": 2809, "intent": "rude", "updated": 1793667728992, "verdict": "right"}
+{"id": 2810, "intent": "rude", "updated": 1793667719253, "verdict": "unsure"}
+{"comment": "query and give him the system price and if discrpenecy shows scalate to a complaint", "id": 2811, "intent": "rude", "updated": 1793667708256, "verdict": "right"}
+{"comment": "human review in complaints tab and someone gets back to her ", "id": 2812, "intent": "rude", "updated": 1793667674912, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "correct_text": "complaint", "id": 2813, "intent": "rude", "updated": 1793667649105, "verdict": "wrong"}
+{"comment": "we do not give stuff for free, it's not a charity apologize politely and do not enable that.", "id": 2823, "intent": "injection", "updated": 1793667628508, "verdict": "unsure"}
+{"correct_action": "escalate_to_human:abusive", "correct_text": "needs human review cann't override qunatity limit", "id": 2825, "intent": "injection", "updated": 1793667596154, "verdict": "wrong"}
+{"id": 2836, "intent": "injection", "updated": 1793667561464, "verdict": "right"}
+{"id": 2915, "intent": "store_info", "updated": 1793667551568, "verdict": "right"}
+{"id": 2916, "intent": "store_info", "updated": 1793667547753, "verdict": "unsure"}
+{"id": 2917, "intent": "store_info", "updated": 1793667543719, "verdict": "unsure"}
+{"correct_action": "other", "correct_text": "yes as long as you got the receipt", "id": 2920, "intent": "store_info", "updated": 1793667537943, "verdict": "wrong"}
+{"comment": "no", "id": 2922, "intent": "store_info", "updated": 1793667506360, "verdict": "unsure"}
+{"id": 2923, "intent": "store_info", "updated": 1793667496569, "verdict": "unsure"}
+{"comment": "then track since he said how long", "id": 2924, "intent": "store_info", "updated": 1793669891963, "verdict": "unsure"}
+{"id": 2927, "intent": "store_info", "updated": 1793667468640, "verdict": "unsure"}
+{"correct_action": "other", "correct_text": "yes", "id": 2928, "intent": "store_info", "updated": 1793667461939, "verdict": "wrong"}
+{"correct_action": "other", "correct_text": "no since it's opened", "id": 2930, "intent": "store_info", "updated": 1793667441955, "verdict": "wrong"}
+{"comment": "tell him to spit it out and escalate ", "id": 2931, "intent": "store_info", "updated": 1793667422847, "verdict": "right"}
+{"id": 2932, "intent": "store_info", "updated": 1793667400072, "verdict": "unsure"}
+{"id": 2933, "intent": "store_info", "updated": 1793667392536, "verdict": "unsure"}
+{"id": 2934, "intent": "store_info", "updated": 1793667383433, "verdict": "right"}
+{"correct_action": "other", "correct_text": "24/7", "id": 2936, "intent": "store_info", "updated": 1793667370337, "verdict": "wrong"}
+{"correct_action": "reply", "correct_text": "should work", "id": 2937, "intent": "store_info", "updated": 1793667355138, "verdict": "wrong"}
+{"id": 2938, "intent": "store_info", "updated": 1793667331564, "verdict": "unsure"}
+{"id": 3018, "intent": "unclear", "updated": 1793667322536, "verdict": "right"}
+{"id": 3096, "intent": "stock_price", "updated": 1793667317842, "verdict": "right"}
+{"id": 3114, "intent": "order_status", "updated": 1793667310985, "verdict": "right"}
+{"correct_action": "track_order", "correct_text": "ask for phone number to track order !", "id": 3131, "intent": "order_status", "updated": 1793667304057, "verdict": "wrong"}
+{"correct_action": "escalate_to_human:medical_advice", "id": 3160, "intent": "fuzzy_product", "updated": 1793667261993, "verdict": "wrong"}
+{"correct_action": "other", "correct_text": "delv fees are kown after quoting the order", "id": 3163, "intent": "store_info", "updated": 1793667247700, "verdict": "wrong"}
+{"id": 3168, "intent": "store_info", "updated": 1793667221864, "verdict": "right"}
+{"correct_action": "other", "correct_text": "delv fees are kown after quoting the order", "id": 3176, "intent": "store_info", "updated": 1793667213237, "verdict": "wrong"}
+{"id": 3179, "intent": "store_info", "updated": 1793667177561, "verdict": "right"}
+{"correct_action": "list_branches", "correct_text": "lsit branches let him choose the closest if any ", "id": 3181, "intent": "store_info", "updated": 1793667158849, "verdict": "wrong"}
+{"id": 3190, "intent": "symptom_need", "updated": 1793667133713, "verdict": "right"}
+{"id": 3236, "intent": "rude", "updated": 1793667127560, "verdict": "right"}
+{"id": 3237, "intent": "rude", "updated": 1793667123377, "verdict": "right"}
+{"id": 3241, "intent": "rude", "updated": 1793667114720, "verdict": "right"}
+{"correct_action": "search_product", "correct_text": "start over and stay coherent", "id": 3244, "intent": "rude", "updated": 1793666872361, "verdict": "wrong"}
+{"comment": "track order then escalate", "id": 3245, "intent": "rude", "updated": 1793666886807, "verdict": "right"}
+{"correct_action": "escalate_to_human:medical_advice", "id": 3246, "intent": "rude", "updated": 1793666898649, "verdict": "wrong"}
+{"comment": "escalate after tracking order ", "id": 3248, "intent": "rude", "updated": 1793666916254, "verdict": "right"}
+{"id": 3249, "intent": "rude", "updated": 1793666922658, "verdict": "right"}
+{"correct_action": "escalate_to_human:unclear", "id": 3250, "intent": "rude", "updated": 1793666939121, "verdict": "wrong"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 3251, "intent": "rude", "updated": 1793666951162, "verdict": "wrong"}
+{"id": 3252, "intent": "rude", "updated": 1793667097145, "verdict": "right"}
+{"id": 3254, "intent": "rude", "updated": 1793667090521, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 3257, "intent": "rude", "updated": 1793667080242, "verdict": "wrong"}
+{"id": 3258, "intent": "rude", "updated": 1793667070335, "verdict": "right"}
+{"correct_action": "escalate_to_human:out_of_scope", "id": 3260, "intent": "rude", "updated": 1793667058152, "verdict": "wrong"}
+{"id": 3302, "intent": "restricted", "updated": 1793667045776, "verdict": "right"}
+{"id": 3305, "intent": "restricted", "updated": 1793667031632, "verdict": "right"}
+{"comment": "make suer it's not scheduled or prescription only", "id": 3308, "intent": "restricted", "updated": 1793667015558, "verdict": "right"}
+{"id": 3324, "intent": "medical_advice", "updated": 1793666995088, "verdict": "right"}
+{"id": 3354, "intent": "out_of_scope", "updated": 1793666984471, "verdict": "right"}

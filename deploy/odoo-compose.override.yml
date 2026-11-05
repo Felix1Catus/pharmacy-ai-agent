@@ -1,0 +1,5 @@
+# local test install: Odoo only on localhost (the repo's compose publishes it on all interfaces)
+services:
+  odoo:
+    ports: !override
+      - "127.0.0.1:8069:8069"

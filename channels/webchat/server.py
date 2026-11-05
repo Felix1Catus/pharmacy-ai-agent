@@ -110,7 +110,10 @@ def page():
 
 @app.get("/api/models", dependencies=[Depends(auth)])
 def models():
-    names = [m["name"] for m in requests.get(f"{OLLAMA}/api/tags", timeout=10).json()["models"]]
+    try:   # Ollama lists its models; llama-server (LLM_API=openai) serves only the one it loaded
+        names = [m["name"] for m in requests.get(f"{OLLAMA}/api/tags", timeout=10).json()["models"]]
+    except Exception:  # noqa: BLE001
+        names = []
     usable = [n for n in names if "Qwen3-4B-Instruct-2507" in n or n.startswith("pharmacy-")]
     return {"default": DEFAULT_MODEL, "models": [DEFAULT_MODEL] + [n for n in usable if n != DEFAULT_MODEL]}
 
@@ -127,7 +130,7 @@ def reset(body: dict):
 GUARD_LABELS = {
     "menu": "menu (fixed reply)", "injection": "prompt-injection guard",
     "off_topic": "off-topic guard", "output_filter": "output filter (leak blocked)",
-    "medical": "medical-advice guard", "scheduled": "scheduled-medicine guard",
+    "medical": "medical-advice guard", "pharmacist_referral": "symptom -> pharmacist referral", "scheduled": "scheduled-medicine guard",
     "scheduled_tool": "scheduled-medicine guard", "scheduled_search": "scheduled-medicine guard",
     "scheduled_prescription": "scheduled-medicine guard (prescription)",
     "prescription_tool": "prescription needed -> asked for photo",

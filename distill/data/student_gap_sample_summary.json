@@ -1,0 +1,163 @@
+{
+ "category": {
+  "rude": {
+   "agree": 6,
+   "n": 32,
+   "rate": 0.188
+  },
+  "medical_advice": {
+   "agree": 15,
+   "n": 48,
+   "rate": 0.312
+  },
+  "store_info": {
+   "agree": 42,
+   "n": 68,
+   "rate": 0.618
+  },
+  "order_status": {
+   "agree": 49,
+   "n": 65,
+   "rate": 0.754
+  },
+  "restricted": {
+   "agree": 19,
+   "n": 23,
+   "rate": 0.826
+  },
+  "unclear": {
+   "agree": 19,
+   "n": 20,
+   "rate": 0.95
+  },
+  "out_of_scope": {
+   "agree": 22,
+   "n": 23,
+   "rate": 0.957
+  },
+  "fuzzy_product": {
+   "agree": 34,
+   "n": 35,
+   "rate": 0.971
+  },
+  "symptom_need": {
+   "agree": 92,
+   "n": 93,
+   "rate": 0.989
+  },
+  "stock_price": {
+   "agree": 16,
+   "n": 16,
+   "rate": 1.0
+  },
+  "reserve_first": {
+   "agree": 12,
+   "n": 12,
+   "rate": 1.0
+  },
+  "order_first": {
+   "agree": 13,
+   "n": 13,
+   "rate": 1.0
+  },
+  "injection": {
+   "agree": 10,
+   "n": 10,
+   "rate": 1.0
+  }
+ },
+ "dialect": {
+  "Modern Standard Arabic": {
+   "agree": 54,
+   "n": 78,
+   "rate": 0.692
+  },
+  "Egyptian": {
+   "agree": 32,
+   "n": 46,
+   "rate": 0.696
+  },
+  "Gulf": {
+   "agree": 28,
+   "n": 40,
+   "rate": 0.7
+  },
+  "Saudi Hijazi": {
+   "agree": 21,
+   "n": 29,
+   "rate": 0.724
+  },
+  "Levantine": {
+   "agree": 42,
+   "n": 56,
+   "rate": 0.75
+  },
+  "Arabizi": {
+   "agree": 24,
+   "n": 32,
+   "rate": 0.75
+  },
+  "Saudi Najdi": {
+   "agree": 44,
+   "n": 57,
+   "rate": 0.772
+  },
+  "Gulf (Kuwaiti/Emirati)": {
+   "agree": 15,
+   "n": 19,
+   "rate": 0.789
+  },
+  "English": {
+   "agree": 32,
+   "n": 39,
+   "rate": 0.821
+  },
+  "mixed Arabic and English": {
+   "agree": 56,
+   "n": 61,
+   "rate": 0.918
+  },
+  "MSA": {
+   "agree": 1,
+   "n": 1,
+   "rate": 1.0
+  }
+ },
+ "teacher_action": {
+  "escalate_to_human:complaint": {
+   "agree": 0,
+   "n": 10,
+   "rate": 0.0
+  },
+  "escalate_to_human:restricted_item": {
+   "agree": 0,
+   "n": 3,
+   "rate": 0.0
+  },
+  "escalate_to_human:medical_advice": {
+   "agree": 15,
+   "n": 48,
+   "rate": 0.312
+  },
+  "list_branches": {
+   "agree": 8,
+   "n": 17,
+   "rate": 0.471
+  },
+  "track_order": {
+   "agree": 49,
+   "n": 85,
+   "rate": 0.576
+  },
+  "reply": {
+   "agree": 91,
+   "n": 106,
+   "rate": 0.858
+  },
+  "search_product": {
+   "agree": 186,
+   "n": 189,
+   "rate": 0.984
+  }
+ }
+}
