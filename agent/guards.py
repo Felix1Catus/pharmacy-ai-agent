@@ -487,7 +487,6 @@ _RX_PROBLEMS = {
     "date_in_future": ("تاريخ الوصفة غير صحيح", "the prescription date isn't valid"),
     "no_invoice": ("لم أجد رقم الفاتورة/الوصفة", "I couldn't find the invoice/prescription number"),
     "no_medication": ("لم أجد في الوصفة دواءً من أدويتنا", "I couldn't find one of our medicines on it"),
-    "invoice_already_used": ("هذه الوصفة مستخدمة من قبل", "this prescription was already used"),
 }
 
 

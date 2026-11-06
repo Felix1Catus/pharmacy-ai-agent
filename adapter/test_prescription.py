@@ -345,3 +345,20 @@ def test_common_words_never_name_a_product():
     products = [{"id": 32, "product_variant_id": [32], "name": "Digital Thermometer",
                  "x_name_ar": "ميزان حرارة رقمي"}]
     assert rx.match_medications("الختم الالكتروني المعتمد Digital MOH Seal", products) == []
+
+
+@odoo
+def test_same_invoice_again_is_accepted_and_flagged_for_the_pharmacist(ctx):
+    # never "already used" to the customer: a repeat goes to the pharmacist with the earlier uses
+    from make_prescription import make_prescription_png
+    inv = f"INV-DUP-{time.time_ns() % 10**10}"
+    other = GW.register_customer("ZZ Dup Rx", "0500004406", "Riyadh")["customer_id"]
+    img = make_prescription_png(["Augmentin 1g"], 0, inv)
+    first = GW.submit_prescription(other, img)
+    again = GW.submit_prescription(ctx["cust"], img)
+    try:
+        assert first["ok"] and again["ok"] and again["problems"] == [] and again["needs_pharmacist"]
+        rec = GW.c.read("pharmacy.prescription", again["prescription_id"], ["state", "notes"])[0]
+        assert rec["state"] == "submitted" and "seen before" in rec["notes"] and first["prescription_id"]
+    finally:
+        GW.c.execute_kw("pharmacy.prescription", "unlink", [[first["prescription_id"], again["prescription_id"]]])

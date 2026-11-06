@@ -750,15 +750,16 @@ class Gateway:
         if res["scheduled_count"] and not res["medications"]:
             res["problems"].append("only_scheduled")
             res["ok"] = False
+        seen_before = []
         if res["invoice_number"]:
-            # used = on an order, or held by another customer; a rejected upload (unreadable,
-            # a test, the wrong patient) never blocks the real owner from sending it again
-            reused = self.c.search_count("pharmacy.prescription", [
+            # The same invoice number seen before (on an order, or sent by another contact) is NOT
+            # refused: the customer is never told "used before". It goes to the pharmacist, who
+            # decides, with the earlier uses written on the record (Pharmacy -> Prescriptions).
+            seen_before = self.c.search_read("pharmacy.prescription", [
                 ["invoice_number", "=", res["invoice_number"]], ["state", "!=", "rejected"],
-                "|", ["sale_order_id", "!=", False], ["partner_id", "!=", customer_id]])
-            if reused:
-                res["problems"].append("invoice_already_used")
-                res["ok"] = False
+                "|", ["sale_order_id", "!=", False], ["partner_id", "!=", customer_id]],
+                ["name", "partner_id", "sale_order_id"], limit=5)
+        res["needs_pharmacist"] = bool(seen_before)
         meds = res["medications"]
         # generic substitution: the prescription also unlocks other brands with EXACTLY the same
         # active ingredient(s) (Augmentin -> أوجمنتين / JULMENTIN / أموكلان), never Scheduled ones
@@ -788,9 +789,14 @@ class Gateway:
             "extracted_drug": ", ".join(m["name_en"] for m in meds)[:250] or False,
             "directions": "\n".join(f"{d['medicine']}: {d['directions']}"
                                     for d in res.get("directions") or []) or False,
-            "state": "auto_verified" if res["ok"] else "submitted",
-            "notes": ("checks failed: " + ", ".join(res["problems"])) if res["problems"]
-                     else "auto-verified: date, invoice number and medicine(s) found",
+            "state": "auto_verified" if res["ok"] and not seen_before else "submitted",
+            "notes": "\n".join(filter(None, [
+                ("checks failed: " + ", ".join(res["problems"])) if res["problems"]
+                else ("checks passed" if seen_before else "auto-verified: date, invoice number and medicine(s) found"),
+                ("PHARMACIST CHECK - this invoice number was seen before: " + "; ".join(
+                    f"{r['name']} ({(r['partner_id'] or [0, 'no contact'])[1]}"
+                    + (f", order {r['sale_order_id'][1]}" if r["sale_order_id"] else "") + ")"
+                    for r in seen_before)) if seen_before else ""])),
         })
         return {"prescription_id": rid, **res}
 
