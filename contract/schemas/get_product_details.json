@@ -1,0 +1,37 @@
+{
+  "name": "get_product_details",
+  "description": "Label facts of products already found by search_product: active ingredient, strength, dosage form, route, pack size, price, prescription status, storage (fridge or room temperature, min/max °C, keep from light, keep dry, do not freeze), shelf life, manufacturer and country. Use for questions ABOUT a product (\"does it need the fridge?\", \"how many in the box?\", \"is it made in Saudi?\", \"does it need a prescription?\"). Never for dose, use or suitability.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "product_id": {
+        "type": "integer",
+        "description": "A product_id from search_product."
+      },
+      "product_ids": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "description": "Up to 3 product_ids, to compare products."
+      }
+    },
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "products: list of label facts; not_recorded lists facts missing from our system."
+  },
+  "errors": [
+    {
+      "code": "not_found",
+      "when": "unknown product_id"
+    },
+    {
+      "code": "scheduled_item",
+      "when": "a scheduled/controlled medicine - nothing is disclosed"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import re
 
 from gateway import guess_city
 from fuzzy_search import _STOP as _FUZZY_STOP
-from guards import is_affirmation, normalize
+from guards import is_affirmation, normalize, service_intent
 from rapidfuzz import fuzz
 
 MAX_QTY = 10
@@ -54,6 +54,9 @@ T = {
         "add_prompt": "تمام، اكتب اسم المنتج الثاني 🛒",
         "cancelled": "تم إلغاء الطلب. اكتب «القائمة» إذا احتجت شيئاً.",
         "rx_note": "\n📝 فيه دواء يحتاج وصفة: بعد التأكيد نطلب صورتها ويراجعها الصيدلي.",
+        "oos": "⚠️ للأسف {name} غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+        "notify": "🔔 بلغني لما يتوفر", "other_product": "🔎 منتج آخر",
+        "alert_saved": "تمام ✅ سجّلنا طلبك، ونرسل لك هنا أول ما يتوفر {name}.",
     },
     "en": {
         "list": "Here's what I found 🔎\n{rows}\n\nPick a product number or tap it 👇",
@@ -85,6 +88,9 @@ T = {
         "add_prompt": "OK, type the name of the next product 🛒",
         "cancelled": "Order cancelled. Type 'menu' if you need anything.",
         "rx_note": "\n📝 It includes a prescription medicine: after you confirm we ask for the prescription photo for the pharmacist.",
+        "oos": "⚠️ Sorry, {name} is out of stock at all our branches right now.\nShall we message you here as soon as it is back?",
+        "notify": "🔔 Notify me", "other_product": "🔎 Another product",
+        "alert_saved": "Done ✅ we'll message you here as soon as {name} is back in stock.",
     },
 }
 
@@ -299,6 +305,14 @@ class OrderFlow:
             if idx is None:
                 return None
             return self._pick(conv, idx, prefix="")
+        if step == "oos":                        # picked an out-of-stock product
+            if _pressed(raw, "notify") or is_affirmation(raw) or service_intent(raw) == "stock_alert":
+                return self._stock_alert(conv)
+            if _pressed(raw, "other_product"):
+                conv.order = None
+                return self.a._say(conv, t["ask_name"], guard="order_flow")
+            conv.order = None
+            return None                          # something else: the agent handles it
         if step == "qty":
             q = parse_qty(raw)
             if q is not None and 1 <= q <= MAX_QTY:
@@ -388,10 +402,28 @@ class OrderFlow:
         c["qty"] = o["draft"].pop("qty", None)
         if c["qty"] and not 1 <= c["qty"] <= MAX_QTY:
             c["qty"] = None
+        st = self.a.gw.check_stock(c["product_id"])
+        if isinstance(st, dict) and "stock" in st and not any(s["qty_available"] > 0 for s in st["stock"]):
+            # nothing at any branch: say so now (not after quantity and delivery) and offer the
+            # back-in-stock message instead
+            o["step"], o["oos"] = "oos", c
+            return self.a._say(conv, t["oos"].format(name=c["name"]), guard="order_flow",
+                               buttons=self._btns(conv, "notify", "other_product"))
         o["current"] = c
         o.setdefault("fulfillment", o["draft"].get("fulfillment"))
         o.setdefault("branch_id", o["draft"].get("branch_id"))
         return self._next(conv, picked=t["picked"].format(name=c["name"], price=self._price(t, c)) + "\n")
+
+    def _stock_alert(self, conv, item=None):
+        t = self._t(conv)
+        c = item or conv.order["oos"]
+        args = {"product_id": c["product_id"], "customer_id": conv.customer_id}
+        if not conv.customer_id:                 # the request belongs to a contact: identify first
+            conv.order = None
+            return self.a.customer.start(conv, pending={"kind": "stock_alert", "item": c})
+        conv.order = None
+        self.a._run_tool(conv, "request_stock_alert", args)
+        return self.a._say(conv, t["alert_saved"].format(name=c["name"]), guard="stock_alert")
 
     def _next(self, conv, picked=""):
         """Ask for the first missing detail, or show the summary."""

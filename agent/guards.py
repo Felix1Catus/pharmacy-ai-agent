@@ -32,7 +32,7 @@ def normalize(text: str) -> str:
 _MEDICAL_TERMS = [
     # dosage (ar) — "جرعه" plus administration verbs ("give/take") which, unlike bare "كم حبة"
     # (also a stock question), signal a dosage/medical question.
-    "جرعه", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
+    "جرعه", "جرعت", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
     # advice / recommendation / diagnosis (ar)
     "المناسب لي", "الدواء المناسب", "العلاج المناسب", "وش اعطي", "ايش اعطي", "وش الدوا",
     "ايش الدوا", "اخد ايه", "اخد ايش", "اخذ ايش", "وش اخذ", "ايش اخذ", "ايه اخد", "شو اخذ",
@@ -75,8 +75,14 @@ _REPLY_DOSE = re.compile(
     r"max(imum)? (of )?\d|before meals|after meals|empty stomach)", re.I)
 
 
+# opening hours ("مفتوحين 24 ساعة يومياً", "open daily") are store facts, not a dosing schedule
+_HOURS = re.compile(r"(24\s*(ساعه|ساعات|/\s*7|hours?)(\s*(يوميا|في اليوم|باليوم|طول الاسبوع|daily|a day))?|"
+                    r"طوال (اليوم|الاسبوع|الوقت)|(مفتوح\w*|نفتح|تفتح|يفتح|يعمل|نعمل|تعمل|شغال\w*|الدوام|دوام|"
+                    r"ساعات العمل|open\w*)[^.؟?\n]{0,40})", re.I)
+
+
 def reply_gives_medical_advice(reply: str) -> bool:
-    return bool(_REPLY_DOSE.search(normalize(reply)))
+    return bool(_REPLY_DOSE.search(_HOURS.sub(" ", normalize(reply))))
 
 
 # ---- 1b. prompt injection / manipulation ----------------------------------
@@ -134,9 +140,64 @@ _SMALL_TALK = ["السلام", "سلام", "مرحبا", "هلا", "اهلا", "
                "good morning", "good evening", "ok", "yes", "no"]
 
 
+# ---- 1c'. questions ABOUT a product (label facts, answered by get_product_details) ----
+# storage / fridge / temperature, shelf life / expiry, maker / country, form, pack size, strength,
+# prescription needed, ingredient. Not use, dose or suitability (those stay medical questions).
+_INFO_TERMS = [
+    "ثلاجه", "الثلاجه", "بالثلاجه", "تلاجه", "التلاجه", "بالتلاجه", "تبريد", "مبرد", "يتبرد", "بارد", "فريزر",
+    "يحفظ", "يتحفظ", "احفظ", "احفظه", "احفظها", "حفظه", "حفظها", "تخزين", "يخزن", "اخزن", "اخزنه", "درجه حراره",
+    "حراره الغرفه", "يتحمل الحر", "في الشمس", "من الضوء", "رطوبه", "يتجمد", "يجمد",
+    "صلاحي", "انتهاء", "ينتهي", "تنتهي",
+    "الشركه", "شركه", "المصنع", "مصنع", "صنع", "صناعه", "امريكي", "اوروبي", "الماني", "سعودي ولا",
+    "صناعه سعوديه", "هندي", "اي بلد", "وين مصنوع", "منشا",
+    "كم حبه في", "كم حبه فيه", "كم قرص في", "كم في العلبه", "حجم العبوه", "حجم العلبه", "كم مل",
+    "شراب ولا", "حبوب ولا", "كبسول ولا", "اقراص ولا", "ابره ولا", "التركيز", "تركيزه", "كم تركيز",
+    "يحتاج وصفه", "يبغاله وصفه", "يبي وصفه", "يحتاج روشته", "بدون وصفه", "بوصفه", "المادة الفعاله",
+    "الماده الفعاله", "المكونات", "مكوناته", "وش فيه", "ايش فيه",
+    "fridge", "refrigerat", "store it", "storage", "stored", "temperature", "room temp", "freeze",
+    "expiry", "expire", "shelf life", "manufactur", "made in", "made by", "which company", "country",
+    "how many tablets in", "how many in a box", "pack size", "box size", "how many ml", "syrup or",
+    "tablets or", "strength", "need a prescription", "needs a prescription", "without a prescription",
+    "prescription needed", "active ingredient", "ingredients",
+]
+
+
+_INFO_RE = re.compile(r"(how many|كم)\s+\S+(\s+\S+)?\s+(are\s+)?(in|per|inside|في|فيه|بال|داخل)\s+"
+                      r"(a|one|the|each|every|ال)?\s*(box|pack|packet|bottle|pen|علبه|العلبه|عبوه|الباكيت|كرتون|قلم)",
+                      re.I)
+
+
+def product_info_intent(text: str) -> bool:
+    """A question about a product's label facts (storage, fridge, shelf life, maker, form, pack,
+    strength, prescription status) - answered from get_product_details, not the order wizard."""
+    n = normalize(text)
+    if medical_advice_intent(text):
+        return False
+    return bool(_INFO_RE.search(n)) or any(t in n for t in (normalize(x) for x in _INFO_TERMS))
+
+
+# ---- 1c''. account requests the model handles with a tool (not the order wizard) ------------
+_STOCK_ALERT = re.compile(r"(بلغني|بلغوني|نبهني|نبهوني|خبرني|خبروني|ابلغني|كلموني|راسلوني|ارسلولي|"
+                          r"تعلموني|اعلمني|notify me|let me know when|tell me when|message me when|"
+                          r"alert me)", re.I)
+_ADDRESS_CHANGE = re.compile(r"((غير|غيري|غيرو|بدل|حدث|عدل|تغيير|تحديث|تعديل)\s*(لي\s*)?(ال)?عنوان|"
+                             r"عنواني (الجديد|تغير|صار)|عنوان (جديد|ثاني)|change (my )?address|"
+                             r"new address|update (my )?address)", re.I)
+
+
+def service_intent(text: str) -> str | None:
+    """'stock_alert' ("tell me when it's back") / 'address' (a new delivery address) or None."""
+    n = normalize(text)
+    if _STOCK_ALERT.search(n):
+        return "stock_alert"
+    if _ADDRESS_CHANGE.search(n):
+        return "address"
+    return None
+
+
 def looks_in_scope(text: str) -> bool:
     n = normalize(text)
-    if len(n.split()) <= 3:
+    if len(n.split()) <= 3 or product_info_intent(text) or service_intent(text):
         return True
     return any(t in n for t in _SCOPE_TERMS) or any(
         re.search(rf"(?<!\w){re.escape(t)}(?!\w)", n) for t in _SMALL_TALK)

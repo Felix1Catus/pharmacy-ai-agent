@@ -232,6 +232,10 @@ class CustomerFlow:
             return self.place_order(conv, pending["name"], pending["args"], head)
         if pending["kind"] == "menu":
             return self.a._menu_choice(conv, pending["choice"], prefix=head)
+        if pending["kind"] == "stock_alert":     # "notify me" on an out-of-stock product
+            return self.a.order._stock_alert(conv, pending["item"])
+        if pending["kind"] == "text":            # an account question asked before identifying
+            return self.a.respond(conv, pending["text"], resumed=True)
         if pending["kind"] == "image":
             return self.a.respond(conv, pending.get("text") or "", image=pending["image"],
                                   image_name=pending.get("image_name"), resumed=True)

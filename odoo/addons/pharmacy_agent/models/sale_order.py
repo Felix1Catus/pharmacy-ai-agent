@@ -1,4 +1,4 @@
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -65,3 +65,15 @@ class SaleOrder(models.Model):
             order.write({"rx_review_state": "rejected", "rx_reviewed_by": self.env.user.id,
                          "notify_state": "pending"})
         return True
+
+    # ---- cold chain + handovers (read by the assistant and the dispatcher) -----------
+    needs_cold_chain = fields.Boolean(
+        string="Needs cold chain", compute="_compute_needs_cold_chain", store=True,
+        help="A fridge / freezer item is on the order: deliver in a cool box.")
+    handover_ids = fields.One2many("pharmacy.handover", "sale_order_id", string="Handovers")
+    cancel_reason_wa = fields.Char(string="Cancellation reason (customer)", copy=False)
+
+    @api.depends("order_line.product_id.cold_chain")
+    def _compute_needs_cold_chain(self):
+        for o in self:
+            o.needs_cold_chain = any(l.product_id.cold_chain for l in o.order_line)

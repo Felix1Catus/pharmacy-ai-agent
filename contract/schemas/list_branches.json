@@ -1,15 +1,20 @@
 {
   "name": "list_branches",
-  "description": "Our branches and their branch_id.",
+  "description": "Our branches: city, district, address, opening hours, phone, whether they deliver. Optional city filter.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
-    "properties": {},
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "City the customer named, e.g. جدة / Riyadh."
+      }
+    },
     "additionalProperties": false
   },
   "returns": {
     "type": "object",
-    "description": "branches: list of {branch_id, name}.",
+    "description": "branches: list of {branch_id, name, city, district, address, hours, phone, delivery}.",
     "properties": {
       "branches": {
         "type": "array"

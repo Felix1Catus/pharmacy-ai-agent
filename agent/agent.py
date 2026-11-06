@@ -40,6 +40,7 @@ from gateway import err  # noqa: E402
 from needs import detect_need  # noqa: E402
 from guards import (ScheduledDenylist, abusive_intent, injection_attempt, is_affirmation,  # noqa: E402
                     looks_in_scope, medical_advice_intent, order_status_intent, prescription_rejected,
+                    product_info_intent, service_intent,
                     reply_gives_medical_advice, pharmacist_complaint, ABUSE_HANDOVER,
                     PHARMACIST_REFERRAL, URGENT_REFERRAL,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
@@ -53,7 +54,12 @@ _VOICE_REFINE_SYS = ("أنت تصحّح نصاً ناتجاً عن تحويل ك
                      "الخليجية. أعد كتابة الجملة مع تصحيح أخطاء التعرّف الواضحة فقط، خصوصاً "
                      "أسماء الأدوية. لا تُجب على السؤال ولا تضف شيئاً؛ أعد الجملة المصحّحة فقط في سطر واحد.")
 
-CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
+CUSTOMER_TOOLS = {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human",
+                  "get_product_details", "get_order_details", "cancel_order", "list_prescriptions",
+                  "request_stock_alert", "update_delivery_address"}
+# account tools: only for an identified customer (the agent injects their id)
+_ACCOUNT_TOOLS = {"create_order", "hold_item", "track_order", "create_dispatch", "get_order_details",
+                  "cancel_order", "list_prescriptions", "request_stock_alert", "update_delivery_address"}
 from rapidfuzz import fuzz  # noqa: E402
 from menu import (TEXTS, detect_lang, format_orders, is_greeting, localize, match_menu,  # noqa: E402
                   menu_items, menu_text, wants_menu)
@@ -85,15 +91,37 @@ SYSTEM_PROMPT = (
     "complaint.\n"
     "WHAT TO DO:\n"
     "- Any product or medicine mentioned (name, brand, ingredient): call search_product at once "
-    "with the product words only. Something wanted FOR a symptom or purpose with no product named "
+    "with the product words only - FIRST, even when the message also names a branch, pickup, "
+    "delivery or the word order (\"order 1 Centrum\", \"بنادول موجود في فرع العليا؟\"). Something wanted FOR a symptom or purpose with no product named "
     "(\"دوا للصداع\", \"something for a blocked nose\"): call search_product with need set to that "
     "need and the customer's words as query - the system picks the products; never choose a "
     "medicine or ingredient yourself. The system then shows the options and takes the order "
     "(quantity, pickup/delivery, confirmation) itself.\n"
     "- Questions about an existing order (where it is, when it arrives, whether it shipped): "
     "track_order - never create_order or hold_item.\n"
-    "- Branches: list_branches. Stock question about a product already "
-    "found: check_stock.\n"
+    "- Branches (where, which city or district, opening hours, phone, delivery): list_branches, "
+    "with city when they name one. Stock question about a product already found: check_stock; "
+    "out of stock and they want to be told when it is back: request_stock_alert.\n"
+    "PRODUCT QUESTIONS - the pharmacy system holds each medicine's label facts: active "
+    "ingredient, strength, dosage form, pack size, price, prescription status, storage (fridge or "
+    "room temperature, the temperature range, keep from light, keep dry, do not freeze), shelf "
+    "life, manufacturer and country. For any such question (\"يحتاج ثلاجة؟\", \"كم حبة في "
+    "العلبة؟\", \"صناعة وين؟\", \"يحتاج وصفة؟\") call get_product_details with the product_id "
+    "from search_product (search first if needed: ONE product name per search_product call, two "
+    "products = two searches; then up to 3 ids in one get_product_details to compare) and answer "
+    "only from it, briefly, in the customer's words: e.g. fridge 2-8 °C. A later question about "
+    "the same product: answer from that result. A fact marked NOT RECORDED: say the pharmacist "
+    "will confirm it - never answer it from memory. dispensing=otc: no prescription needed; "
+    "prescription: they can order it and send a photo of the prescription for the pharmacist. "
+    "These are label facts, not advice - what it is for, how to take it or whether it suits "
+    "them stays medical_advice.\n"
+    "ACCOUNT (identified customers; only for orders ALREADY placed - a new order is always "
+    "search_product): one order in detail (items, what the pharmacist said, "
+    "payment, delivery address): get_order_details. Cancel: get_order_details, ask them to "
+    "confirm the order number, then cancel_order (if can_cancel is false: escalate_to_human "
+    "reason complaint). Their prescriptions and review status: list_prescriptions. A new "
+    "delivery address they wrote: update_delivery_address. \"Did anyone answer my complaint?\": "
+    "track_order shows their requests.\n"
     "- Never ask for the customer's name, phone or address - the system has or collects them.\n"
     "- Prescription-only medicines are ordered normally; a pharmacist reviews the prescription.\n"
     "- If create_order is available: call it only after the customer confirmed the exact items, "
@@ -121,14 +149,16 @@ LANG_HINT = {"ar": "\n\n(Reply only in Arabic, Saudi dialect.)",
              "en": "\n\n(Reply only in English.)"}
 
 # tools that operate on behalf of a specific customer — agent injects the id.
-_NEEDS_CUSTOMER = {"create_order", "hold_item", "create_dispatch", "track_order", "escalate_to_human"}
+_NEEDS_CUSTOMER = _ACCOUNT_TOOLS | {"escalate_to_human"}
 # state-changing tools: only after the customer's latest message is a clear "yes"
-_NEEDS_CONFIRMATION = {"create_order", "hold_item", "create_dispatch"}
+_NEEDS_CONFIRMATION = {"create_order", "hold_item", "create_dispatch", "cancel_order"}
 MAX_QTY = 10                         # per item through the chat; bigger orders go via a branch
 SESSION_GAP_S = 6 * 3600             # a WhatsApp chat idle this long starts over with the menu
 _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:", "tool_call",
                  "<|im_", "search_product", "check_stock", "create_order", "create_dispatch",
-                 "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id"]
+                 "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id",
+                 "get_product_details", "get_order_details", "cancel_order", "list_prescriptions",
+                 "request_stock_alert", "update_delivery_address", "not_recorded", "dispensing_meaning"]
 # the model sometimes WRITES an escalation as text ("call escalate_to_human reason=abusive summary=...")
 # instead of calling the tool; the leak filter would then drop it and the handover never happens.
 # Only escalations are recovered from text (the safe direction); any other tool-like text stays a leak.
@@ -142,6 +172,28 @@ _ID_MENTION = re.compile(r"\s*[\(\[]?\s*(?<![\w])(?:product_id|product id|branch
 _CLAIMS_ORDER = re.compile(r"(رقم\s*(ال)?طلب|تم\s*(تاكيد|تسجيل|انشاء|ارسال)\s*(ال)?طلب|طلبك\s*(تم|اتسجل|تاكد)|"
                            r"order\s*(number|no\.?|#|id)|order (has been|was|is) (placed|confirmed|created)|"
                            r"your order is confirmed)", re.I)
+_CANCEL_WORDS = re.compile(r"(الغ|الغاء|كنسل|cancel)", re.I)
+
+# a model reply saying an account change is DONE: only true if that tool succeeded this turn
+_CLAIMS_DONE = [
+    ("update_delivery_address", re.compile(r"((تم|اتم|سويت|خلاص)\s*(ال)?(تحديث|تغيير|تعديل|حفظ|تسجيل)\s*(ال)?عنوان|"
+                                           r"(حدثت|غيرت|عدلت|حفظت|سجلت)\s*(لك\s*)?(ال)?عنوان|"
+                                           r"address (has been|was|is) (updated|changed|saved)|updated your address)", re.I)),
+    ("cancel_order", re.compile(r"((تم|اتم)\s*(ال)?(الغاء|إلغاء)|الغيت (لك\s*)?(ال)?طلب|"
+                                r"(order|it) (has been|was|is) cancell?ed|cancell?ed your order)", re.I)),
+    ("request_stock_alert", re.compile(r"(سجلت(نا)?\s*(لك\s*)?(طلب|تنبيه)|(we will|we'll) (notify|message|let you know))", re.I)),
+]
+
+
+def _claimed_action(text: str) -> str | None:
+    n = normalize(text)
+    return next((tool for tool, rx in _CLAIMS_DONE if rx.search(n)), None)
+
+
+NOT_RECORDED_REPLY = {"ar": "هالمعلومة مو مسجلة عندنا لهذا المنتج، الصيدلي يأكدها لك 👨‍⚕️",
+                      "en": "We don't have that detail recorded for this product - our pharmacist will confirm it 👨‍⚕️"}
+NOT_DONE = {"ar": "عذراً، ما تم حفظ أي تغيير بعد. ممكن تعيد طلبك بالتفصيل؟",
+            "en": "Sorry, nothing has been changed yet. Could you repeat what you'd like me to do?"}
 NOT_PLACED = {"ar": "عذراً، لم يتم تسجيل الطلب بعد. اكتب «نعم» لأسجّله لك بالتفاصيل اللي اتفقنا عليها.",
               "en": "Sorry, the order hasn't been placed yet. Reply \"yes\" and I'll place it with the details we agreed."}
 
@@ -270,9 +322,15 @@ class PharmacyAgent:
     # ---- helpers -----------------------------------------------------------
     def _escalate(self, conv, reason, summary):
         esc = dispatch(self.gw, "escalate_to_human",
-                       {"reason": reason, "customer_id": conv.customer_id, "summary": summary})
+                       {"reason": reason, "customer_id": conv.customer_id, "summary": summary,
+                        **self._handover_ctx(conv)})
         self._audit(conv.conv_id, "guard_escalate", {"reason": reason, "result": esc})
         return esc
+
+    @staticmethod
+    def _handover_ctx(conv) -> dict:
+        return {"conv_id": conv.conv_id,
+                "channel": "whatsapp" if conv.wa_phone else ("webchat" if conv.customer_facing else "other")}
 
     def _audit(self, conv_id, kind, payload):
         AUDIT.parent.mkdir(exist_ok=True)
@@ -300,6 +358,8 @@ class PharmacyAgent:
         # message must never act on, or read, another customer's account or orders
         if name in _NEEDS_CUSTOMER:
             args["customer_id"] = conv.customer_id
+        if name == "escalate_to_human":
+            args.update(self._handover_ctx(conv))
         # delivery to the customer's saved (just confirmed) address unless they gave another
         if name == "create_order" and args.get("fulfillment") == "delivery" \
                 and not args.get("delivery_address") and conv.profile and conv.profile.get("address"):
@@ -327,6 +387,18 @@ class PharmacyAgent:
         """Deterministic checks a tool call must pass before it runs; an error dict, or None."""
         if name not in contract.ACTIONS:
             return err("invalid_input", f"unknown action {name!r}")
+        if name == "cancel_order":
+            # only when the customer asked to cancel (this message or the one before the "yes")
+            recent = [m["content"] for m in conv.messages if m["role"] == "user"][-2:]
+            if not any(_CANCEL_WORDS.search(normalize(t)) for t in recent):
+                return err("not_requested", "The customer did not ask to cancel. Do not cancel - "
+                           "answer what they asked.")
+            prev = next((m["content"] for m in reversed(conv.messages[:-1])
+                         if m["role"] == "assistant" and m.get("content")), "")
+            if not _ASKED_CONFIRM.search(normalize(prev)) and "الغ" not in normalize(prev) \
+                    and "cancel" not in prev.lower():
+                return err("confirmation_required", "Name the order (number and items) and ask the "
+                           "customer to confirm the cancellation first.")
         if name in _NEEDS_CONFIRMATION and not is_affirmation(conv.last_user_text):
             return err("confirmation_required",
                        "Not placed. First summarise the exact items, quantities and the pickup "
@@ -339,7 +411,10 @@ class PharmacyAgent:
             asked = self.gw._ingr.resolve_name(args.get("active_ingredient") or args.get("query") or "")
             if said and len(said) > len(asked):
                 args["active_ingredient"] = ", ".join(sorted(said))
-            if not args.get("need"):              # the customer's words reveal a need the model left out
+            if args.get("need") and args.get("query") and product_info_intent(conv.last_user_text):
+                args.pop("need")                  # a question ABOUT named products, not a symptom
+            if not args.get("need") and not product_info_intent(conv.last_user_text):
+                # the customer's words reveal a need the model left out
                 need = detect_need(conv.last_user_text)
                 if need:
                     args["need"] = need
@@ -352,17 +427,82 @@ class PharmacyAgent:
             if not args.get("query"):
                 return {"candidates": [], "hint": "Ask the customer for the active ingredient "
                         "written on the box or prescription. Never guess it yourself."}
+        if name in ("get_product_details", "request_stock_alert", "check_stock"):
+            # product ids come from this conversation's search results, never the model's memory
+            seen = self._seen_products(conv)
+            ids = [args.get("product_id")] + list(args.get("product_ids") or [])
+            if any(i is not None and i not in seen for i in ids):
+                return err("unknown_product", "Use a product_id from a search_product result in this "
+                           "conversation: call search_product with the product name first.")
+        if name == "update_delivery_address" and not self._address_grounded(conv, args.get("address") or ""):
+            return err("invalid_input", "Use the address exactly as the customer wrote it; if they "
+                       "have not written one, ask for it.")
         qtys = [it.get("qty", 0) for it in args.get("items") or []] + \
                ([args["qty"]] if "qty" in args else [])
         if any((q or 0) > MAX_QTY for q in qtys):
             return err("quantity_limit", f"At most {MAX_QTY} of an item per chat order; tell the "
                        f"customer larger quantities are arranged at a branch.")
         # last: everything above passed, so a resumed order (after registration) is already valid
-        if name in ("create_order", "hold_item", "track_order", "create_dispatch") \
-                and not conv.customer_id:
+        if name in _ACCOUNT_TOOLS and not conv.customer_id:
             # account-bound: never run for an unidentified chat (and never read orders by id)
             return err("customer_required", "identify or register the customer first")
         return None
+
+    _STORAGE_WORDS = re.compile(r"(ثلاج|تلاج|تبريد|مبرد|بارد|حراره|الحر\b|فريزر|يتجمد|يجمد|الشمس|"
+                                r"fridge|refrigerat|temperature|°|cool|freez|heat)", re.I)
+
+    @classmethod
+    def _ungrounded(cls, conv, reply: str) -> str | None:
+        """A number or a storage claim in a product answer that no tool result (or the customer)
+        gave - or None. Prices, pack sizes, months and °C all come from tools."""
+        tools = " ".join(m["content"] for m in conv.messages if m["role"] == "tool")
+        said = " ".join(m["content"] for m in conv.messages if m["role"] == "user")
+        known = set(re.findall(r"\d+(?:\.\d+)?", (tools + " " + said).translate(_AR_DIGITS)))
+        num = lambda x: x.rstrip("0").rstrip(".") if "." in x else x  # noqa: E731  ("2.0" = "2")
+        known = {num(x) for x in known} | {"24", "7", "15", "5", "1"}   # store facts: 24/7, VAT, refunds
+        for x in re.findall(r"\d+(?:\.\d+)?", normalize(reply).translate(_AR_DIGITS)):
+            if num(x) not in known:
+                return f"the number {x}"
+        if cls._STORAGE_WORDS.search(normalize(reply)) and '"class":' not in tools \
+                and "صيدل" not in reply and "pharmacist" not in reply.lower():
+            return "a storage condition"
+        return None
+
+    _ORDER_REF = re.compile(r"(?<![a-z])s?\d{3,6}(?!\d)|طلبي|طلباتي|طلبيتي|my orders?|الطلب (اللي|الي|السابق)", re.I)
+
+    def _new_order_product(self, conv, raw: str) -> str | None:
+        """The product words of a message that names a catalogue product exactly and does not
+        point at an existing order (no number, no "my order") - else None."""
+        n = normalize(raw)
+        if order_status_intent(raw) or self._ORDER_REF.search(n) or any(
+                m.get("tool_calls") and m["tool_calls"][0]["function"]["name"] == "search_product"
+                for m in conv.messages[-6:]):
+            return None
+        place = {normalize(x) for b in self.gw.branches() for x in
+                 (b.get("city") or "", b.get("district") or "", *b["name"].split()) if x}
+        words = " ".join(w for w in order_core(raw).split() if not _SERVICE_WORD.fullmatch(w)
+                         and not w.isdigit() and normalize(w) not in place and not normalize(w).lstrip("بلف") in place
+                         and w.lower() not in ("order", "pickup", "delivery", "branch", "for", "at", "the"))
+        if len(words.replace(" ", "")) < 3:
+            return None
+        res = self.gw.search_product(query=words)
+        exact = [c for c in (res.get("candidates") or []) if c.get("match") == "exact" and not c.get("is_scheduled")] \
+            if isinstance(res, dict) else []
+        return words if exact else None
+
+    @staticmethod
+    def _seen_products(conv) -> set[int]:
+        ids = set()
+        for m in conv.messages:
+            if m["role"] == "tool":
+                ids.update(int(x) for x in re.findall(r'"product_id":\s*(\d+)', m["content"]))
+        return ids
+
+    @staticmethod
+    def _address_grounded(conv, address: str) -> bool:
+        said = normalize(" ".join(m["content"] for m in conv.messages if m["role"] == "user"))
+        words = [w for w in normalize(address).split() if len(w) >= 3]
+        return bool(words) and sum(w in said for w in words) >= max(1, int(len(words) * 0.7))
 
     @staticmethod
     def _grounded(conv, ingredient: str) -> bool:
@@ -661,7 +801,9 @@ class PharmacyAgent:
             note = self._prescription_note(res)
             conv.messages[-1]["content"] = note + ("\n\nCustomer message: " + raw
                                                    if raw.strip() else "")
-        elif conv.order and conv.order.get("step") not in (None, "add") and (
+        elif conv.order and conv.order.get("step") not in (None, "add") \
+                and not product_info_intent(raw) and not (
+                    service_intent(raw) and conv.order.get("step") != "oos") and (
                 reply := self.order.handle(conv, raw)) is not None:
             return reply                         # next step of the order wizard (no model)
         elif conv.customer_facing and not looks_in_scope(raw) and not detect_need(raw):
@@ -677,7 +819,9 @@ class PharmacyAgent:
 
         # A message that clearly names a catalogue product ("عندكم سنتروم؟") is searched directly:
         # no model call at all (the model sometimes answered such questions from memory, slowly).
-        if conv.customer_facing and not image:
+        info_q = product_info_intent(raw) and not image
+        service = service_intent(raw) if not image else None
+        if conv.customer_facing and not image and not info_q and not service:
             direct = self._direct_search(conv, raw)
             if direct is not None:
                 return direct
@@ -686,6 +830,15 @@ class PharmacyAgent:
         # stays byte-identical for every customer, so Ollama reuses its cached ~1,800 tokens.
         turn = len(conv.messages) - 1
         hint = LANG_HINT.get(conv.lang or "", "") + self._customer_hint(conv)
+        if service == "stock_alert":
+            hint += ("\n(They want a message when a product is back in stock: request_stock_alert "
+                     "with its product_id from the results above - search_product first if needed.)")
+        elif service == "address":
+            hint += ("\n(A new delivery address: call update_delivery_address with the address exactly "
+                     "as they wrote it - never say it is saved before the tool returns saved.)")
+        if info_q:
+            hint += ("\n(A question ABOUT a product: find it with search_product if it is not in the "
+                     "results above, then call get_product_details and answer only from it.)")
         if conv.interrupt_note:                        # conversation mode: they cut us off
             hint += "\n" + conv.interrupt_note
             conv.interrupt_note = None
@@ -695,7 +848,7 @@ class PharmacyAgent:
         prev = next((m["content"] for m in reversed(conv.messages[:-1])
                      if m["role"] == "assistant" and m.get("content")), "")
         confirming = is_affirmation(raw) and bool(_ASKED_CONFIRM.search(normalize(prev)))
-        nudged = False
+        nudged = info_nudged = claimed_nudged = fact_nudged = False
 
         while calls_made <= MAX_TOOL_CALLS:
             msgs = list(conv.messages)
@@ -722,17 +875,52 @@ class PharmacyAgent:
                          "or delivery - do not ask for confirmation again.)")
                 self._audit(conv.conv_id, "confirm_nudge", {"model_text": out["content"][:200]})
                 continue
+            if not out["tool_calls"] and info_q and not info_nudged and not any(
+                    m.get("tool_calls") and m["tool_calls"][0]["function"]["name"] == "get_product_details"
+                    for m in conv.messages):
+                # a product question answered from memory: storage / maker / pack facts must come
+                # from Odoo, so ask the model once to look them up
+                info_nudged = True
+                hint += ("\n(Do not answer from memory: call get_product_details for the product "
+                         "first - search_product if you do not have its product_id.)")
+                self._audit(conv.conv_id, "info_nudge", {"model_text": (out["content"] or "")[:200]})
+                continue
+            claimed = None if out["tool_calls"] else _claimed_action(out["content"] or "")
+            if claimed and not any(
+                    m.get("role") == "tool" and m.get("tool_name") == claimed and '"error"' not in m["content"]
+                    for m in conv.messages[turn:]):
+                if claimed_nudged:              # still claiming it: never tell the customer it is done
+                    self._audit(conv.conv_id, "fake_action_blocked", {"tool": claimed,
+                                                                      "model_text": out["content"][:300]})
+                    return self._say(conv, NOT_DONE[self._lang(conv)], guard="output_filter")
+                claimed_nudged = True
+                hint += (f"\n(You said it is done, but nothing was saved: call {claimed} now, or tell the "
+                         f"customer what you still need.)")
+                self._audit(conv.conv_id, "claim_nudge", {"tool": claimed, "model_text": out["content"][:200]})
+                continue
             if not out["tool_calls"]:
                 reply = self._clean_reply(out["content"].strip())
                 if reply is None:                    # leaked internals: never sent to the customer
                     return self._say(conv, TEXTS[self._lang(conv)]["off_topic"],
                                      guard="output_filter", menu=conv.customer_facing)
+                if info_q and (bad := self._ungrounded(conv, reply)):
+                    # a product fact that no tool returned (the model "filled in" a pack size or
+                    # storage we do not hold): ask once, then say the pharmacist confirms it
+                    self._audit(conv.conv_id, "ungrounded_fact", {"what": bad, "model_text": reply[:300]})
+                    if not fact_nudged:
+                        fact_nudged = True
+                        hint += (f"\n(Your answer stated {bad}, which is not in the tool results. Answer "
+                                 f"only with facts from get_product_details; for NOT RECORDED say the "
+                                 f"pharmacist will confirm.)")
+                        continue
+                    return self._say(conv, NOT_RECORDED_REPLY[self._lang(conv)], guard="fact_check")
                 if reply_gives_medical_advice(reply):   # dosage/treatment slipped through: never sent
                     self._escalate(conv, "medical_advice", f"model reply blocked: {reply[:200]}")
                     return self._say(conv, MEDICAL_REFUSAL, guard="medical_output")
                 # the model answered a product question from memory ("لا، عندنا سنتروم فقط...")
                 # instead of searching: search ourselves and show the real catalogue
-                if conv.customer_facing and not any(m.get("tool_calls") for m in conv.messages[turn:]):
+                if conv.customer_facing and not info_q and not service \
+                        and not any(m.get("tool_calls") for m in conv.messages[turn:]):
                     # product words only: a store question ("تقبلون الدفع عند الاستلام؟") answered from
                     # STORE FACTS must not be swapped for a fuzzy product list
                     words = " ".join(w for w in order_core(raw).split() if not _SERVICE_WORD.fullmatch(w))
@@ -749,6 +937,12 @@ class PharmacyAgent:
                 return self._say(conv, reply)
 
             tc = out["tool_calls"][0]
+            if conv.customer_facing and tc["name"] in ("track_order", "get_order_details", "list_branches") \
+                    and (q := self._new_order_product(conv, raw)):
+                # "Order 1 Centrum for pickup at Olaya": a NEW order for a named product, not their
+                # existing orders or the branch list - search it (the wizard takes the order)
+                self._audit(conv.conv_id, "tool_redirected", {"from": tc["name"], "query": q})
+                tc = {"name": "search_product", "arguments": {"query": q}}
             name, args = tc["name"], self._fill_defaults(tc["name"], tc["arguments"], conv)
             conv.messages.append({"role": "assistant", "content": out["content"],
                                   "tool_calls": [{"function": {"name": name,
@@ -785,8 +979,10 @@ class PharmacyAgent:
                     if name in ("create_order", "hold_item"):
                         return self.customer.start(conv, intro="intro_checkout", pending={
                             "kind": "tool", "name": name, "args": args})
-                    return self.customer.start(conv, pending={"kind": "menu",
-                                                              "choice": "track_order"})
+                    if name == "track_order":
+                        return self.customer.start(conv, pending={"kind": "menu",
+                                                                  "choice": "track_order"})
+                    return self.customer.start(conv, pending={"kind": "text", "text": raw})
                 if code == "scheduled_item":
                     self._escalate(conv, "restricted_item", f"tool returned scheduled_item: {name}")
                     return self._say(conv, SCHEDULED_REFUSAL, guard="scheduled_tool")
@@ -804,8 +1000,11 @@ class PharmacyAgent:
 
             # customer chats: search results are shown by the fixed order wizard (numbered list,
             # then quantity / pickup or delivery / confirm) - no second model call
+            if name == "update_delivery_address" and isinstance(result, dict) and result.get("saved") \
+                    and conv.profile is not None:
+                conv.profile["address"] = result["address"]
             if name == "search_product" and conv.customer_facing and isinstance(result, dict) \
-                    and "error" not in result:
+                    and "error" not in result and not info_q and service != "stock_alert":
                 # the model often shortens the query ("بنادول" for "بنادول اكسترا"): also search the
                 # customer's own product words and merge, so the exact product is in the list
                 core = " ".join(fuzzy_words(raw))

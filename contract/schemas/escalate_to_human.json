@@ -14,7 +14,8 @@
           "abusive",
           "unclear",
           "out_of_scope",
-          "complaint"
+          "complaint",
+          "prescription"
         ]
       },
       "summary": {
@@ -22,6 +23,10 @@
       },
       "customer_id": {
         "type": "integer"
+      },
+      "order_id": {
+        "type": "integer",
+        "description": "The order it is about, if any."
       }
     },
     "required": [

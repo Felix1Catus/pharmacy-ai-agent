@@ -1,0 +1,39 @@
+{
+  "name": "cancel_order",
+  "description": "Cancel one of the customer's orders that is still a quotation (can_cancel=true). Only after they confirmed which order to cancel.",
+  "requires_confirmed_intent": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "order_id": {
+        "type": "integer"
+      },
+      "order_ref": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "description": "The customer's reason, in a few words, if they gave one."
+      }
+    },
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "order_ref, cancelled."
+  },
+  "errors": [
+    {
+      "code": "not_cancellable",
+      "when": "already confirmed/paid - hand over with reason complaint"
+    },
+    {
+      "code": "not_found",
+      "when": "no such order"
+    },
+    {
+      "code": "confirmation_required",
+      "when": "the customer has not confirmed yet"
+    }
+  ]
+}

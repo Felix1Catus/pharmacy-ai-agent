@@ -1,0 +1,20 @@
+{
+  "name": "list_prescriptions",
+  "description": "The customer's prescriptions on file: date, review status (waiting for the pharmacist / approved / rejected / used), the medicines found on them, the linked order.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "prescriptions: list of {received, prescription_date, status, medicines, order_ref}."
+  },
+  "errors": [
+    {
+      "code": "customer_required",
+      "when": "customer not identified"
+    }
+  ]
+}

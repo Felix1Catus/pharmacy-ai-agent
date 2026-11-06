@@ -1,0 +1,440 @@
+{
+ "summary": {
+  "turns": 32,
+  "turns_ok": 32,
+  "turn_pass_rate": 1.0,
+  "scenarios": 11,
+  "scenarios_ok": 11,
+  "model": "qwen3-8b-q4_k_m"
+ },
+ "scenarios": [
+  {
+   "scenario": "fridge",
+   "turns": [
+    {
+     "say": "عندكم فكتوزا؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "⚠️ للأسف فكتوزا 6 ملجم/ مل غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+     "latency_s": 0.47,
+     "problems": []
+    },
+    {
+     "say": "هل يحتاج ثلاجة؟",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "يحفظ في الثلاجة في درجة حرارة (2 درجة إلى 8 درجة مئوية).",
+     "latency_s": 1.85,
+     "problems": []
+    },
+    {
+     "say": "طيب كم مدة صلاحيته؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "مدة صلاحيته 30 شهر.",
+     "latency_s": 0.77,
+     "problems": []
+    },
+    {
+     "say": "وش الشركة المصنعة ومن وين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "الشركة المصنعة هي NOVO NORDISK, Anova Joint Venture Company Limited، والمصنعة في دنمارك وفيتنام.",
+     "latency_s": 0.9,
+     "problems": []
+    },
+    {
+     "say": "يحتاج وصفة؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "نعم، يحتاج وصفة.",
+     "latency_s": 0.33,
+     "problems": []
+    },
+    {
+     "say": "كم جرعته باليوم؟",
+     "tools": [],
+     "done": [],
+     "guard": "medical",
+     "reply": "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة).",
+     "latency_s": 0.04,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "compare",
+   "turns": [
+    {
+     "say": "ابي اعرف عن زيرتيك 10 ملجم وكلاريتين 10 ملجم، كم حبة في كل علبة ويحتاجون وصفة؟",
+     "tools": [
+      "search_product",
+      "get_product_details"
+     ],
+     "done": [
+      "search_product",
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "الزيرتيك 10 ملجم: 10 حبة في العلبة، لا يحتاج وصفة. الكلاريتين 10 ملجم: 10 حبة في العلبة، لا يحتاج وصفة.",
+     "latency_s": 4.59,
+     "problems": []
+    },
+    {
+     "say": "واي واحد فيهم صناعة سعودية؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "الكلاريتين 10 ملجم صناعة سعودية.",
+     "latency_s": 1.53,
+     "problems": []
+    },
+    {
+     "say": "طيب وش السعر؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "الزيرتيك 10 ملجم: 16.2 ريال. الكلاريتين 10 ملجم: 19.6 ريال.",
+     "latency_s": 1.14,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "cancel",
+   "turns": [
+    {
+     "say": "ابي تفاصيل طلبي رقم S00142",
+     "tools": [
+      "get_order_details"
+     ],
+     "done": [
+      "get_order_details"
+     ],
+     "guard": null,
+     "reply": "طلبك رقم S00142 مسجل وتم تأكيده. المنتج: 2 قرص من \"بنادول 500 ملغ\"، سعره 27.6 ريال. سيتم استلامه من فرع جدة - تحلية. لا يوجد دفع بعد. هل ترغب في إلغاء الطلب؟",
+     "latency_s": 3.04,
+     "problems": []
+    },
+    {
+     "say": "ابي الغيه",
+     "tools": [
+      "cancel_order"
+     ],
+     "done": [],
+     "guard": null,
+     "reply": "هل ترغب في إلغاء طلبك رقم S00142؟ تأكد من أنك تريد الغاء الطلب.",
+     "latency_s": 2.23,
+     "problems": []
+    },
+    {
+     "say": "نعم",
+     "tools": [
+      "cancel_order"
+     ],
+     "done": [
+      "cancel_order"
+     ],
+     "guard": null,
+     "reply": "تم إلغاء طلبك رقم S00142 بنجاح. إذا كنت بحاجة إلى أي شيء آخر، لا تتردد في طلبها.",
+     "latency_s": 3.56,
+     "problems": []
+    },
+    {
+     "say": "وش وضع طلب S00142 الحين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "طلب S00142 تم إلغاؤه بالكامل. إذا كنت بحاجة إلى أي شيء، نحن هنا لمساعدتك.",
+     "latency_s": 1.29,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "branches",
+   "turns": [
+    {
+     "say": "عندكم فرع في جدة؟",
+     "tools": [
+      "list_branches"
+     ],
+     "done": [
+      "list_branches"
+     ],
+     "guard": null,
+     "reply": "نعم، لدينا فرع في جدة، وهو \"جدة - تحلية\". يعمل 24 ساعة يومياً ويوفر خدمة التوصيل. هل ترغب في توصيل الدواء إلى عنوانك في الرياض؟",
+     "latency_s": 2.0,
+     "problems": []
+    },
+    {
+     "say": "متى تفتحون؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "نفتح 24 ساعة يومياً في جميع الفروع. هل ترغب في توصيل الدواء إلى عنوانك في الرياض؟",
+     "latency_s": 0.96,
+     "problems": []
+    },
+    {
+     "say": "وفي تبوك؟",
+     "tools": [
+      "list_branches"
+     ],
+     "done": [
+      "list_branches"
+     ],
+     "guard": null,
+     "reply": "لا يوجد فرع في تبوك، لكننا نقوم بتوصيل الدواء إلى المدن القريبة من الفروع. هل ترغب في توصيل الدواء إلى عنوانك في الرياض؟",
+     "latency_s": 1.97,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "stock_alert",
+   "turns": [
+    {
+     "say": "عندكم كلاريتين 10 ملجم؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "⚠️ للأسف كلاريتين 10 ملجم غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+     "latency_s": 0.18,
+     "problems": []
+    },
+    {
+     "say": "متى يتوفر؟ بلغني لما يجي لو سمحت",
+     "tools": [
+      "request_stock_alert"
+     ],
+     "done": [
+      "request_stock_alert"
+     ],
+     "guard": "stock_alert",
+     "reply": "تمام ✅ سجّلنا طلبك، ونرسل لك هنا أول ما يتوفر كلاريتين 10 ملجم.",
+     "latency_s": 0.11,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "account",
+   "turns": [
+    {
+     "say": "ارسلت لكم وصفة قبل، وش صار عليها؟",
+     "tools": [
+      "list_prescriptions"
+     ],
+     "done": [
+      "list_prescriptions"
+     ],
+     "guard": null,
+     "reply": "الوصفة التي أرسلتها ما زالت بحاجة لمراجعة الصيدلي. يرجى زيارة أحد فروع الصيد Pharmacy لتقديم الوصفة وتحديث حالة الطلب.",
+     "latency_s": 2.13,
+     "problems": []
+    },
+    {
+     "say": "وقدمت شكوى امس عن التوصيل، احد رد علي؟",
+     "tools": [
+      "track_order"
+     ],
+     "done": [
+      "track_order"
+     ],
+     "guard": null,
+     "reply": "الشكوى التي أرسلتها امس ما زالت في معالجة الصيدلي. يرجى الانتظار قليلاً حتى يتم الرد عليك.",
+     "latency_s": 2.73,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "address",
+   "turns": [
+    {
+     "say": "غير عنوان التوصيل حقي الى الرياض حي النخيل شارع العليا 45",
+     "tools": [
+      "update_delivery_address"
+     ],
+     "done": [
+      "update_delivery_address"
+     ],
+     "guard": null,
+     "reply": "عنوان التوصيل حقي تم تحديثه إلى الرياض حي النخيل شارع العليا 45.",
+     "latency_s": 1.63,
+     "problems": []
+    },
+    {
+     "say": "وش عنواني المسجل عندكم الحين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "عنوان التوصيل المسجل حالياً هو الرياض حي النخيل شارع العليا 45.",
+     "latency_s": 0.89,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "scheduled",
+   "turns": [
+    {
+     "say": "زاناكس يحتاج ثلاجة؟",
+     "tools": [],
+     "done": [],
+     "guard": "scheduled",
+     "reply": "هذا الدواء من الأدوية المجدولة/الخاضعة للرقابة ولا يمكن طلبه عبر المساعد. سأحوّلك إلى الصيدلي. يمكنني مساعدتك في الأدوية الأخرى وأسعارها وتوفّرها.",
+     "latency_s": 0.04,
+     "problems": []
+    },
+    {
+     "say": "وترامادول وش الشركة المصنعة له؟",
+     "tools": [],
+     "done": [],
+     "guard": "scheduled",
+     "reply": "هذا الدواء من الأدوية المجدولة/الخاضعة للرقابة ولا يمكن طلبه عبر المساعد. سأحوّلك إلى الصيدلي. يمكنني مساعدتك في الأدوية الأخرى وأسعارها وتوفّرها.",
+     "latency_s": 0.03,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "mixed_medical",
+   "turns": [
+    {
+     "say": "اكترابيد يحفظ بالثلاجة؟ وكم وحدة اخذ قبل الاكل؟",
+     "tools": [
+      "search_product",
+      "get_product_details"
+     ],
+     "done": [
+      "search_product",
+      "get_product_details"
+     ],
+     "guard": "medical_output",
+     "reply": "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة).",
+     "latency_s": 2.34,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "english",
+   "turns": [
+    {
+     "say": "Do you have Victoza?",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "317.60 SAR\nIs this the one you mean?",
+     "latency_s": 0.88,
+     "problems": []
+    },
+    {
+     "say": "Does it need to be kept in the fridge?",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "Yes, it needs to be kept in the fridge at a temperature between 2°C to 8°C.",
+     "latency_s": 1.73,
+     "problems": []
+    },
+    {
+     "say": "How many pens are in one box?",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "One box contains 2 pens.",
+     "latency_s": 0.67,
+     "problems": []
+    },
+    {
+     "say": "Which company makes it?",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "The product is made by NOVO NORDISK, Anova Joint Venture Company Limited.",
+     "latency_s": 0.59,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "mid_wizard",
+   "turns": [
+    {
+     "say": "ابي بنادول اكسترا",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "✅ بنادول اكسترا — 15.00 ريال\nكم علبة تبغى؟",
+     "latency_s": 0.18,
+     "problems": []
+    },
+    {
+     "say": "قبل لا اطلب، كم حبة في العلبة؟ وهل يتحمل الحر لاني بطلبه توصيل",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": "fact_check",
+     "reply": "هالمعلومة مو مسجلة عندنا لهذا المنتج، الصيدلي يأكدها لك 👨‍⚕️",
+     "latency_s": 3.17,
+     "problems": []
+    },
+    {
+     "say": "1",
+     "tools": [],
+     "done": [],
+     "guard": "order_flow",
+     "reply": "توصيل أو استلام من الفرع؟",
+     "latency_s": 0.0,
+     "problems": []
+    }
+   ],
+   "ok": true
+  }
+ ]
+}
