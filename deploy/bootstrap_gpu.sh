@@ -25,7 +25,7 @@ docker info 2>/dev/null | grep -q nvidia || fail "Docker with the nvidia runtime
 
 log "== 2/9 system packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -q >/dev/null && apt-get install -y -q python3.12-venv ffmpeg tesseract-ocr tesseract-ocr-ara curl ufw >/dev/null \
+apt-get update -q >/dev/null && apt-get install -y -q python3.12-venv ffmpeg tesseract-ocr tesseract-ocr-ara poppler-utils curl ufw >/dev/null \
   || fail "apt"
 
 log "== 3/9 agent venv (requirements.txt)"

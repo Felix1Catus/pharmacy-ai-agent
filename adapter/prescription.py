@@ -35,15 +35,38 @@ MATCH_THRESHOLD = 90                          # rapidfuzz partial_ratio for a me
 _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 _MONTHS = {m: i + 1 for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+# Arabic month names (Gulf / Egypt) and the Levantine ones, as normalize() writes them
+_AR_MONTHS = {**{m: i + 1 for i, m in enumerate(
+    ["يناير", "فبراير", "مارس", "ابريل", "مايو", "يونيو", "يوليو", "اغسطس", "سبتمبر", "اكتوبر",
+     "نوفمبر", "ديسمبر"])},
+    **{m: i + 1 for i, m in enumerate(
+        ["كانون الثاني", "شباط", "اذار", "نيسان", "ايار", "حزيران", "تموز", "اب", "ايلول",
+         "تشرين الاول", "تشرين الثاني", "كانون الاول"])},
+    "يونيه": 6, "يوليه": 7, "ابريل": 4, "إبريل": 4}
 
 
 def today_ksa() -> date:
     return datetime.now(KSA).date()
 
 
+_BIDI = re.compile("[\u200e\u200f\u202a-\u202e\u2066-\u2069\u061c]")
+
+
+def tidy(text: str) -> str:
+    """Undo PDF text-extraction artefacts (pdftotext on Arabic prescriptions, e.g. Wasfaty):
+    invisible direction marks (U+202A-202E...), the lam-alef ligature split out of order
+    ("اإللكترونية" -> "الإلكترونية"), mirrored brackets "()Packs 2" and list numbers
+    written backwards (".1" -> "1.")."""
+    t = _BIDI.sub("", text or "")
+    t = re.sub(r"ا([اأإآ])ل", r"ال\1", t)
+    t = re.sub(r"\(\)([^\n()]+?)(?=\s*$)", r"(\1)", t, flags=re.M)
+    t = re.sub(r"^(\s*)\.(\d{1,2})(?=\s*\S)", r"\1\2. ", t, flags=re.M)
+    return t
+
+
 def clean(text: str) -> str:
     """Normalise OCR text: Arabic-Indic digits -> ASCII, Arabic orthography, lowercase."""
-    return normalize((text or "").translate(_DIGITS))
+    return normalize(tidy(text).translate(_DIGITS))
 
 
 # ---- 1. OCR ---------------------------------------------------------------
@@ -88,9 +111,15 @@ def read_document(data: bytes) -> dict:
         pdf = Path(d) / "rx.pdf"
         pdf.write_bytes(data)
         last = ["-f", "1", "-l", str(PDF_MAX_PAGES)]
-        r = subprocess.run(["pdftotext", "-layout", *last, str(pdf), "-"],
-                           capture_output=True, text=True, timeout=60)
-        text = r.stdout if r.returncode == 0 else ""
+        # reading order keeps "label / value" and each medicine on its own lines; layout order
+        # keeps a label and its value on one line (invoice numbers) - both, like two OCR passes
+        texts = []
+        for mode in ([], ["-layout"]):
+            r = subprocess.run(["pdftotext", *mode, *last, str(pdf), "-"],
+                               capture_output=True, text=True, timeout=60)
+            if r.returncode == 0:
+                texts.append(tidy(r.stdout))
+        text = "\n".join(texts)
         subprocess.run(["pdftoppm", "-png", "-r", "200", *last, str(pdf), str(Path(d) / "p")],
                        capture_output=True, timeout=120)
         pages = sorted(Path(d).glob("p*.png"))
@@ -128,6 +157,10 @@ def find_dates(text: str) -> list[date]:
     for mon, d, y in re.findall(r"\b([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b", t):
         if mon in _MONTHS:
             out.append(_mk(int(y), _MONTHS[mon], int(d)))
+    months = "|".join(sorted((re.escape(normalize(m)) for m in _AR_MONTHS), key=len, reverse=True))
+    ar = {normalize(k): v for k, v in _AR_MONTHS.items()}
+    for d, mon, y in re.findall(rf"(?<!\d)(\d{{1,2}})\s*(?:من\s*)?({months})\s*,?\s*(\d{{4}})(?!\d)", t):
+        out.append(_mk(int(y), ar[mon], int(d)))
     return sorted({x for x in out if x})
 
 
@@ -154,24 +187,40 @@ _LABEL = re.compile(
 _DATE_LIKE = re.compile(r"^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$")
 
 
+_NUMBER_LABEL = re.compile(r"(رقم\s*(ال)?(فاتوره|وصفه)|(invoice|prescription|rx|presc)\.?\s*(no|number|#|num)\b)", re.I)
+
+
 def find_invoice_number(text: str) -> str | None:
     """First token with >= 4 digits within 40 characters after an invoice/prescription label,
-    on the same line (skipping words like "No.", "رقم", ":" and anything that is a date)."""
-    for line in clean(text).splitlines() or [clean(text)]:
-        for m in _LABEL.finditer(line):
+    on the same line (skipping words like "No.", "رقم", ":" and anything that is a date). An
+    explicit number label ("رقم الوصفة", "Invoice No.") wins over a bare word such as a
+    platform name ("وصفتي") next to a barcode."""
+    lines = clean(text).splitlines() or [clean(text)]
+    for label in (_NUMBER_LABEL, _LABEL):
+        for tok in _numbers_after(lines, label):
+            return tok
+    return None
+
+
+def _numbers_after(lines, label):
+    for line in lines:
+        for m in label.finditer(line):
             window = line[m.end(): m.end() + 40]
             for tok in re.findall(r"[a-z0-9][a-z0-9\-/]*", window):
                 tok = tok.strip("-/")
                 if sum(ch.isdigit() for ch in tok) >= 4 and not _DATE_LIKE.match(tok):
-                    return tok.upper()
-    return None
+                    yield tok.upper()
 
 
 # ---- 4. medicines ---------------------------------------------------------
 # generic words that must never identify a product on their own
 _GENERIC = {"vitamin", "tablet", "tablets", "capsule", "capsules", "syrup", "cream", "insulin",
             "inhaler", "drops", "injection", "solution", "suspension", "ointment", "spray",
-            "فيتامين", "حبوب", "شراب", "كريم", "بخاخ", "قطره", "انسولين", "ابره", "مرهم"}
+            "فيتامين", "حبوب", "شراب", "كريم", "بخاخ", "قطره", "انسولين", "ابره", "مرهم",
+            # everyday English words that start product names ("Digital Thermometer") and also
+            # appear on prescriptions ("digital MOH seal", "surgical", "pregnancy")
+            "digital", "surgical", "pregnancy", "signal", "sunscreen", "calcium", "omega", "medical",
+            "health", "baby", "seal", "clinic", "first", "family", "daily", "super", "extra"}
 _STRENGTH = re.compile(r"\b\d+([.,]\d+)?\s*(mg|g|ml|mcg|iu|%|ملغ|ملجم|جرام|مل)?\b")
 
 
@@ -213,6 +262,20 @@ def _score(term: str, t: str) -> float:
     return s if s >= (MATCH_THRESHOLD - 6 if len(term) >= 8 else MATCH_THRESHOLD) else 0.0
 
 
+_COMBO = re.compile(r"^\s*(\+|,|/|&|and\b|with\b|مع\b|و\s?\w)")
+
+
+def _part_of_combination(term: str, t: str, p: dict) -> bool:
+    """A single-ingredient product's scientific name ("amoxicillin") found only as part of a
+    combination on the prescription ("Amoxicillin + Clavulanic Acid") does not count: that
+    prescription is for the combination, not plain amoxicillin."""
+    sci = clean(p.get("sfda_scientific_name") or "")
+    if not sci or term not in sci or "," in sci or "+" in sci:
+        return False                          # a brand/name match, or the product IS a combination
+    hits = [m.end() for m in re.finditer(rf"(?<!\w){re.escape(term)}(?!\w)", t)]
+    return bool(hits) and all(_COMBO.match(t[h:h + 12]) for h in hits)
+
+
 def match_medications(text: str, products: list[dict]) -> list[dict]:
     """Catalogue products whose name/brand/scientific name appears on the prescription
     (fuzzy, to survive OCR slips). `products` rows: product.template search_read with
@@ -227,6 +290,8 @@ def match_medications(text: str, products: list[dict]) -> list[dict]:
             s = _score(term_, t)
             if s > best:
                 best, term = s, term_
+        if best and _part_of_combination(term, t, p):
+            continue
         if best:
             found.append({
                 "product_id": p["product_variant_id"][0], "template_id": p.get("id"),
@@ -236,9 +301,57 @@ def match_medications(text: str, products: list[dict]) -> list[dict]:
                                               or p.get("x_requires_prescription")
                                               or p.get("sfda_requires_prescription")),
                 "matched": term, "score": round(best, 1)})
+    # a medicine named by brand/name ("Augmentin 1g") is what was prescribed: other products
+    # that only share its scientific name are not listed (same-ingredient brands are allowed
+    # separately, as alternatives, by the gateway)
+    sci = {p["product_variant_id"][0]: clean(p.get("sfda_scientific_name") or "") for p in products}
+    by_name = [f for f in found if f["matched"] != sci.get(f["product_id"])]
+    if by_name:
+        found = by_name
     # prescription-only first (they are what the check unlocks), then best/longest match
     found.sort(key=lambda f: (not f["requires_prescription"], -f["score"], -len(f["matched"])))
     return found[:10]
+
+
+# ---- 4b. directions as written ("Sig: 1 tab twice daily with meals") ----------
+_ITEM = re.compile(r"^\s*(?:\d{1,2}\s*[.)\-]|[.\-•*]|rx\s*\d*[:.]?)\s*(?P<name>[A-Za-z\u0600-\u06FF][^\n]{2,80})$", re.I)
+_SIG_LABEL = re.compile(r"^\s*(sig|directions?|dose|dosage|instructions?|usage|الجرعه|الجرعة|جرعه الدواء|"
+                        r"جرعة الدواء|طريقه الاستخدام|طريقة الاستعمال|طريقة الاستخدام|طريقه الاستعمال|"
+                        r"الاستعمال|الاستخدام)\s*\S?\s*[:\-]\s*(?P<sig>.+)$", re.I)
+_SIG_WORDS = re.compile(r"(once|twice|three times|every \d+\s*h|\bdaily\b|\bat night\b|morning|before|after|"
+                        r"with meals|empty stomach|\b(od|bid|tid|qid|prn|hs)\b|مر[ةه]|مرتين|يومي|كل \d+ ساع|"
+                        r"صباح|مساء|قبل|بعد|على الريق|عند النوم)", re.I)
+_NOT_ITEM = re.compile(r"^(qty|quantity|refills?|الكميه|الكمية|patient|date|invoice|doctor|dr\.|license|"
+                       r"diagnosis|prescriber|dispensed|sample)\b", re.I)
+
+
+def extract_directions(text: str) -> list[dict]:
+    """[{medicine, directions}] for each numbered Rx line, the directions copied as written. The
+    assistant repeats these to the customer; it never derives or changes a dose."""
+    out, cur = [], None
+    for raw in tidy(text).translate(_DIGITS).splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = _ITEM.match(line)
+        sig = _SIG_LABEL.match(line)
+        if sig and cur is not None:          # every labelled line, as written (dose, how to take it)
+            part = sig.group("sig").strip()
+            if part and part not in cur["directions"]:
+                cur["directions"] = (cur["directions"] + " — " + part) if cur["directions"] else part
+            continue
+        if m and not _NOT_ITEM.match(m.group("name")) and not sig:
+            name = m.group("name").strip()
+            if any(o["medicine"] == name for o in out):     # OCR text often repeats the page
+                cur = None
+                continue
+            cur = {"medicine": name, "directions": ""}
+            out.append(cur)
+            continue
+        if cur is not None and not cur["directions"] and _SIG_WORDS.search(line) \
+                and not _NOT_ITEM.match(line):
+            cur["directions"] = line
+    return [o for o in out if o["directions"]]
 
 
 # ---- 5. all checks ---------------------------------------------------------
@@ -256,4 +369,4 @@ def evaluate(text: str, products: list[dict], today: date | None = None) -> dict
     if not meds:
         problems.append("no_medication")
     return {"ok": not problems, "date": d.isoformat() if d else None, "invoice_number": invoice,
-            "medications": meds, "problems": problems}
+            "medications": meds, "problems": problems, "directions": extract_directions(text)}
