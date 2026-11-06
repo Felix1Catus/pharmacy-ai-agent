@@ -72,9 +72,8 @@ def scenarios(fx: dict) -> dict[str, list[dict]]:
         "cancel": [
             T(f"ابي تفاصيل طلبي رقم {ref}", tools=["get_order_details"],
               has=[[ref.lower(), ref[-2:]], ["بنادول", "بانادول", "panadol"]]),
-            T("ابي الغيه", never=["cancel_order"], has=[["تاكيد", "تأكيد", "متاكد", "توكد", "اكيد", "نعم",
-                                                        "الغاء", "تلغي"]]),
-            T("نعم", tools=["cancel_order"], has=[["الغ", "ملغ"]]),
+            T("ابي الغيه", guard="cancel", never=["cancel_order"], has=[[ref.lower()], ["نلغي"]]),
+            T("نعم", guard="cancel", tools=["cancel_order"], has=[["تم الغاء"]]),
             T(f"وش وضع طلب {ref} الحين؟", ctx=["cancel_order"], has=[["ملغ", "الغ"]]),
         ],
         # branches by city, hours, a city without a branch

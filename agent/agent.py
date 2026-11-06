@@ -49,6 +49,7 @@ from fuzzy_search import normalize, sound_key, words as fuzzy_words  # noqa: E40
 from llm import LLMClient  # noqa: E402
 from customer import T as CUSTOMER_TEXTS, CustomerFlow  # noqa: E402
 from order_flow import OrderFlow, _core as order_core  # noqa: E402
+from cancel_flow import CancelFlow, cancel_intent  # noqa: E402
 
 VOICE_LLM_CORRECT = os.environ.get("VOICE_LLM_CORRECT", "0") == "1"   # #3 off by default: LLM refine can drift meaning; #1 (phonetic) is the safe win
 _VOICE_REFINE_SYS = ("أنت تصحّح نصاً ناتجاً عن تحويل كلام صوتي لعميل صيدلية سعودي باللهجة "
@@ -196,6 +197,19 @@ NOT_RECORDED_REPLY = {"ar": "هالمعلومة مو مسجلة عندنا له�
                       "en": "We don't have that detail recorded for this product - our pharmacist will confirm it 👨‍⚕️"}
 NOT_DONE = {"ar": "عذراً، ما تم حفظ أي تغيير بعد. ممكن تعيد طلبك بالتفصيل؟",
             "en": "Sorry, nothing has been changed yet. Could you repeat what you'd like me to do?"}
+# a reply that states what is IN an order (its number, items, delivery) - only true if an order
+# tool ran in this chat
+_ORDER_TOOLS = {"track_order", "get_order_details", "cancel_order", "create_order", "hold_item"}
+_ORDER_REF_RX = re.compile(r"(?<![a-z\d])s\d{4,6}(?!\d)", re.I)
+_LAST_ORDER_RX = re.compile(r"(طلبك|طلبيتك|اوردرك)\s*(الاخير|السابق|الحالي|رقم)|your (last|latest|previous|current) order", re.I)
+_ORDER_FACT_RX = re.compile(r"(\d|علبه|علب|حبه|توصيل|التوصيل|استلام|ريال|box|deliver|pickup|sar)", re.I)
+
+
+def _describes_order(text: str) -> bool:
+    n = normalize(text)
+    return bool(_ORDER_REF_RX.search(n)) or bool(_LAST_ORDER_RX.search(n) and _ORDER_FACT_RX.search(n))
+
+
 NOT_PLACED = {"ar": "عذراً، لم يتم تسجيل الطلب بعد. اكتب «نعم» لأسجّله لك بالتفاصيل اللي اتفقنا عليها.",
               "en": "Sorry, the order hasn't been placed yet. Reply \"yes\" and I'll place it with the details we agreed."}
 
@@ -257,6 +271,7 @@ class Conversation:
         self.interrupt_note: str | None = None         # spoken reply cut off by the customer
         self.dose_ctx: dict | None = None              # dosage question waiting for the prescription photo
         self.dose_check: dict | None = None            # directions read back; "that's wrong" -> pharmacist
+        self.cancel_ctx: dict | None = None            # cancel wizard step (cancel_flow.py)
         self.order: dict | None = None   # order wizard state (agent/order_flow.py)
         self.started = False
         self.last_ts = 0.0
@@ -269,7 +284,7 @@ class Conversation:
     _FIELDS = ("customer_id", "conv_id", "messages", "customer_facing", "lang", "wa_phone",
                "customer_name", "profile", "flow", "started", "last_ts", "menu_shown",
                "last_menu", "last_guard", "last_user_text", "awaiting_rx_order",
-               "awaiting_confirm_order", "order", "dose_ctx", "dose_check")
+               "awaiting_confirm_order", "order", "dose_ctx", "dose_check", "cancel_ctx")
 
     def to_dict(self) -> dict:
         d = {k: getattr(self, k) for k in self._FIELDS}
@@ -301,6 +316,7 @@ class PharmacyAgent:
         self.denylist = ScheduledDenylist.from_odoo(self.gw.c)
         self.customer = CustomerFlow(self)
         self.order = OrderFlow(self)
+        self.cancel = CancelFlow(self)
         # customer chats: the model only finds things and answers - orders, holds and dispatch
         # are placed by the order wizard's ✅ button, never by the model
         self.tools_cf = [t for t in self.tools if t["function"]["name"] in CUSTOMER_TOOLS]
@@ -326,6 +342,19 @@ class PharmacyAgent:
     # ---- helpers -----------------------------------------------------------
     def _escalate(self, conv, reason, summary):
         return self._handover(conv, reason, summary)
+
+    def _real_orders(self, conv):
+        """The customer's orders from Odoo (fixed text), or identification first."""
+        if not conv.customer_id:
+            return self.customer.start(conv, pending={"kind": "menu", "choice": "track_order"})
+        args = {"customer_id": conv.customer_id}
+        res = self.gw.track_order(**args)
+        conv.messages.append({"role": "assistant", "content": "",
+                              "tool_calls": [{"function": {"name": "track_order", "arguments": args}}]})
+        conv.messages.append({"role": "tool", "tool_name": "track_order",
+                              "content": json.dumps(res, ensure_ascii=False)})
+        return self._say(conv, format_orders(res if "orders" in res else {}, self._lang(conv)),
+                         guard="order_status")
 
     # ---- policy: scheduled refusal, medical questions, handovers with context ---------------
     def _scheduled(self, conv, ids=None, name=None, why=""):
@@ -844,6 +873,15 @@ class PharmacyAgent:
             if reply is not None:
                 return reply
 
+        # --- cancelling an order: fixed wizard (which order -> its items -> ✅ / ↩️), no model ---
+        if conv.cancel_ctx and not image:
+            reply = self.cancel.handle(conv, raw)
+            if reply is not None:
+                return reply
+        in_order_wizard = bool(conv.order and conv.order.get("step") not in (None, "add", "cart"))
+        if conv.customer_facing and not image and not in_order_wizard and cancel_intent(raw):
+            return self.cancel.start(conv, raw)
+
         # --- opening menu / menu choices (customer-facing channels) ---
         if conv.customer_facing and not resumed:
             # a bare 1-5 is a quantity only inside the order wizard; anywhere else it is the menu
@@ -1064,6 +1102,12 @@ class PharmacyAgent:
                         found["alternatives"] = [c for c in found.get("alternatives") or [] if not c.get("is_scheduled")]
                         if found["candidates"] or found["alternatives"]:
                             return self.order.present(conv, found, raw)
+                if conv.customer_facing and _describes_order(reply) and not any(
+                        m["role"] == "tool" and m.get("tool_name") in _ORDER_TOOLS for m in conv.messages):
+                    # the model described an order nobody looked up ("1 box Panadol, delivery in
+                    # 24 hours"): show the customer's real orders instead
+                    self._audit(conv.conv_id, "invented_order_blocked", {"model_text": reply[:300]})
+                    return self._real_orders(conv)
                 reply = _strip_promises(reply)
                 reply = reply or ("عفواً، ممكن توضح طلبك؟" if self._lang(conv) == "ar"
                                   else "Sorry, could you clarify your request?")
