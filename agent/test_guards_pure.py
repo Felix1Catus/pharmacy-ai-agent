@@ -80,16 +80,18 @@ def test_menu_matching():
     assert match_menu("❓ Questions / inquiries", False) == "questions"
     assert match_menu("🌐 English", False) == "switch_lang"
     assert match_menu("English please", False) == "switch_lang"
-    assert match_menu("عميل جديد", False) == "customer" and match_menu("4", True) == "customer"
+    assert match_menu("عميل جديد", False) == "customer" and match_menu("5", True) == "customer"
     assert match_menu("طلب جديد", False) == "new_order"
+    assert match_menu("2", True) == "cart" and match_menu("سلتي", False) == "cart"
+    assert match_menu("فضي السلة", False) == "clear_cart" and match_menu("clear cart", False) == "clear_cart"
     assert match_menu("ابغى اطلب بنادول 500 توصيل للرياض", False) is None
     assert wants_menu("القائمة") and wants_menu("menu") and not wants_menu("بنادول")
 
 
 def test_menu_text_and_language():
-    assert "1. 🛒 طلب جديد" in menu_text("ar") and "5. 🌐 English" in menu_text("ar")
-    assert "4. 👤 عميل حالي / جديد" in menu_text("ar")
-    assert "5. 🌐 العربية" in menu_text("en")
+    assert "1. 🛒 طلب جديد" in menu_text("ar") and "6. 🌐 English" in menu_text("ar")
+    assert "5. 👤 عميل حالي / جديد" in menu_text("ar") and "2. 🧺 سلتي" in menu_text("ar")
+    assert "6. 🌐 العربية" in menu_text("en")
     assert detect_lang("Do you have Centrum?") == "en" and detect_lang("عندكم Centrum؟") == "ar"
     assert localize("عربي — English", "en") == "English" and localize("عربي — English", "ar") == "عربي"
     assert localize("عربي — English", None) == "عربي — English"

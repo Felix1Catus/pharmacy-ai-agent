@@ -190,10 +190,13 @@ def test_track_requires_arg():
 
 # ---- escalate ------------------------------------------------------------
 def test_escalate():
-    r = _call("escalate_to_human", {"reason": "medical_advice",
+    r = _call("escalate_to_human", {"reason": "medical_advice", "medicine": "Augmentin 1g",
                                     "summary": "asked for dosage"})
     assert r.status_code == 200
     assert "handover_id" in r.json()
+    # a handover nobody can act on (no order, no medicine) is refused
+    r = _call("escalate_to_human", {"reason": "medical_advice", "summary": "asked for dosage"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "needs_context"
 
 
 def test_escalate_bad_reason_is_422():

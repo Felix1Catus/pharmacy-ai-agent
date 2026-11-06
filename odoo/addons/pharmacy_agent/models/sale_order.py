@@ -77,3 +77,9 @@ class SaleOrder(models.Model):
     def _compute_needs_cold_chain(self):
         for o in self:
             o.needs_cold_chain = any(l.product_id.cold_chain for l in o.order_line)
+
+    # ---- the chat cart: a quotation the customer is still filling in the chat -----------
+    wa_cart = fields.Boolean(
+        string="Chat cart (not checked out)", copy=False, index=True,
+        help="Items the customer added in the chat but has not checked out yet. A pharmacist "
+             "answering a question about them sees the items here.")

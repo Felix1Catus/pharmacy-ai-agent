@@ -59,6 +59,30 @@ demo products that have no SFDA record (fill **Storage (pharmacy note)** on the 
 - ✅ Complaint follow-up: the latest complaint's state from `pharmacy.handover`.
 - ✅ New delivery address saved on the contact; claiming "updated" without the tool is blocked.
 
+## Escalation policy (pharmacy_agent 18.0.1.10.0)
+A handover (`pharmacy.handover`) is only made when a pharmacist can act on it: it is tied to an
+order / cart quotation, or at least names the medicine (`escalate_to_human` returns
+`needs_context` otherwise and the customer is asked which order or medicine).
+
+| Situation | What the chat does | Handover? |
+|---|---|---|
+| Scheduled (مقيد) medicine asked about, searched, on a photo | fixed refusal: dispensed in person only, at a branch, against a doctor's stamped prescription; plus 📍 which branches have it in stock. No price, no order, no photo request | never |
+| Prescription-only (يحتاج وصفة) | ordered normally; the quotation waits for the photo and goes to Pharmacy → Prescriptions for review | no |
+| Dose / medical question, no order or cart behind it (or about another product) | refused; "if it is in your order or cart, send the prescription photo" | no |
+| Dose question about an item in the cart or a recent order | the directions read from that order's prescription, word for word ("Metformin: 1 tab twice daily with meals"); no prescription yet → ask for the photo, OCR reads them | no |
+| …customer says the directions are wrong | handed over with the order, the prescription and what was read | **yes, tied to the order** |
+| …photo sent but no directions readable | handed over with the order and the prescription | **yes, tied to the order** |
+| Complaint about an order | `track_order` / details, then handover with that order | **yes, tied to the order** |
+| Complaint / abuse / "a human please" with no order or medicine | asks for the order number or medicine | no |
+| Symptoms ("بطني يوجعني") | see a pharmacist at any branch; severe → 997 / emergency | no |
+
+## Cart
+Items added in the order wizard go into a **cart quotation** in Odoo (`sale.order` with
+`wa_cart`), so a pharmacist answering a question sees the items. The menu has 🧺 My cart
+(shows it: ✅ check out / ➕ add / 🧹 clear); "clear cart" also works as a message. Checking out
+turns the same quotation into the order (prescription review, payment link as before). A guest's
+cart stays in the chat until they register at checkout.
+
 ## Safety rails added with these tools
 - Product ids must come from a search result in the same chat; the address must be the
   customer's own words.

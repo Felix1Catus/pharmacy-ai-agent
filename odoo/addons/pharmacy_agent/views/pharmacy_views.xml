@@ -44,6 +44,7 @@
           <field name="document" filename="document_filename" invisible="not document"/>
           <field name="document_filename" invisible="1"/>
           <field name="image" widget="image"/>
+          <field name="directions"/>
           <field name="ocr_text"/>
           <field name="notes"/>
         </sheet>

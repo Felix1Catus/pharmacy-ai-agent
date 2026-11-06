@@ -14,12 +14,12 @@ import re
 
 from guards import normalize
 
-MENU_IDS = ["new_order", "track_order", "questions", "customer", "switch_lang"]
+MENU_IDS = ["new_order", "cart", "track_order", "questions", "customer", "switch_lang"]
 
 TEXTS = {
     "ar": {
         "greeting": "أهلاً وسهلاً بك في الصيدلية 👋\nكيف أقدر أخدمك اليوم؟ اختر من القائمة:",
-        "labels": {"new_order": "🛒 طلب جديد", "track_order": "📦 تتبع طلب",
+        "labels": {"new_order": "🛒 طلب جديد", "cart": "🧺 سلتي", "track_order": "📦 تتبع طلب",
                    "questions": "❓ أسئلة واستفسارات", "customer": "👤 عميل حالي / جديد",
                    "switch_lang": "🌐 English"},
         "new_order": "تمام! اكتب اسم الدواء أو المنتج اللي تبغاه 🛒\n"
@@ -41,7 +41,7 @@ TEXTS = {
     },
     "en": {
         "greeting": "Welcome to the pharmacy 👋\nHow can I help you today? Choose from the menu:",
-        "labels": {"new_order": "🛒 New order", "track_order": "📦 Track order",
+        "labels": {"new_order": "🛒 New order", "cart": "🧺 My cart", "track_order": "📦 Track order",
                    "questions": "❓ Questions / inquiries", "customer": "👤 Existing / new customer",
                    "switch_lang": "🌐 العربية"},
         "new_order": "Great! Type the name of the medicine or product you need 🛒\n"
@@ -68,6 +68,10 @@ _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 # "ابغى اطلب بنادول" goes to the agent, while "طلب جديد" / "track order" open the item
 _KEYWORDS = {
     "new_order": ["طلب جديد", "اطلب جديد", "new order", "order now", "place an order"],
+    "cart": ["سلتي", "السله", "سله", "سلتي وش فيها", "وش في السله", "my cart", "cart", "basket",
+             "show cart", "view cart"],
+    "clear_cart": ["فضي السله", "فضي سلتي", "امسح السله", "امسح سلتي", "الغي السله", "تفريغ السله",
+                   "clear cart", "empty cart", "clear my cart", "empty my cart"],
     "track_order": ["تتبع", "تتبيع", "track", "tracking", "وين طلبي", "وين وصل طلبي", "where is my order"],
     "questions": ["اسئله", "استفسار", "استفسارات", "سؤال", "question", "questions", "inquiry",
                   "inquiries", "enquiry"],
@@ -114,18 +118,18 @@ def is_greeting(text: str) -> bool:
 
 
 def match_menu(text: str, menu_just_shown: bool) -> str | None:
-    """Menu item chosen by this message, or None. A bare digit 1-5 counts only right after the
+    """Menu item chosen by this message, or None. A bare digit 1-6 counts only right after the
     menu was shown (otherwise "1" may be a quantity); labels/keywords count in short messages."""
     n = normalize(text).translate(_DIGITS)
     n = re.sub(r"[^\w\s]", " ", n).strip()               # drop emoji / punctuation
-    if menu_just_shown and n in {"1", "2", "3", "4", "5"}:
+    if menu_just_shown and n in {str(i) for i in range(1, len(MENU_IDS) + 1)}:
         return MENU_IDS[int(n) - 1]
     for lang in TEXTS:                                     # exact button label (either language)
         for i, label in TEXTS[lang]["labels"].items():
             if n == re.sub(r"[^\w\s]", " ", normalize(label)).strip():
                 return i
     if len(n.split()) <= 4:
-        for i, kws in _KEYWORDS.items():
+        for i, kws in sorted(_KEYWORDS.items(), key=lambda kv: kv[0] != "clear_cart"):
             if any(re.search(rf"(?<!\w){re.escape(normalize(k))}(?!\w)", n) for k in kws):
                 return i
     return None

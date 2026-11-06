@@ -321,39 +321,95 @@ def order_status_intent(text: str) -> bool:
 
 
 # ---- canned replies ------------------------------------------------------
+# No handover in these replies: a handover is only made when it is tied to an order / cart
+# quotation (or names the medicine), so a pharmacist has something to act on.
 PHARMACIST_REFERRAL = (
-    "سلامتك 🙏 هذي الأعراض يحتاج الصيدلي يسألك عنها أولاً، فحوّلت محادثتك له وبيتواصل معك قريباً. "
+    "سلامتك 🙏 هذي الأعراض يحتاج الصيدلي يسألك عنها بنفسه، تقدر تزور أي فرع من فروعنا ويخدمك مباشرة. "
     "وإذا تبغى منتج معيّن تقدر تكتب اسمه. "
-    "— Sorry you're unwell. A pharmacist needs to ask you about these symptoms first, so I've passed your "
-    "chat to one; they'll contact you shortly. If you want a specific product, you can type its name."
+    "— Sorry you're unwell. A pharmacist needs to ask you about these symptoms in person - any of our "
+    "branches can help you straight away. If you want a specific product, you can type its name."
 )
 
 URGENT_REFERRAL = (
     "سلامتك 🙏 إذا الأعراض شديدة أو مفاجئة، اتصل على الإسعاف 997 أو توجّه لأقرب طوارئ فوراً. "
-    "حوّلت محادثتك للصيدلي أيضاً وبيتواصل معك. "
     "— If the symptoms are severe or sudden, call an ambulance on 997 or go to the nearest emergency "
-    "department now. I've also passed your chat to a pharmacist, who will contact you."
+    "department now."
 )
 
 ABUSE_HANDOVER = (
-    "نعتذر إن كانت تجربتك غير مرضية. حوّلت محادثتك لأحد زملائنا وسيتواصل معك قريباً. "
-    "— We're sorry your experience wasn't good. I've passed your conversation to a colleague, "
-    "who will contact you shortly."
+    "نعتذر إن كانت تجربتك غير مرضية. إذا المشكلة في طلب، اكتب رقم الطلب أو اسم الدواء وأحوّلها لزميل يتابعها معك. "
+    "— We're sorry your experience wasn't good. If the problem is with an order, send the order number "
+    "or the medicine's name and I'll pass it to a colleague to sort out."
 )
 
 MEDICAL_REFUSAL = (
-    "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. "
-    "يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة). "
-    "— Sorry, I can't give medical advice or dosages; I'll refer you to a pharmacist. "
-    "I can help you find medicines, prices and availability (except scheduled/controlled medicines)."
+    "عذراً، ما أقدر أعطي نصائح طبية أو جرعات. إذا الدواء ضمن طلبك أو سلتك، أرسل صورة الوصفة 📎 "
+    "وأقرأ لك الجرعة المكتوبة فيها. ويقدر الصيدلي في أي فرع يجاوب سؤالك. "
+    "— Sorry, I can't give medical advice or dosages. If the medicine is in your order or cart, send a "
+    "photo of the prescription 📎 and I'll read you the dose written on it. A pharmacist at any of our "
+    "branches can also answer your question."
 )
 
+# ---- dosage questions about an order / cart: the prescription's own words -----------------
+DOSE_ASK_PHOTO = {
+    "ar": "سؤالك عن {items} ({ref}). أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها كما كتبها الطبيب.",
+    "en": "Your question is about {items} ({ref}). Send a photo of the prescription 📎 and I'll read you "
+          "the dose exactly as the doctor wrote it.",
+}
+DOSE_AS_WRITTEN = {
+    "ar": "📝 مكتوب في وصفتك:\n{lines}\nهذا كما كتبه الطبيب. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، "
+          "قل لي وأحوّل سؤالك مع طلبك {ref} للصيدلي.",
+    "en": "📝 Your prescription says:\n{lines}\nThat is exactly as the doctor wrote it. If something is wrong "
+          "or different from what the doctor told you, say so and I'll pass your question with order {ref} "
+          "to the pharmacist.",
+}
+DOSE_UNREADABLE = {
+    "ar": "ما قدرت أقرأ الجرعة من الوصفة بوضوح، فحوّلت سؤالك مع طلبك {ref} والوصفة للصيدلي ويرد عليك قريباً.",
+    "en": "I couldn't read the dose on the prescription clearly, so I've passed your question with order "
+          "{ref} and the prescription to the pharmacist, who will reply shortly.",
+}
+DOSE_DISPUTED = {
+    "ar": "تمام، حوّلت سؤالك مع طلبك {ref} ووصفتك للصيدلي، وبيراجعها ويرد عليك قريباً 👨‍⚕️",
+    "en": "OK - I've passed your question with order {ref} and your prescription to the pharmacist, who "
+          "will check it and reply shortly 👨‍⚕️",
+}
+_DISPUTE = re.compile(r"(غلط|خطا|خطأ|مو صحيح|مش صحيح|موب صحيح|غير صحيح|مب صحيح|مختلف|ماهو كذا|مو كذا|"
+                      r"الدكتور قال|قال لي الدكتور|not right|wrong|incorrect|not correct|different|doctor said)", re.I)
+
+
+def disputes_directions(text: str) -> bool:
+    return bool(_DISPUTE.search(normalize(text)))
+
+
+NEEDS_CONTEXT = {
+    "ar": "عشان أحوّلك لزميل يقدر يساعدك، اكتب رقم الطلب أو اسم الدواء اللي تقصده.",
+    "en": "So I can pass this to a colleague who can help, please send the order number or the name of "
+          "the medicine it is about.",
+}
+
+# Scheduled (مقيد) medicines are dispensed in person only, against a doctor's stamped
+# prescription: refused here, never escalated, no photo asked for. Availability only.
 SCHEDULED_REFUSAL = (
-    "هذا الدواء من الأدوية المجدولة/الخاضعة للرقابة ولا يمكن طلبه عبر المساعد. سأحوّلك إلى الصيدلي. "
-    "يمكنني مساعدتك في الأدوية الأخرى وأسعارها وتوفّرها. "
-    "— That medicine is scheduled/controlled and can't be ordered through the assistant; "
-    "I'll refer you to a pharmacist. I can help with other medicines, prices and availability."
+    "هذا دواء مقيّد (خاضع للرقابة) 🔒: يُصرف حضورياً فقط من الفرع مع وصفة طبية مختومة من الطبيب، ولا يمكن "
+    "طلبه أو توصيله عبر المحادثة. أقدر أفيدك بتوفّره فقط. "
+    "— This is a controlled (scheduled) medicine 🔒: it is dispensed in person only, at a branch, against a "
+    "doctor's stamped prescription, and can't be ordered or delivered through the chat. I can only tell "
+    "you where it is available."
 )
+_SCHED_AVAIL = {"ar": ("📍 متوفر حالياً في: {b}", "📍 حالياً غير متوفر في فروعنا."),
+                "en": ("📍 Available now at: {b}", "📍 Not available at our branches right now.")}
+
+
+def scheduled_refusal(lang: str | None, branches: list[str] | None) -> str:
+    """The refusal + where it is in stock (branches=None: availability unknown, e.g. a name the
+    denylist caught that is not in the catalogue)."""
+    from menu import localize
+    text = localize(SCHEDULED_REFUSAL, lang)          # lang None (staff / evals): both languages
+    if branches is None:
+        return text
+    have, none = _SCHED_AVAIL[lang if lang in _SCHED_AVAIL else "ar"]
+    return text + "\n" + (have.format(b="، ".join(branches) if (lang or "ar") == "ar" else ", ".join(branches))
+                          if branches else none)
 
 PRESCRIPTION_HANDOVER = (
     "هذا الدواء يحتاج وصفة طبية، لذلك لا يمكن طلبه أو حجزه عبر المحادثة. سأحوّلك إلى الصيدلي "

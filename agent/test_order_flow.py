@@ -107,6 +107,7 @@ def test_full_sentence_order_needs_one_model_call(shop):
     # one product clearly named + qty 2 + pickup Jeddah: straight to the summary
     assert "ملخص طلبك" in reply and "× 2" in reply and "Jeddah" in reply
     reply = a.respond(conv, "✅ تأكيد الطلب")
+    assert isinstance(shop[0].pop("cart_id"), int)       # the chat cart quotation becomes the order
     assert shop == [{"items": [{"product_id": 1, "qty": 2}], "fulfillment": "pickup", "branch_id": 3,
                      "customer_id": prof["customer_id"]}]
     assert "S04321" in reply and "/my/orders/4321" in reply

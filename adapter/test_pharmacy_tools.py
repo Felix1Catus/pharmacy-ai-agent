@@ -144,7 +144,7 @@ def test_stock_alert(gw, cust):
 
 @live
 def test_handover_is_an_odoo_record(gw, cust):
-    r = gw.escalate_to_human("complaint", "test: wrong item delivered", customer_id=cust,
+    r = gw.escalate_to_human("complaint", "test: wrong item delivered", customer_id=cust, medicine="Panadol",
                              conv_id="pytest", channel="webchat")
     assert r["handover_ref"].startswith("HO-")
     req = gw.track_order(customer_id=cust)["requests"]

@@ -385,7 +385,7 @@ class Gateway:
 
     # ---- 3. create_order -----------------------------------------------------
     def create_order(self, customer_id, items, fulfillment,
-                     branch_id=None, delivery_address=None):
+                     branch_id=None, delivery_address=None, cart_id=None):
         if not self.c.search("res.partner", [["id", "=", customer_id]]):
             return err("not_found", f"no customer with id {customer_id}")
         if not items:
@@ -448,8 +448,14 @@ class Gateway:
                                       ["name", "invoice_number"])
             vals["note"] = ((vals.get("note") or "") + " | Prescription(s): " + ", ".join(
                 f"{r['name']} (invoice {r['invoice_number']})" for r in refs)).strip(" |")
+        cart = self._cart_ids(customer_id, cart_id) if cart_id else []   # only the cart being checked out
         try:
-            oid = self.c.create("sale.order", vals)
+            if cart:                             # check out the chat cart: the same quotation
+                vals.update(wa_cart=False, order_line=[(5, 0, 0)] + lines)
+                self.c.write("sale.order", cart[:1], vals)
+                oid = cart[0]
+            else:
+                oid = self.c.create("sale.order", vals)
         except OdooError as e:
             return err("invalid_input", str(e))
         if rx_used:      # one prescription = one order: it cannot be used again
@@ -732,8 +738,10 @@ class Gateway:
             res["problems"].append("only_scheduled")
             res["ok"] = False
         if res["invoice_number"]:
+            # used = on an order, or held by another customer; a rejected upload (unreadable,
+            # a test, the wrong patient) never blocks the real owner from sending it again
             reused = self.c.search_count("pharmacy.prescription", [
-                ["invoice_number", "=", res["invoice_number"]],
+                ["invoice_number", "=", res["invoice_number"]], ["state", "!=", "rejected"],
                 "|", ["sale_order_id", "!=", False], ["partner_id", "!=", customer_id]])
             if reused:
                 res["problems"].append("invoice_already_used")
@@ -765,6 +773,8 @@ class Gateway:
             "prescription_date": res["date"] or False,
             "matched_product_ids": [(6, 0, sorted(unlocked))],
             "extracted_drug": ", ".join(m["name_en"] for m in meds)[:250] or False,
+            "directions": "\n".join(f"{d['medicine']}: {d['directions']}"
+                                    for d in res.get("directions") or []) or False,
             "state": "auto_verified" if res["ok"] else "submitted",
             "notes": ("checks failed: " + ", ".join(res["problems"])) if res["problems"]
                      else "auto-verified: date, invoice number and medicine(s) found",
@@ -798,7 +808,7 @@ class Gateway:
         if customer_id:
             try:
                 req = self.open_requests(customer_id)
-            except OdooError:
+            except Exception:  # noqa: BLE001
                 req = []
             if req:
                 out["requests"] = req
@@ -908,8 +918,11 @@ class Gateway:
         if order_id:
             dom.append(["id", "=", int(order_id)])
         elif order_ref:
-            ref = re.sub(r"\D", "", str(order_ref))
-            dom.append(["name", "ilike", ref.lstrip("0") or ref] if ref else ["name", "=", order_ref])
+            # exact: "S46", "s00046", "46" -> S00046 (never a substring: 46 must not match S00146)
+            ref = str(order_ref).strip().upper()
+            digits = re.sub(r"\D", "", ref)
+            names = {ref} | ({f"S{int(digits):05d}"} if digits else set())
+            dom.append(["name", "in", sorted(names)])
         rows = self.c.search_read("sale.order", dom, [
             "name", "state", "date_order", "amount_total", "fulfillment_type", "delivery_address_text",
             "warehouse_id", "rx_review_state", "rx_review_note", "payment_state_wa", "dispatch_status",
@@ -947,6 +960,8 @@ class Gateway:
     def cancel_order(self, order_id=None, order_ref=None, reason=None, customer_id=None):
         """Cancel one of the customer's open quotations (not yet confirmed / paid). A confirmed
         order cannot be cancelled here: the customer is handed to staff."""
+        if not (order_id or order_ref):
+            return err("invalid_input", "which order? pass the order_ref the customer confirmed")
         d = self.get_order_details(order_id, order_ref, customer_id)
         if "error" in d:
             return d
@@ -1000,6 +1015,8 @@ class Gateway:
             return err("scheduled_item", f"{flags['name']} is a scheduled/controlled substance",
                        product_id=product_id)
         b = self._branch(branch_id) if branch_id else None
+        if branch_id and not b:
+            return err("not_found", f"no branch with id {branch_id} - call list_branches")
         avail = self._avail_at(product_id, b["loc_id"]) if b else \
             sum(self._avail_at(product_id, x["loc_id"]) for x in self.branches())
         if avail > 0:
@@ -1045,14 +1062,130 @@ class Gateway:
         p = self.update_customer_address(customer_id, address)
         return {"saved": True, "address": p["address"] if p else address.strip()}
 
+    # ---- chat cart: a draft quotation (wa_cart) kept in step with the chat ----------------
+    def _cart_ids(self, customer_id, cart_id=None) -> list[int]:
+        if not customer_id:
+            return []
+        dom = [["partner_id", "=", customer_id], ["wa_cart", "=", True], ["state", "=", "draft"]]
+        if cart_id:
+            dom.append(["id", "=", cart_id])
+        return self.c.search("sale.order", dom, order="id desc", limit=1)
+
+    def cart_sync(self, customer_id, items) -> dict:
+        """Make the customer's cart quotation hold exactly `items` [{product_id, qty}]: created on
+        the first item, emptied (cancelled) when items is empty. A pharmacist answering a
+        question about the cart sees these lines."""
+        if not customer_id:
+            return err("customer_required", "identify or register the customer first")
+        ids = self._cart_ids(customer_id)
+        if not items:
+            if ids:
+                self.c.execute_kw("sale.order", "action_cancel", [ids])
+            return {"cart_id": None, "items": []}
+        lines = [(0, 0, {"product_id": it["product_id"], "product_uom_qty": it["qty"]}) for it in items]
+        if ids:
+            self.c.write("sale.order", ids, {"order_line": [(5, 0, 0)] + lines})
+            oid = ids[0]
+        else:
+            oid = self.c.create("sale.order", {"partner_id": customer_id, "wa_cart": True,
+                                               "origin": "WhatsApp cart", "order_line": lines})
+        return self.get_cart(customer_id) | {"cart_id": oid}
+
+    def get_cart(self, customer_id) -> dict:
+        ids = self._cart_ids(customer_id)
+        if not ids:
+            return {"cart_id": None, "items": []}
+        o = self.c.read("sale.order", ids[0], ["name", "amount_untaxed"])[0]
+        lines = self.c.search_read("sale.order.line", [["order_id", "=", ids[0]], ["display_type", "=", False]],
+                                   ["product_id", "name", "product_uom_qty", "price_subtotal"])
+        return {"cart_id": ids[0], "cart_ref": o["name"], "total": o["amount_untaxed"],
+                "items": [{"product_id": l["product_id"][0], "qty": int(l["product_uom_qty"]),
+                           "name": re.sub(r"^\[[^]]*\]\s*", "", l["name"].split("\n")[0]),
+                           "subtotal": l["price_subtotal"]} for l in lines if l["product_id"]]}
+
+    # ---- scheduled medicines: availability only (never ordered, priced or escalated) ------
+    def scheduled_availability(self, product_ids=None, name=None) -> dict:
+        """Branches that have a scheduled (مقيد) medicine in stock, for the fixed refusal:
+        dispensed in person only, with a stamped doctor's prescription. No price."""
+        ids = list(product_ids or [])
+        if not ids and name:
+            ids = self.c.search("product.product", [["is_scheduled", "=", True], "|", "|",
+                                                    ["name", "ilike", name], ["x_name_ar", "ilike", name],
+                                                    ["sfda_scientific_name", "ilike", name]], limit=5)
+        where = []
+        for b in self.branches():
+            if any(self._avail_at(i, b["loc_id"]) > 0 for i in ids):
+                where.append(b["name"])
+        names = [r["name"] for r in self.c.read("product.product", ids, ["name"])] if ids else []
+        return {"products": names, "branches": where}
+
+    # ---- prescription directions (what the doctor wrote), for a dosage question ------------
+    def prescription_directions(self, customer_id, order_id=None) -> dict | None:
+        """The directions read from the customer's prescription FOR THIS ORDER: one linked to it,
+        or an unlinked one sent in the last 30 days that names one of its items. Never another
+        prescription's directions. {prescription_id, order_id, directions: [lines]} or None."""
+        if not customer_id or not order_id:
+            return None
+        base = [["partner_id", "=", customer_id], ["state", "!=", "rejected"], ["directions", "!=", False]]
+        fields = ["directions", "sale_order_id"]
+        rows = self.c.search_read("pharmacy.prescription", base + [["sale_order_id", "=", order_id]],
+                                  fields, order="id desc", limit=1)
+        if not rows:                           # sent before the order existed: must name its items
+            items = [l["product_id"][0] for l in self.c.search_read(
+                "sale.order.line", [["order_id", "=", order_id], ["display_type", "=", False]],
+                ["product_id"]) if l["product_id"]]
+            since = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
+            rows = self.c.search_read("pharmacy.prescription", base + [
+                ["sale_order_id", "=", False], ["create_date", ">=", since],
+                ["matched_product_ids", "in", items]], fields, order="id desc", limit=1) if items else []
+        if not rows:
+            return None
+        return {"prescription_id": rows[0]["id"], "order_id": order_id,
+                "directions": [l for l in rows[0]["directions"].splitlines() if l.strip()]}
+
+    def link_prescription(self, prescription_id: int, order_id: int, customer_id: int) -> None:
+        """A prescription sent for a dosage question goes on that order (Pharmacy -> Prescriptions
+        shows it with the order); a prescription-only quotation then goes to pharmacist review."""
+        if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id]]):
+            return
+        o = self.c.read("sale.order", order_id, ["rx_review_state", "state"])[0]
+        self.c.write("pharmacy.prescription", [prescription_id], {"sale_order_id": order_id})
+        if o["state"] in ("draft", "sent") and o["rx_review_state"] == "awaiting_photo":
+            self.c.write("sale.order", [order_id], {"rx_review_state": "pending"})
+
+    def active_order(self, customer_id) -> dict | None:
+        """What a question or handover is about: the chat cart, else the latest open quotation
+        or order of the last 30 days. {order_id, order_ref, items:[names], product_ids}."""
+        if not customer_id:
+            return None
+        ids = self._cart_ids(customer_id) or self.c.search("sale.order", [
+            ["partner_id", "=", customer_id], ["state", "in", ["draft", "sent", "sale"]],
+            ["create_date", ">=", (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")]],
+            order="id desc", limit=1)
+        if not ids:
+            return None
+        o = self.c.read("sale.order", ids[0], ["name"])[0]
+        lines = self.c.search_read("sale.order.line", [["order_id", "=", ids[0]], ["display_type", "=", False]],
+                                   ["product_id", "name"])
+        return {"order_id": ids[0], "order_ref": o["name"],
+                "items": [re.sub(r"^\[[^]]*\]\s*", "", l["name"].split("\n")[0]) for l in lines],
+                "product_ids": [l["product_id"][0] for l in lines if l["product_id"]]}
+
     # ---- 7. escalate_to_human ------------------------------------------------
     _HANDOVER_REASONS = {"medical_advice", "restricted_item", "complaint", "abusive", "low_confidence",
                          "unclear", "out_of_scope", "prescription"}
 
-    def escalate_to_human(self, reason, summary, customer_id=None, order_id=None,
+    def escalate_to_human(self, reason, summary, customer_id=None, order_id=None, medicine=None,
                           conv_id=None, channel=None):
         """Hand the conversation to staff: a pharmacy.handover record in Odoo (Pharmacy ->
-        Handovers, the staff queue) plus the local log as a fallback if Odoo is unreachable."""
+        Handovers, the staff queue) plus the local log as a fallback if Odoo is unreachable.
+        A handover must be solvable: it is tied to an order / cart quotation, or at least names
+        the medicine - otherwise needs_context (ask the customer which order or medicine)."""
+        if not order_id and not (medicine and str(medicine).strip()):
+            return err("needs_context", "Ask the customer which order (number) or which medicine "
+                       "this is about; a handover needs one of them.")
+        if medicine:
+            summary = f"[{medicine}] {summary}"
         RESULTS.mkdir(exist_ok=True)
         entry = {"ts": datetime.now(timezone.utc).isoformat(), "reason": reason,
                  "summary": summary, "customer_id": customer_id}
@@ -1069,7 +1202,7 @@ class Gateway:
                 vals["sale_order_id"] = order_id
             handover_id = self.c.create("pharmacy.handover", vals)
             ref = self.c.read("pharmacy.handover", handover_id, ["name"])[0]["name"]
-        except OdooError:
+        except Exception:  # noqa: BLE001  (Odoo down / timeout: the local log still has it)
             handover_id = sum(1 for _ in HANDOVER_LOG.open(encoding="utf-8"))
         ack = ("حوّلت طلبك إلى صيدلي/موظف وسيتواصل معك قريبًا."
                " (Handed over to a human pharmacist; they'll follow up shortly.)")

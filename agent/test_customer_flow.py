@@ -62,7 +62,7 @@ def test_existing_customer_button_confirms_saved_profile():
     prof = GW.register_customer("ZZ Test Existing", "0500000303", "Dammam, Al Faisaliyah, St 9")
     a, llm, conv = _guest()
     a.greet(conv)
-    reply = a.respond(conv, "4")                          # 👤 عميل حالي / جديد
+    reply = a.respond(conv, "5")                          # 👤 عميل حالي / جديد
     assert "جوال" in reply and conv.flow["step"] == "ask_phone"
     reply = a.respond(conv, "0500000303")
     assert prof["name"] in reply and "Dammam" in reply
@@ -75,7 +75,7 @@ def test_edit_address_updates_contact():
     prof = GW.register_customer("ZZ Test Edit Address", "0500000404", "Riyadh, Old Street 1")
     a, llm, conv = _guest(wa_phone="966500000404")
     a.greet(conv)
-    a.respond(conv, "4")
+    a.respond(conv, "5")
     a.respond(conv, "✏️ تعديل العنوان")
     a.respond(conv, "الرياض، حي الملقا، طريق انس بن مالك 22")
     assert "الملقا" in GW.get_customer(prof["customer_id"])["address"]
@@ -129,7 +129,7 @@ def test_confirmed_order_from_guest_registers_then_places_quotation(monkeypatch)
 def test_guest_cannot_track_or_read_orders():
     a, llm, conv = _guest()
     a.greet(conv)
-    reply = a.respond(conv, "2")                          # 📦 تتبع طلب
+    reply = a.respond(conv, "3")                          # 📦 تتبع طلب
     assert conv.flow and conv.flow["pending"] == {"kind": "menu", "choice": "track_order"}
     assert "جوال" in reply
 
@@ -157,7 +157,7 @@ def test_identity_kept_and_given_to_the_model():
     a = PharmacyAgent(llm=llm, gateway=GW)
     conv = Conversation(None, customer_facing=True)
     a.greet(conv)
-    a.respond(conv, "4")
+    a.respond(conv, "5")
     a.respond(conv, "0500000606")
     a.respond(conv, "✅ نعم، اعتمدها")
     a.respond(conv, "وين اقرب فرع لي؟")                 # several turns later, still identified

@@ -105,3 +105,16 @@ class ProductTemplate(models.Model):
         for t in self:
             t.shelf_life_months = storage_parse.shelf_life_months(t.sfda_shelf_life)
             t.manufacturer_country = storage_parse.manufacturer_country(t.sfda_manufacturer)
+
+    def write(self, vals):
+        # the demo catalogue's custom prescription flags feed the module's own field, so the
+        # stored dispensing class follows them (x_ fields cannot be listed in @api.depends)
+        legacy = {k: vals[k] for k in ("x_requires_prescription", "x_is_restricted") if k in vals}
+        res = super().write(vals)
+        if legacy:
+            for t in self:
+                flag = bool(t._fields.get("x_requires_prescription") and t["x_requires_prescription"]) or \
+                    bool(t._fields.get("x_is_restricted") and t["x_is_restricted"])
+                if t.rx_required_manual != flag:
+                    super(ProductTemplate, t).write({"rx_required_manual": flag})
+        return res

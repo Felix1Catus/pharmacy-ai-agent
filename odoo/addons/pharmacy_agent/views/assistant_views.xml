@@ -138,6 +138,7 @@
       <xpath expr="//notebook" position="inside">
         <page string="Assistant" name="assistant">
           <group>
+            <field name="wa_cart"/>
             <field name="needs_cold_chain"/>
             <field name="cancel_reason_wa" invisible="not cancel_reason_wa"/>
           </group>
