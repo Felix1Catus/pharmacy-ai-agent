@@ -324,3 +324,23 @@ def test_cancel_only_when_the_customer_asked(monkeypatch):
     assert cancelled == []
     a.respond(conv, "نعم")                            # asked + confirmed
     assert cancelled and cancelled[0]["order_ref"] == "S00001"
+
+
+@live
+def test_all_you_have_then_a_number_at_quantity_step_never_crashes(shop, monkeypatch):
+    # live chat 2026-11-06: "والله ابغي كل ماعندكم" went to a product search, found nothing, dropped
+    # the picked product, and the next "2" crashed the server (500)
+    llm = ScriptLLM([_search_call("بنادول")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "بنادول")
+    reply = a.respond(conv, "1")
+    assert "كم علبة" in reply
+    reply = a.respond(conv, "والله ابغي كل ماعندكم")
+    assert "10" in reply and conv.order["step"] == "qty" and conv.order["current"]
+    monkeypatch.setattr(GW, "search_product", lambda **kw: {"candidates": []})
+    reply = a.respond(conv, "زززقققق")                   # a search that finds nothing keeps the product
+    assert conv.order["step"] == "qty" and conv.order["current"] and "كم علبة" in reply
+    reply = a.respond(conv, "2")
+    assert "توصيل" in reply or "استلام" in reply        # quantity taken, wizard carries on
+    conv.order["step"], conv.order["current"] = "qty", None   # even a broken state never crashes
+    assert "اكتب اسم" in a.respond(conv, "2")

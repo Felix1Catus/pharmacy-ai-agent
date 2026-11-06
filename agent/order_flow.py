@@ -21,6 +21,9 @@ MAX_CHOICES = 5
 
 # a message during the wizard that means "cancel" or "I meant a different product"
 _CANCEL = re.compile(r"(?<!\w)(الغاء|إلغاء|الغي|إلغي|انهاء|إنهاء|انهي|إنهي|توقف|خروج|cancel|stop|abort|quit)(?!\w)")
+# "كل ماعندكم" / "all you have" at the quantity step: a quantity, not a product name
+_ALL_QTY = re.compile(r"(كل (ما|اللي|الي|الكميه|المتوفر|الموجود)|كل ماعندكم|كل الموجود|كل الكميه|كميه كبيره|"
+                      r"all (you have|of it|of them|your stock)|everything you have|as many as)")
 _CORRECTION = re.compile(r"(اقصد|قصدي|ليس هذا|ليس هو|مو هذا|مو هو|مب هذا|مش هذا|مش ده|غلط|خطا|غير هذا|غيره|not this|wrong|i mean|instead|different|other one)")
 
 T = {
@@ -38,6 +41,7 @@ T = {
         "ask_name": "تمام، اكتب اسم الدواء اللي تبغاه 🛒",
         "ask_qty": "كم علبة تبغى؟",
         "bad_qty": "اكتب الكمية رقماً من 1 إلى {max}.",
+        "max_qty": "أقصى كمية عبر المحادثة {max} علب، والكميات الأكبر نرتّبها لك من الفرع. كم علبة تبغى (1 إلى {max})؟",
         "ask_fulfil": "توصيل أو استلام من الفرع؟",
         "delivery": "🚚 توصيل", "pickup": "🏪 استلام من فرع",
         "ask_branch": "من أي فرع تستلم؟",
@@ -77,6 +81,7 @@ T = {
         "yes_item": "✅ Yes, this one", "no_item": "🔎 No, search again",
         "ask_name": "OK, type the name of the medicine you want 🛒",
         "ask_qty": "How many boxes?",
+        "max_qty": "The most we can take through the chat is {max} boxes; larger quantities are arranged at a branch. How many (1 to {max})?",
         "bad_qty": "Type the quantity as a number from 1 to {max}.",
         "ask_fulfil": "Delivery or pickup from a branch?",
         "delivery": "🚚 Delivery", "pickup": "🏪 Pickup",
@@ -340,7 +345,12 @@ class OrderFlow:
                 return self.a._say(conv, t["ask_name"], guard="order_flow")
             conv.order = None
             return None                          # something else: the agent handles it
+        if step == "qty" and not o.get("current"):
+            o["step"] = "await_name"             # nothing picked (any more): ask for the product
+            return self.a._say(conv, t["ask_name"], guard="order_flow")
         if step == "qty":
+            if _ALL_QTY.search(normalize(raw)):  # "كل ماعندكم" / "all you have": the chat limit
+                return self.a._say(conv, t["max_qty"].format(max=MAX_QTY), guard="order_flow")
             q = parse_qty(raw)
             if q is not None and 1 <= q <= MAX_QTY:
                 o["current"]["qty"] = q
@@ -413,13 +423,21 @@ class OrderFlow:
         return bool(core) and parse_qty(raw) is None and any(len(w) >= 3 for w in core.split())
 
     def _research(self, conv, raw):
-        """Customer named a different product mid-order: search again from their words."""
+        """Customer named a different product mid-order: search again from their words. If that
+        finds nothing, the product they had picked stays and the quantity is asked again."""
         o, t = conv.order, self._t(conv)
-        o["current"] = None
+        prev, step = o.get("current"), o.get("step")
         n = _CORRECTION.sub(" ", normalize(raw))
         core = _core(n)
         if core:
-            return self.present(conv, self.a.gw.search_product(query=core), raw)
+            res = self.a.gw.search_product(query=core)
+            if prev and isinstance(res, dict) and not (res.get("candidates") or res.get("alternatives")):
+                o["current"], o["step"] = prev, step
+                return self.a._say(conv, t["not_found"].format(q=raw.strip()) + "\n" + t["ask_qty"],
+                                   guard="order_flow")
+            o["current"] = None
+            return self.present(conv, res, raw)
+        o["current"] = None
         o["step"] = "await_name"
         return self.a._say(conv, t["ask_name"], guard="order_flow")
 
