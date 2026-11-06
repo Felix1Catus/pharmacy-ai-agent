@@ -55,7 +55,8 @@ def _agent(monkeypatch, candidates):
 def test_scheduled_next_to_loose_match_is_refused(monkeypatch):
     # the real case: "بريقابلين" -> an unrelated eye drop (spelling variant) + Brex (مقيد)
     a, llm, conv = _agent(monkeypatch, [EYE_DROP, BREX])
-    assert a.respond(conv, "هل في بريقابلين") == SCHEDULED_REFUSAL
+    reply = a.respond(conv, "هل في بريقابلين")
+    assert reply.startswith(SCHEDULED_REFUSAL) and not _handovers(conv)  # refused, never escalated
 
 
 def test_scheduled_hidden_when_exact_otc_matches(monkeypatch):
@@ -70,7 +71,8 @@ def test_ingredient_of_scheduled_blocked_before_model(monkeypatch):
     a, llm, conv = _agent(monkeypatch, [PANADOL])
     if not a.denylist.match("pregabalin"):
         pytest.skip("no Scheduled pregabalin product in this catalogue")
-    assert a.respond(conv, "do you have pregabalin?") == SCHEDULED_REFUSAL
+    reply = a.respond(conv, "do you have pregabalin?")
+    assert reply.startswith(SCHEDULED_REFUSAL) and not _handovers(conv)  # refused, never escalated
     assert llm.seen == []                       # the model was never called
 
 
@@ -79,7 +81,8 @@ def test_prescription_with_only_scheduled_is_refused(monkeypatch):
     monkeypatch.setattr(GW, "submit_prescription", lambda *a, **k: {
         "ok": False, "problems": ["only_scheduled"], "date": "2026-10-19",
         "invoice_number": "INV-1", "medications": [], "scheduled_count": 1})
-    assert a.respond(conv, "", image=b"%PDF-fake") == SCHEDULED_REFUSAL
+    reply = a.respond(conv, "", image=b"%PDF-fake")
+    assert reply.startswith(SCHEDULED_REFUSAL) and not _handovers(conv)  # refused, never escalated
     assert llm.seen == []
 
 
@@ -103,7 +106,7 @@ def _cf(outputs=()):
 def test_first_message_gets_greeting_and_menu():
     a, llm, conv = _cf()
     reply = a.respond(conv, "السلام عليكم")
-    assert "طلب جديد" in reply and conv.last_menu and len(conv.last_menu) == 5
+    assert "طلب جديد" in reply and conv.last_menu and len(conv.last_menu) == 6
     assert llm.seen == []
 
 
@@ -112,7 +115,7 @@ def test_menu_choices_and_language_switch():
     a.greet(conv)
     assert "اكتب اسم الدواء" in a.respond(conv, "1")
     a.respond(conv, "القائمة")
-    reply = a.respond(conv, "5")                       # switch to English
+    reply = a.respond(conv, "6")                       # switch to English
     assert conv.lang == "en" and "New order" in reply
     assert "Type the name" in a.respond(conv, "🛒 New order")
     assert llm.seen == []
@@ -121,7 +124,7 @@ def test_menu_choices_and_language_switch():
 def test_track_order_from_menu_lists_own_orders():
     a, llm, conv = _cf()
     a.greet(conv)
-    reply = a.respond(conv, "2")
+    reply = a.respond(conv, "3")
     assert "S0" in reply or "ما لقيت" in reply
     assert llm.seen == []
 
@@ -203,3 +206,12 @@ def test_customer_named_ingredients_override_partial_model_search(monkeypatch):
     a.greet(conv)
     a.respond(conv, "the box says amoxicillin and clavulanic acid")
     assert any(c.get("active_ingredient") == "amoxicillin, clavulanic acid" for c in seen)
+
+
+def _handovers(conv):
+    """Handovers recorded for this conversation (Odoo pharmacy.handover by conv id)."""
+    from gateway import Gateway
+    try:
+        return Gateway().c.search("pharmacy.handover", [["conv_id", "=", conv.conv_id]])
+    except Exception:  # noqa: BLE001
+        return []

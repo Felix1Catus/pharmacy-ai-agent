@@ -1,0 +1,35 @@
+{
+  "name": "request_stock_alert",
+  "description": "Record that the customer wants a message when an out-of-stock product (from search_product / check_stock) is back in stock, at one branch or any.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "product_id": {
+        "type": "integer"
+      },
+      "branch_id": {
+        "type": "integer",
+        "description": "Optional branch from list_branches."
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "product_id"
+    ]
+  },
+  "returns": {
+    "type": "object",
+    "description": "recorded; or already_available when it is in stock now."
+  },
+  "errors": [
+    {
+      "code": "scheduled_item",
+      "when": "scheduled medicine"
+    },
+    {
+      "code": "customer_required",
+      "when": "customer not identified"
+    }
+  ]
+}

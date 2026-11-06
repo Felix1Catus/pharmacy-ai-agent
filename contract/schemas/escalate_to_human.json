@@ -1,6 +1,6 @@
 {
   "name": "escalate_to_human",
-  "description": "Hand the conversation to a pharmacist or colleague (medical advice, restricted item, complaint, abusive, unclear).",
+  "description": "Hand the conversation to a pharmacist or colleague. Only with something they can act on: order_id (the order or cart it is about) or medicine (the product name). Never for scheduled medicines.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
@@ -14,7 +14,8 @@
           "abusive",
           "unclear",
           "out_of_scope",
-          "complaint"
+          "complaint",
+          "prescription"
         ]
       },
       "summary": {
@@ -22,6 +23,14 @@
       },
       "customer_id": {
         "type": "integer"
+      },
+      "order_id": {
+        "type": "integer",
+        "description": "The order it is about, if any."
+      },
+      "medicine": {
+        "type": "string",
+        "description": "The medicine it is about, as named in this chat."
       }
     },
     "required": [

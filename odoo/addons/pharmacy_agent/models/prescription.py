@@ -50,3 +50,7 @@ class PharmacyPrescription(models.Model):
     ], default="draft", index=True)
     verified_by = fields.Many2one("res.users", string="Verified by (pharmacist)")
     notes = fields.Text()
+
+    # written directions per medicine as read by OCR ("Metformin: 1 tab twice daily with meals"),
+    # one per line - the assistant repeats them as written; it never works out a dose itself
+    directions = fields.Text(string="Directions (as written, OCR)")

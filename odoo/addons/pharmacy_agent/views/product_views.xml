@@ -8,9 +8,28 @@
       <xpath expr="//notebook" position="inside">
         <page string="Pharmacy" name="pharmacy">
           <group>
-            <group string="Controlled substances">
+            <group string="Dispensing (what the assistant may do)">
+              <field name="dispensing_class" widget="badge"
+                     decoration-success="dispensing_class == 'otc'"
+                     decoration-warning="dispensing_class == 'prescription'"
+                     decoration-danger="dispensing_class == 'scheduled'"/>
               <field name="is_scheduled" string="Scheduled"/>
               <field name="schedule_class" invisible="not is_scheduled"/>
+              <field name="rx_required_manual"/>
+            </group>
+            <group string="Storage (the assistant answers from these)">
+              <field name="storage_class" widget="badge" decoration-info="cold_chain"/>
+              <field name="storage_min_c" invisible="not storage_has_min"/>
+              <field name="storage_max_c" invisible="not storage_has_max"/>
+              <field name="storage_has_min" invisible="1"/>
+              <field name="storage_has_max" invisible="1"/>
+              <field name="storage_protect_light"/>
+              <field name="storage_protect_moisture"/>
+              <field name="storage_no_freeze"/>
+              <field name="cold_chain"/>
+              <field name="storage_note" placeholder="Overrides the SFDA storage text"/>
+              <field name="shelf_life_months"/>
+              <field name="manufacturer_country"/>
             </group>
           </group>
           <div class="text-muted" invisible="not is_scheduled">
@@ -57,6 +76,8 @@
     <field name="arch" type="xml">
       <xpath expr="//field[@name='name']" position="after">
         <field name="is_scheduled" string="Scheduled" optional="show"/>
+        <field name="dispensing_class" optional="show"/>
+        <field name="storage_class" optional="hide"/>
       </xpath>
     </field>
   </record>
@@ -70,6 +91,9 @@
       <xpath expr="//filter[@name='filter_to_sell']" position="before">
         <filter string="Scheduled" name="filter_scheduled" domain="[('is_scheduled', '=', True)]"/>
         <filter string="Prescription (SFDA)" name="filter_sfda_rx" domain="[('sfda_requires_prescription', '=', True)]"/>
+        <filter string="Over the counter" name="filter_otc" domain="[('dispensing_class', '=', 'otc')]"/>
+        <filter string="Prescription only" name="filter_rx" domain="[('dispensing_class', '=', 'prescription')]"/>
+        <filter string="Needs fridge / cold chain" name="filter_cold" domain="[('cold_chain', '=', True)]"/>
         <filter string="From SFDA registry" name="filter_sfda" domain="[('sfda_reg_no', '!=', False)]"/>
         <separator/>
       </xpath>

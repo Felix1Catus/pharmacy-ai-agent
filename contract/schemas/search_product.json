@@ -1,6 +1,6 @@
 {
   "name": "search_product",
-  "description": "Find products by name, brand or active ingredient (Arabic or English), or by what the customer needs something for.",
+  "description": "Find products by name, brand or active ingredient (Arabic or English). Never for a symptom with no product named - the pharmacist advises on symptoms.",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",
@@ -23,26 +23,6 @@
       "active_ingredient": {
         "type": "string",
         "description": "Only an ingredient the customer wrote or that is on their prescription."
-      },
-      "need": {
-        "type": "string",
-        "enum": [
-          "pain_headache",
-          "fever",
-          "cold_flu",
-          "blocked_nose",
-          "sore_throat",
-          "cough",
-          "heartburn",
-          "bloating_gas",
-          "diarrhea_dehydration",
-          "allergy",
-          "dry_skin",
-          "sun_protection",
-          "wound_care",
-          "immunity_vitamins"
-        ],
-        "description": "Only when the customer wants something FOR a symptom or purpose and names no product (e.g. 'دوا للصداع', 'something for a blocked nose'): that need. The system picks the over-the-counter products - never choose a medicine or ingredient yourself."
       }
     },
     "required": [],
@@ -56,11 +36,6 @@
       {
         "required": [
           "active_ingredient"
-        ]
-      },
-      {
-        "required": [
-          "need"
         ]
       }
     ]

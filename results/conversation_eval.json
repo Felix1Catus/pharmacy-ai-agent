@@ -1,0 +1,554 @@
+{
+ "summary": {
+  "turns": 42,
+  "turns_ok": 42,
+  "turn_pass_rate": 1.0,
+  "scenarios": 14,
+  "scenarios_ok": 14,
+  "model": "qwen3-8b-q4_k_m"
+ },
+ "scenarios": [
+  {
+   "scenario": "fridge",
+   "turns": [
+    {
+     "say": "عندكم فكتوزا؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "⚠️ للأسف فكتوزا 6 ملجم/ مل غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+     "latency_s": 0.48,
+     "problems": []
+    },
+    {
+     "say": "هل يحتاج ثلاجة؟",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "يحفظ في الثلاجة في درجة حرارة (2 درجة إلى 8 درجة مئوية).",
+     "latency_s": 1.81,
+     "problems": []
+    },
+    {
+     "say": "طيب كم مدة صلاحيته؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "مدة صلاحيته 30 شهر.",
+     "latency_s": 0.76,
+     "problems": []
+    },
+    {
+     "say": "وش الشركة المصنعة ومن وين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "الشركة المصنعة هي NOVO NORDISK, Anova Joint Venture Company Limited، والمصنعة في دنمارك وفيتنام.",
+     "latency_s": 0.89,
+     "problems": []
+    },
+    {
+     "say": "يحتاج وصفة؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "نعم، يحتاج وصفة.",
+     "latency_s": 0.33,
+     "problems": []
+    },
+    {
+     "say": "كم جرعته باليوم؟",
+     "tools": [],
+     "done": [],
+     "guard": "medical",
+     "reply": "عذراً، ما أقدر أعطي نصائح طبية أو جرعات. إذا الدواء ضمن طلبك أو سلتك، أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها. ويقدر الصيدلي في أي فرع يجاوب سؤالك.",
+     "latency_s": 0.11,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "compare",
+   "turns": [
+    {
+     "say": "ابي اعرف عن زيرتيك 10 ملجم وكلاريتين 10 ملجم، كم حبة في كل علبة ويحتاجون وصفة؟",
+     "tools": [
+      "search_product",
+      "get_product_details"
+     ],
+     "done": [
+      "search_product",
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "زيرتيك 10 ملجم: 10 شريط معدني، لا يحتاج وصفة. كلاريتين 10 ملجم: 10 شريط معدني، لا يحتاج وصفة.",
+     "latency_s": 4.48,
+     "problems": []
+    },
+    {
+     "say": "واي واحد فيهم صناعة سعودية؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "كلاريتين 10 ملجم صناعة سعودية.",
+     "latency_s": 1.5,
+     "problems": []
+    },
+    {
+     "say": "طيب وش السعر؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "كلاريتين 10 ملجم سعره 19.6 ريال.",
+     "latency_s": 0.64,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "cancel",
+   "turns": [
+    {
+     "say": "ابي تفاصيل طلبي رقم S00854",
+     "tools": [
+      "get_order_details"
+     ],
+     "done": [
+      "get_order_details"
+     ],
+     "guard": null,
+     "reply": "طلبك رقم S00854 مُسجل وقُبل، وحالة الطلب \"مُستلم - ينتظر تأكيد الصيدلية\". المنتج: 2 قرص من \"بنادول 500 ملغ\" بسعر 27.6 ريال. سيتم استلام الطلب من فرع جدة - تحلية. يمكنك إلغاء الطلب قبل التأكيد.",
+     "latency_s": 3.43,
+     "problems": []
+    },
+    {
+     "say": "ابي الغيه",
+     "tools": [],
+     "done": [],
+     "guard": "cancel",
+     "reply": "تبغى نلغي الطلب S00854؟\n• Panadol 500mg × 2\n💰 27.60 ريال",
+     "latency_s": 0.04,
+     "problems": []
+    },
+    {
+     "say": "نعم",
+     "tools": [
+      "cancel_order"
+     ],
+     "done": [
+      "cancel_order"
+     ],
+     "guard": "cancel",
+     "reply": "✅ تم إلغاء طلبك S00854. إذا احتجت شيئاً ثانياً أنا هنا.",
+     "latency_s": 0.09,
+     "problems": []
+    },
+    {
+     "say": "وش وضع طلب S00854 الحين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "طلب S00854 إلغى بالكامل. إذا احتجت حاجة تانية، أنا هنا.",
+     "latency_s": 1.38,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "branches",
+   "turns": [
+    {
+     "say": "عندكم فرع في جدة؟",
+     "tools": [
+      "list_branches"
+     ],
+     "done": [
+      "list_branches"
+     ],
+     "guard": null,
+     "reply": "نعم، لدينا فرع في جدة، وهو \"جدة - تحلية\". يعمل 24 ساعة يومياً ويوفر خدمة التوصيل.",
+     "latency_s": 1.08,
+     "problems": []
+    },
+    {
+     "say": "متى تفتحون؟",
+     "tools": [
+      "list_branches"
+     ],
+     "done": [
+      "list_branches"
+     ],
+     "guard": null,
+     "reply": "الفروع مفتوحة 24 ساعة يومياً. إذا كنت في الرياض، ففرع \"الرياض - علايا\" مفتوح 24/7. وإذا كنت في جدة، ففرع \"جدة - تحلية\" مفتوح 24/7.",
+     "latency_s": 2.05,
+     "problems": []
+    },
+    {
+     "say": "وفي تبوك؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "لا، لا يوجد فرع في تبوك. يمكنك اختيار فرع آخر من القائمة.",
+     "latency_s": 0.91,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "stock_alert",
+   "turns": [
+    {
+     "say": "عندكم كلاريتين 10 ملجم؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "⚠️ للأسف كلاريتين 10 ملجم غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+     "latency_s": 0.25,
+     "problems": []
+    },
+    {
+     "say": "متى يتوفر؟ بلغني لما يجي لو سمحت",
+     "tools": [
+      "request_stock_alert"
+     ],
+     "done": [
+      "request_stock_alert"
+     ],
+     "guard": "stock_alert",
+     "reply": "تمام ✅ سجّلنا طلبك، ونرسل لك هنا أول ما يتوفر كلاريتين 10 ملجم.",
+     "latency_s": 0.11,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "account",
+   "turns": [
+    {
+     "say": "ارسلت لكم وصفة قبل، وش صار عليها؟",
+     "tools": [
+      "list_prescriptions"
+     ],
+     "done": [
+      "list_prescriptions"
+     ],
+     "guard": null,
+     "reply": "الوصفة التي أرسلتها ما زالت بحاجة لمراجعة الصيدلي. يرجى زيارة أحد فروع الصيدلية لتقديم الوصفة الأصلية وتأكيد تفاصيلها.",
+     "latency_s": 2.25,
+     "problems": []
+    },
+    {
+     "say": "وقدمت شكوى امس عن التوصيل، احد رد علي؟",
+     "tools": [
+      "track_order"
+     ],
+     "done": [
+      "track_order"
+     ],
+     "guard": "complaint_status",
+     "reply": "أحد زملائنا استلم شكواك (HO-00317) ويتابعها الحين.",
+     "latency_s": 1.11,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "address",
+   "turns": [
+    {
+     "say": "غير عنوان التوصيل حقي الى الرياض حي النخيل شارع العليا 45",
+     "tools": [
+      "update_delivery_address"
+     ],
+     "done": [
+      "update_delivery_address"
+     ],
+     "guard": "address_saved",
+     "reply": "✅ حفظنا عنوان التوصيل الجديد: الرياض حي النخيل شارع العليا 45",
+     "latency_s": 0.94,
+     "problems": []
+    },
+    {
+     "say": "وش عنواني المسجل عندكم الحين؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "عنوان التوصيل المسجل حالياً هو: الرياض حي النخيل شارع العليا 45.",
+     "latency_s": 0.92,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "scheduled",
+   "turns": [
+    {
+     "say": "زاناكس يحتاج ثلاجة؟",
+     "tools": [],
+     "done": [],
+     "guard": "scheduled",
+     "reply": "هذا دواء مقيّد (خاضع للرقابة) 🔒: يُصرف حضورياً فقط من الفرع مع وصفة طبية مختومة من الطبيب، ولا يمكن طلبه أو توصيله عبر المحادثة. أقدر أفيدك بتوفّره فقط.\n📍 متوفر حالياً في: Riyadh - Olaya، Dammam - Corniche",
+     "latency_s": 0.23,
+     "problems": []
+    },
+    {
+     "say": "وترامادول وش الشركة المصنعة له؟",
+     "tools": [],
+     "done": [],
+     "guard": "scheduled",
+     "reply": "هذا دواء مقيّد (خاضع للرقابة) 🔒: يُصرف حضورياً فقط من الفرع مع وصفة طبية مختومة من الطبيب، ولا يمكن طلبه أو توصيله عبر المحادثة. أقدر أفيدك بتوفّره فقط.\n📍 متوفر حالياً في: Riyadh - Olaya، Dammam - Corniche",
+     "latency_s": 0.09,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "mixed_medical",
+   "turns": [
+    {
+     "say": "اكترابيد يحفظ بالثلاجة؟ وكم وحدة اخذ قبل الاكل؟",
+     "tools": [
+      "search_product",
+      "get_product_details"
+     ],
+     "done": [
+      "search_product",
+      "get_product_details"
+     ],
+     "guard": "medical",
+     "reply": "عذراً، ما أقدر أعطي نصائح طبية أو جرعات. إذا الدواء ضمن طلبك أو سلتك، أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها. ويقدر الصيدلي في أي فرع يجاوب سؤالك.",
+     "latency_s": 2.64,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "symptoms",
+   "turns": [
+    {
+     "say": "i want something for a sore throat",
+     "tools": [],
+     "done": [],
+     "guard": "symptom_referral",
+     "reply": "Choosing a medicine for symptoms needs a licensed pharmacist to ask about your condition, so I can't suggest a product 🙏 A pharmacist at any of our branches can help you straight away - or, if you know the product you want, type its name and I'll help you order it.",
+     "latency_s": 0.1,
+     "problems": []
+    },
+    {
+     "say": "بدي شي للسعال",
+     "tools": [],
+     "done": [],
+     "guard": "symptom_referral",
+     "reply": "اختيار الدواء المناسب للأعراض يحتاج صيدلي مرخّص يسألك عن حالتك، فما أقدر أقترح لك منتج 🙏 تقدر تزور أي فرع من فروعنا ويخدمك الصيدلي مباشرة، وإذا تعرف اسم المنتج اللي تبغاه اكتبه وأساعدك تطلبه.",
+     "latency_s": 0.05,
+     "problems": []
+    },
+    {
+     "say": "طيب عندكم ستربسلز؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "✅ ستربسلز — 14.00 ريال\nكم علبة تبغى؟",
+     "latency_s": 0.22,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "dose",
+   "turns": [
+    {
+     "say": "كم مرة اخذ الدواء اللي في سلتي باليوم؟",
+     "tools": [],
+     "done": [],
+     "guard": "dose_ask_photo",
+     "reply": "سؤالك عن DAONIL M 250/1.25MG TABLETS (S00855). أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها كما كتبها الطبيب.",
+     "latency_s": 0.2,
+     "problems": []
+    },
+    {
+     "say": "[photo]",
+     "tools": [],
+     "done": [],
+     "guard": "dose_as_written",
+     "reply": "📝 مكتوب في وصفتك:\nMetformin - 500 mg tablet: 1 tab twice daily with meals\nAtorvastatin - 20 mg tablet: 1 tab at night\nهذا كما كتبه الطبيب، قرأته آلياً من الصورة - تأكد منه على ملصق الصيدلية عند الاستلام. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، قل لي وأحوّل سؤالك مع طلبك S00855 للصيدلي.",
+     "latency_s": 1.81,
+     "problems": []
+    },
+    {
+     "say": "لا هذا غلط، الدكتور قال مرة وحدة بس",
+     "tools": [],
+     "done": [],
+     "guard": "handover",
+     "reply": "تمام، حوّلت سؤالك مع طلبك S00855 ووصفتك للصيدلي، وبيراجعها ويرد عليك قريباً 👨‍⚕️",
+     "latency_s": 0.05,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "cart",
+   "turns": [
+    {
+     "say": "ابي علبتين بنادول اكسترا",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "✅ بنادول اكسترا — 15.00 ريال\n🧺 أضفته لسلتك.\nتوصيل أو استلام من الفرع؟",
+     "latency_s": 0.37,
+     "problems": []
+    },
+    {
+     "say": "🧺 سلتي",
+     "tools": [],
+     "done": [],
+     "guard": "cart",
+     "reply": "🧺 سلتك:\n• DAONIL M 250/1.25MG TABLETS × 1 — 8.75 ريال\n• بنادول اكسترا × 2 — 30.00 ريال\n💰 الإجمالي قبل الضريبة: 38.75 ريال",
+     "latency_s": 0.0,
+     "problems": []
+    },
+    {
+     "say": "🧹 تفريغ السلة",
+     "tools": [],
+     "done": [],
+     "guard": "cart",
+     "reply": "🧹 فضّينا سلتك. اكتب اسم المنتج إذا تبغى تبدأ من جديد.",
+     "latency_s": 0.05,
+     "problems": []
+    },
+    {
+     "say": "🧺 سلتي",
+     "tools": [],
+     "done": [],
+     "guard": "cart",
+     "reply": "🧺 سلتك فاضية. اكتب اسم الدواء أو المنتج اللي تبغاه 🛒",
+     "latency_s": 0.02,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "english",
+   "turns": [
+    {
+     "say": "Do you have Victoza?",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "317.60 SAR\nIs this the one you mean?",
+     "latency_s": 0.9,
+     "problems": []
+    },
+    {
+     "say": "Does it need to be kept in the fridge?",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": null,
+     "reply": "It needs to be kept in the fridge at a temperature of 2°C to 8°C.",
+     "latency_s": 1.68,
+     "problems": []
+    },
+    {
+     "say": "How many pens are in one box?",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "One box contains 2 pens.",
+     "latency_s": 0.67,
+     "problems": []
+    },
+    {
+     "say": "Which company makes it?",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "The product is made by NOVO NORDISK, Anova Joint Venture Company Limited.",
+     "latency_s": 0.59,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "mid_wizard",
+   "turns": [
+    {
+     "say": "ابي بنادول اكسترا",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "✅ بنادول اكسترا — 15.00 ريال\nكم علبة تبغى؟",
+     "latency_s": 0.2,
+     "problems": []
+    },
+    {
+     "say": "قبل لا اطلب، كم حبة في العلبة؟ وهل يتحمل الحر لاني بطلبه توصيل",
+     "tools": [
+      "get_product_details"
+     ],
+     "done": [
+      "get_product_details"
+     ],
+     "guard": "fact_check",
+     "reply": "هالمعلومة مو مسجلة عندنا لهذا المنتج، الصيدلي يأكدها لك 👨‍⚕️",
+     "latency_s": 3.23,
+     "problems": []
+    },
+    {
+     "say": "1",
+     "tools": [],
+     "done": [],
+     "guard": "order_flow",
+     "reply": "🧺 أضفته لسلتك.\nتوصيل أو استلام من الفرع؟",
+     "latency_s": 0.13,
+     "problems": []
+    }
+   ],
+   "ok": true
+  }
+ ]
+}

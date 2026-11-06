@@ -1,6 +1,6 @@
 {
   "name": "track_order",
-  "description": "The customer's recent orders and their status.",
+  "description": "The customer's recent orders and their status, plus their open requests to staff (complaints, questions handed over).",
   "requires_confirmed_intent": false,
   "parameters": {
     "type": "object",

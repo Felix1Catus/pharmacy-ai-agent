@@ -32,7 +32,7 @@ def normalize(text: str) -> str:
 _MEDICAL_TERMS = [
     # dosage (ar) — "جرعه" plus administration verbs ("give/take") which, unlike bare "كم حبة"
     # (also a stock question), signal a dosage/medical question.
-    "جرعه", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
+    "جرعه", "جرعت", "كم اعطي", "كم مره اخذ", "كم ملغ", "كم ملجم",
     # advice / recommendation / diagnosis (ar)
     "المناسب لي", "الدواء المناسب", "العلاج المناسب", "وش اعطي", "ايش اعطي", "وش الدوا",
     "ايش الدوا", "اخد ايه", "اخد ايش", "اخذ ايش", "وش اخذ", "ايش اخذ", "ايه اخد", "شو اخذ",
@@ -75,8 +75,14 @@ _REPLY_DOSE = re.compile(
     r"max(imum)? (of )?\d|before meals|after meals|empty stomach)", re.I)
 
 
+# opening hours ("مفتوحين 24 ساعة يومياً", "open daily") are store facts, not a dosing schedule
+_HOURS = re.compile(r"(24\s*(ساعه|ساعات|/\s*7|hours?)(\s*(يوميا|في اليوم|باليوم|طول الاسبوع|daily|a day))?|"
+                    r"طوال (اليوم|الاسبوع|الوقت)|(مفتوح\w*|نفتح|تفتح|يفتح|يعمل|نعمل|تعمل|شغال\w*|الدوام|دوام|"
+                    r"ساعات العمل|open\w*)[^.؟?\n]{0,40})", re.I)
+
+
 def reply_gives_medical_advice(reply: str) -> bool:
-    return bool(_REPLY_DOSE.search(normalize(reply)))
+    return bool(_REPLY_DOSE.search(_HOURS.sub(" ", normalize(reply))))
 
 
 # ---- 1b. prompt injection / manipulation ----------------------------------
@@ -134,9 +140,77 @@ _SMALL_TALK = ["السلام", "سلام", "مرحبا", "هلا", "اهلا", "
                "good morning", "good evening", "ok", "yes", "no"]
 
 
+# ---- 1c'. questions ABOUT a product (label facts, answered by get_product_details) ----
+# storage / fridge / temperature, shelf life / expiry, maker / country, form, pack size, strength,
+# prescription needed, ingredient. Not use, dose or suitability (those stay medical questions).
+_INFO_TERMS = [
+    "ثلاجه", "الثلاجه", "بالثلاجه", "تلاجه", "التلاجه", "بالتلاجه", "تبريد", "مبرد", "يتبرد", "بارد", "فريزر",
+    "يحفظ", "يتحفظ", "احفظ", "احفظه", "احفظها", "حفظه", "حفظها", "تخزين", "يخزن", "اخزن", "اخزنه", "درجه حراره",
+    "حراره الغرفه", "يتحمل الحر", "في الشمس", "من الضوء", "رطوبه", "يتجمد", "يجمد",
+    "صلاحي", "انتهاء", "ينتهي", "تنتهي",
+    "الشركه", "شركه", "المصنع", "مصنع", "صنع", "صناعه", "امريكي", "اوروبي", "الماني", "سعودي ولا",
+    "صناعه سعوديه", "هندي", "اي بلد", "وين مصنوع", "منشا",
+    "كم حبه في", "كم حبه فيه", "كم قرص في", "كم في العلبه", "حجم العبوه", "حجم العلبه", "كم مل",
+    "شراب ولا", "حبوب ولا", "كبسول ولا", "اقراص ولا", "ابره ولا", "التركيز", "تركيزه", "كم تركيز",
+    "يحتاج وصفه", "يبغاله وصفه", "يبي وصفه", "يحتاج روشته", "بدون وصفه", "بوصفه", "المادة الفعاله",
+    "الماده الفعاله", "المكونات", "مكوناته", "وش فيه", "ايش فيه",
+    "fridge", "refrigerat", "store it", "storage", "stored", "temperature", "room temp", "freeze",
+    "expiry", "expire", "shelf life", "manufactur", "made in", "made by", "which company", "country",
+    "how many tablets in", "how many in a box", "pack size", "box size", "how many ml", "syrup or",
+    "tablets or", "strength", "need a prescription", "needs a prescription", "without a prescription",
+    "prescription needed", "active ingredient", "ingredients",
+    # price of a product already in the chat ("وش السعر؟") - from the record, never a guess
+    "وش السعر", "كم السعر", "ايش السعر", "شو السعر", "السعر كم", "بكم سعره", "كم سعره", "كم سعرها",
+    "what's the price", "what is the price", "how much is it", "how much are they", "price of",
+]
+
+
+_INFO_RE = re.compile(r"(how many|كم)\s+\S+(\s+\S+)?\s+(are\s+)?(in|per|inside|في|فيه|بال|داخل)\s+"
+                      r"(a|one|the|each|every|ال)?\s*(box|pack|packet|bottle|pen|علبه|العلبه|عبوه|الباكيت|كرتون|قلم)",
+                      re.I)
+
+
+_BRANCH_Q = re.compile(r"(فرع|فروع|الفرع|الفروع|branch|branches|تفتحون|تقفلون|تسكرون|مفتوح|مفتوحين|دوام|الدوام|"
+                       r"ساعات العمل|opening hours|open(ing)? time|what time.{0,15}(open|close)|when do you (open|close)|"
+                       r"اوقات|وين مكانكم|وين موقعكم|عنوانكم|لوكيشن|location)", re.I)
+
+
+def branch_intent(text: str) -> bool:
+    """A question about our branches, where they are or when they open."""
+    return bool(_BRANCH_Q.search(normalize(text)))
+
+
+def product_info_intent(text: str) -> bool:
+    """A question about a product's label facts (storage, fridge, shelf life, maker, form, pack,
+    strength, prescription status) - answered from get_product_details, not the order wizard."""
+    n = normalize(text)
+    if medical_advice_intent(text):
+        return False
+    return bool(_INFO_RE.search(n)) or any(t in n for t in (normalize(x) for x in _INFO_TERMS))
+
+
+# ---- 1c''. account requests the model handles with a tool (not the order wizard) ------------
+_STOCK_ALERT = re.compile(r"(بلغني|بلغوني|نبهني|نبهوني|خبرني|خبروني|ابلغني|كلموني|راسلوني|ارسلولي|"
+                          r"تعلموني|اعلمني|notify me|let me know when|tell me when|message me when|"
+                          r"alert me)", re.I)
+_ADDRESS_CHANGE = re.compile(r"((غير|غيري|غيرو|بدل|حدث|عدل|تغيير|تحديث|تعديل)\s*(لي\s*)?(ال)?عنوان|"
+                             r"عنواني (الجديد|تغير|صار)|عنوان (جديد|ثاني)|change (my )?address|"
+                             r"new address|update (my )?address)", re.I)
+
+
+def service_intent(text: str) -> str | None:
+    """'stock_alert' ("tell me when it's back") / 'address' (a new delivery address) or None."""
+    n = normalize(text)
+    if _STOCK_ALERT.search(n):
+        return "stock_alert"
+    if _ADDRESS_CHANGE.search(n):
+        return "address"
+    return None
+
+
 def looks_in_scope(text: str) -> bool:
     n = normalize(text)
-    if len(n.split()) <= 3:
+    if len(n.split()) <= 3 or product_info_intent(text) or service_intent(text):
         return True
     return any(t in n for t in _SCOPE_TERMS) or any(
         re.search(rf"(?<!\w){re.escape(t)}(?!\w)", n) for t in _SMALL_TALK)
@@ -260,39 +334,135 @@ def order_status_intent(text: str) -> bool:
 
 
 # ---- canned replies ------------------------------------------------------
+# No handover in these replies: a handover is only made when it is tied to an order / cart
+# quotation (or names the medicine), so a pharmacist has something to act on.
 PHARMACIST_REFERRAL = (
-    "سلامتك 🙏 هذي الأعراض يحتاج الصيدلي يسألك عنها أولاً، فحوّلت محادثتك له وبيتواصل معك قريباً. "
+    "سلامتك 🙏 هذي الأعراض يحتاج الصيدلي يسألك عنها بنفسه، تقدر تزور أي فرع من فروعنا ويخدمك مباشرة. "
     "وإذا تبغى منتج معيّن تقدر تكتب اسمه. "
-    "— Sorry you're unwell. A pharmacist needs to ask you about these symptoms first, so I've passed your "
-    "chat to one; they'll contact you shortly. If you want a specific product, you can type its name."
+    "— Sorry you're unwell. A pharmacist needs to ask you about these symptoms in person - any of our "
+    "branches can help you straight away. If you want a specific product, you can type its name."
 )
 
 URGENT_REFERRAL = (
     "سلامتك 🙏 إذا الأعراض شديدة أو مفاجئة، اتصل على الإسعاف 997 أو توجّه لأقرب طوارئ فوراً. "
-    "حوّلت محادثتك للصيدلي أيضاً وبيتواصل معك. "
     "— If the symptoms are severe or sudden, call an ambulance on 997 or go to the nearest emergency "
-    "department now. I've also passed your chat to a pharmacist, who will contact you."
+    "department now."
 )
 
 ABUSE_HANDOVER = (
-    "نعتذر إن كانت تجربتك غير مرضية. حوّلت محادثتك لأحد زملائنا وسيتواصل معك قريباً. "
-    "— We're sorry your experience wasn't good. I've passed your conversation to a colleague, "
-    "who will contact you shortly."
+    "نعتذر إن كانت تجربتك غير مرضية. إذا المشكلة في طلب، اكتب رقم الطلب أو اسم الدواء وأحوّلها لزميل يتابعها معك. "
+    "— We're sorry your experience wasn't good. If the problem is with an order, send the order number "
+    "or the medicine's name and I'll pass it to a colleague to sort out."
 )
 
 MEDICAL_REFUSAL = (
-    "عذراً، لا أستطيع تقديم نصائح طبية أو تحديد الجرعات. سأحوّلك إلى الصيدلي للمساعدة. "
-    "يمكنني مساعدتك في إيجاد الأدوية ومعرفة أسعارها وتوفّرها (عدا الأدوية المجدولة/الخاضعة للرقابة). "
-    "— Sorry, I can't give medical advice or dosages; I'll refer you to a pharmacist. "
-    "I can help you find medicines, prices and availability (except scheduled/controlled medicines)."
+    "عذراً، ما أقدر أعطي نصائح طبية أو جرعات. إذا الدواء ضمن طلبك أو سلتك، أرسل صورة الوصفة 📎 "
+    "وأقرأ لك الجرعة المكتوبة فيها. ويقدر الصيدلي في أي فرع يجاوب سؤالك. "
+    "— Sorry, I can't give medical advice or dosages. If the medicine is in your order or cart, send a "
+    "photo of the prescription 📎 and I'll read you the dose written on it. A pharmacist at any of our "
+    "branches can also answer your question."
 )
 
-SCHEDULED_REFUSAL = (
-    "هذا الدواء من الأدوية المجدولة/الخاضعة للرقابة ولا يمكن طلبه عبر المساعد. سأحوّلك إلى الصيدلي. "
-    "يمكنني مساعدتك في الأدوية الأخرى وأسعارها وتوفّرها. "
-    "— That medicine is scheduled/controlled and can't be ordered through the assistant; "
-    "I'll refer you to a pharmacist. I can help with other medicines, prices and availability."
+# ---- dosage questions about an order / cart: the prescription's own words -----------------
+DOSE_ASK_PHOTO = {
+    "ar": "سؤالك عن {items} ({ref}). أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها كما كتبها الطبيب.",
+    "en": "Your question is about {items} ({ref}). Send a photo of the prescription 📎 and I'll read you "
+          "the dose exactly as the doctor wrote it.",
+}
+DOSE_AS_WRITTEN = {
+    "ar": "📝 مكتوب في وصفتك:\n{lines}\nهذا كما كتبه الطبيب، قرأته آلياً من الصورة - تأكد منه على ملصق الصيدلية "
+          "عند الاستلام. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، قل لي وأحوّل سؤالك مع طلبك {ref} للصيدلي.",
+    "en": "📝 Your prescription says:\n{lines}\nThat is as the doctor wrote it, read automatically from the "
+          "photo - check it against the pharmacy label when you collect it. If something is wrong or different "
+          "from what the doctor told you, say so and I'll pass your question with order {ref} to the pharmacist.",
+}
+DOSE_UNREADABLE = {
+    "ar": "ما قدرت أقرأ الجرعة من الوصفة بوضوح، فحوّلت سؤالك مع طلبك {ref} والوصفة للصيدلي ويرد عليك قريباً.",
+    "en": "I couldn't read the dose on the prescription clearly, so I've passed your question with order "
+          "{ref} and the prescription to the pharmacist, who will reply shortly.",
+}
+DOSE_DISPUTED = {
+    "ar": "تمام، حوّلت سؤالك مع طلبك {ref} ووصفتك للصيدلي، وبيراجعها ويرد عليك قريباً 👨‍⚕️",
+    "en": "OK - I've passed your question with order {ref} and your prescription to the pharmacist, who "
+          "will check it and reply shortly 👨‍⚕️",
+}
+_DISPUTE = re.compile(r"(غلط|خطا|خطأ|مو صحيح|مش صحيح|موب صحيح|غير صحيح|مب صحيح|مختلف|ماهو كذا|مو كذا|"
+                      r"الدكتور قال|قال لي الدكتور|not right|wrong|incorrect|not correct|different|doctor said)", re.I)
+
+
+def disputes_directions(text: str) -> bool:
+    return bool(_DISPUTE.search(normalize(text)))
+
+
+# A symptom with no product named ("something for a sore throat"): choosing a medicine is a
+# licensed pharmacist's call, so no product list - the pharmacist in person, or the product's name.
+SYMPTOM_REFERRAL = (
+    "اختيار الدواء المناسب للأعراض يحتاج صيدلي مرخّص يسألك عن حالتك، فما أقدر أقترح لك منتج 🙏 "
+    "تقدر تزور أي فرع من فروعنا ويخدمك الصيدلي مباشرة، وإذا تعرف اسم المنتج اللي تبغاه اكتبه وأساعدك تطلبه. "
+    "— Choosing a medicine for symptoms needs a licensed pharmacist to ask about your condition, so I "
+    "can't suggest a product 🙏 A pharmacist at any of our branches can help you straight away - or, if "
+    "you know the product you want, type its name and I'll help you order it."
 )
+
+# ---- PDPL: explicit consent before a prescription (health data) is stored ---------------------
+CONSENT_ASK = {
+    "ar": "🔒 قبل ما نستلم وصفتك: نحتاج موافقتك على معالجة بياناتك الصحية (الوصفة والأدوية المكتوبة فيها) "
+          "لغرض صرف طلبك ومراجعة الصيدلي فقط، ولا نستخدمها للتسويق أبداً. تقدر تسحب موافقتك متى ما بغيت "
+          "بكتابة «اسحب موافقتي».{privacy}\nتوافق؟",
+    "en": "🔒 Before we receive your prescription: we need your consent to process your health data (the "
+          "prescription and the medicines on it) only to dispense your order and for the pharmacist's "
+          "review - never for marketing. You can withdraw it at any time by typing \"withdraw consent\"."
+          "{privacy}\nDo you agree?",
+}
+CONSENT_BUTTONS = {"ar": ("✅ أوافق", "❌ لا أوافق"), "en": ("✅ I agree", "❌ I don't agree")}
+CONSENT_DECLINED = {
+    "ar": "تمام، ما استلمنا الوصفة ولا حفظنا شيء منها. تقدر تجيبها للصيدلي في أي فرع مباشرة.",
+    "en": "OK - we haven't received or kept anything from the prescription. You can take it to the "
+          "pharmacist at any branch.",
+}
+CONSENT_WITHDRAWN = {
+    "ar": "تم تسجيل سحب موافقتك 🔒 ما راح نستقبل أو نعالج بيانات صحية جديدة لك، وأحد زملائنا يتواصل معك "
+          "بخصوص بياناتك المحفوظة.",
+    "en": "Your consent withdrawal is recorded 🔒 We won't receive or process new health data for you, and "
+          "a colleague will contact you about the data we hold.",
+}
+_WITHDRAW = re.compile(r"(اسحب موافقتي|سحب الموافقه|الغي موافقتي|احذف بياناتي|امسح بياناتي|حذف بياناتي|"
+                       r"withdraw (my )?consent|delete my data|remove my data|erase my data)", re.I)
+
+
+def withdraws_consent(text: str) -> bool:
+    return bool(_WITHDRAW.search(normalize(text)))
+
+
+NEEDS_CONTEXT = {
+    "ar": "عشان أحوّلك لزميل يقدر يساعدك، اكتب رقم الطلب أو اسم الدواء اللي تقصده.",
+    "en": "So I can pass this to a colleague who can help, please send the order number or the name of "
+          "the medicine it is about.",
+}
+
+# Scheduled (مقيد) medicines are dispensed in person only, against a doctor's stamped
+# prescription: refused here, never escalated, no photo asked for. Availability only.
+SCHEDULED_REFUSAL = (
+    "هذا دواء مقيّد (خاضع للرقابة) 🔒: يُصرف حضورياً فقط من الفرع مع وصفة طبية مختومة من الطبيب، ولا يمكن "
+    "طلبه أو توصيله عبر المحادثة. أقدر أفيدك بتوفّره فقط. "
+    "— This is a controlled (scheduled) medicine 🔒: it is dispensed in person only, at a branch, against a "
+    "doctor's stamped prescription, and can't be ordered or delivered through the chat. I can only tell "
+    "you where it is available."
+)
+_SCHED_AVAIL = {"ar": ("📍 متوفر حالياً في: {b}", "📍 حالياً غير متوفر في فروعنا."),
+                "en": ("📍 Available now at: {b}", "📍 Not available at our branches right now.")}
+
+
+def scheduled_refusal(lang: str | None, branches: list[str] | None) -> str:
+    """The refusal + where it is in stock (branches=None: availability unknown, e.g. a name the
+    denylist caught that is not in the catalogue)."""
+    from menu import localize
+    text = localize(SCHEDULED_REFUSAL, lang)          # lang None (staff / evals): both languages
+    if branches is None:
+        return text
+    have, none = _SCHED_AVAIL[lang if lang in _SCHED_AVAIL else "ar"]
+    return text + "\n" + (have.format(b="، ".join(branches) if (lang or "ar") == "ar" else ", ".join(branches))
+                          if branches else none)
 
 PRESCRIPTION_HANDOVER = (
     "هذا الدواء يحتاج وصفة طبية، لذلك لا يمكن طلبه أو حجزه عبر المحادثة. سأحوّلك إلى الصيدلي "
@@ -317,7 +487,6 @@ _RX_PROBLEMS = {
     "date_in_future": ("تاريخ الوصفة غير صحيح", "the prescription date isn't valid"),
     "no_invoice": ("لم أجد رقم الفاتورة/الوصفة", "I couldn't find the invoice/prescription number"),
     "no_medication": ("لم أجد في الوصفة دواءً من أدويتنا", "I couldn't find one of our medicines on it"),
-    "invoice_already_used": ("هذه الوصفة مستخدمة من قبل", "this prescription was already used"),
 }
 
 

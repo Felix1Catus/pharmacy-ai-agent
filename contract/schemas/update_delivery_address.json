@@ -1,0 +1,32 @@
+{
+  "name": "update_delivery_address",
+  "description": "Save the new delivery address the customer just wrote (district, street, city) on their account.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "address": {
+        "type": "string",
+        "description": "The address exactly as the customer wrote it."
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "address"
+    ]
+  },
+  "returns": {
+    "type": "object",
+    "description": "saved, address."
+  },
+  "errors": [
+    {
+      "code": "invalid_input",
+      "when": "address too short"
+    },
+    {
+      "code": "customer_required",
+      "when": "customer not identified"
+    }
+  ]
+}

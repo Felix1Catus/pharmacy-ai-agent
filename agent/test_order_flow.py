@@ -79,7 +79,7 @@ def shop(monkeypatch):
     placed = []
     monkeypatch.setattr(GW, "search_product", lambda **kw: {"candidates": [dict(c) for c in PANADOL]})
     monkeypatch.setattr(GW, "list_branches", lambda: {"branches": BRANCHES})
-    stock = {1: {2: 50, 3: 50, 4: 50}, 2: {2: 0, 3: 0, 4: 0}, 3: {2: 5, 3: 0, 4: 5}}
+    stock = {1: {2: 50, 3: 50, 4: 50}, 2: {2: 20, 3: 20, 4: 20}, 3: {2: 5, 3: 0, 4: 5}, 9: {2: 3, 3: 3, 4: 3}}
     monkeypatch.setattr(GW, "check_stock", lambda product_id, branch_id=None: {"stock": [
         {"branch_id": b["branch_id"], "branch_name": b["name"], "qty_available": stock[product_id][b["branch_id"]]}
         for b in BRANCHES]})
@@ -107,6 +107,7 @@ def test_full_sentence_order_needs_one_model_call(shop):
     # one product clearly named + qty 2 + pickup Jeddah: straight to the summary
     assert "ملخص طلبك" in reply and "× 2" in reply and "Jeddah" in reply
     reply = a.respond(conv, "✅ تأكيد الطلب")
+    assert isinstance(shop[0].pop("cart_id"), int)       # the chat cart quotation becomes the order
     assert shop == [{"items": [{"product_id": 1, "qty": 2}], "fulfillment": "pickup", "branch_id": 3,
                      "customer_id": prof["customer_id"]}]
     assert "S04321" in reply and "/my/orders/4321" in reply
@@ -128,6 +129,21 @@ def test_missing_details_are_asked_with_buttons(shop):
     a.respond(conv, "نعم")
     assert shop[0]["fulfillment"] == "delivery" and shop[0]["delivery_address"].startswith("الرياض")
     assert len(llm.seen) <= 1
+
+
+@live
+def test_out_of_stock_everywhere_offers_back_in_stock_message(shop, monkeypatch):
+    monkeypatch.setattr(GW, "check_stock", lambda product_id, branch_id=None: {"stock": [
+        {"branch_id": b["branch_id"], "branch_name": b["name"], "qty_available": 0} for b in BRANCHES]})
+    alerts = []
+    monkeypatch.setattr(GW, "request_stock_alert", lambda **kw: alerts.append(kw) or {"recorded": True})
+    llm = ScriptLLM([_search_call("بنادول اكسترا")])
+    a, conv, prof = _identified(llm)
+    reply = a.respond(conv, "ابغى بنادول اكسترا")
+    assert "غير متوفر" in reply and [b["id"] for b in conv.last_menu] == ["notify", "other_product"]
+    reply = a.respond(conv, "🔔 بلغني لما يتوفر")
+    assert "سجّلنا" in reply and conv.order is None
+    assert alerts == [{"product_id": 2, "customer_id": prof["customer_id"]}]
 
 
 @live
@@ -160,7 +176,10 @@ def test_model_never_gets_order_tools_in_customer_chats(shop):
     a, conv, prof = _identified(llm)
     a.respond(conv, "وين فروعكم بالضبط؟")              # not a product: goes to the model
     names = {t["function"]["name"] for t in llm.seen[0][1]}
-    assert names == {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human"}
+    assert not names & {"create_order", "hold_item", "create_dispatch"}   # orders: the fixed wizard only
+    assert names == {"search_product", "check_stock", "list_branches", "track_order", "escalate_to_human",
+                     "get_product_details", "get_order_details", "cancel_order", "list_prescriptions",
+                     "request_stock_alert", "update_delivery_address"}
 
 
 @live
@@ -288,3 +307,40 @@ def test_voice_selection_during_order_not_blocked_by_medical_guard(shop):
     reply = a.respond(conv, "اعطيني البنادول اكسترا اختيار رقم اثنين")  # name beats the (disagreeing) position number
     assert "نصائح طبية" not in reply                          # not the medical refusal
     assert reply.startswith("✅ بنادول اكسترا") and "كم علبة" in reply
+
+
+def test_cancel_only_when_the_customer_asked(monkeypatch):
+    cancelled = []
+    monkeypatch.setattr(GW, "cancel_order", lambda **kw: cancelled.append(kw) or {"cancelled": True})
+    monkeypatch.setattr(GW, "get_order_details", lambda **kw: {"order_ref": "S00001", "can_cancel": True})
+    call = {"content": "", "tool_calls": [{"name": "cancel_order", "arguments": {"order_ref": "S00001"}}]}
+    llm = ScriptLLM([call, {"content": "طلبك S00001 قيد التجهيز", "tool_calls": []},
+                     call, {"content": "تأكد الإلغاء؟", "tool_calls": []},
+                     call, {"content": "تم", "tool_calls": []}])
+    a = PharmacyAgent(llm=llm, gateway=GW)
+    conv = Conversation(customer_id=7)
+    a.respond(conv, "ابي تفاصيل طلبي S00001")          # not asked: refused by the gate
+    a.respond(conv, "طيب الغيه")                      # asked, but no "yes" yet: refused
+    assert cancelled == []
+    a.respond(conv, "نعم")                            # asked + confirmed
+    assert cancelled and cancelled[0]["order_ref"] == "S00001"
+
+
+@live
+def test_all_you_have_then_a_number_at_quantity_step_never_crashes(shop, monkeypatch):
+    # live chat 2026-11-06: "والله ابغي كل ماعندكم" went to a product search, found nothing, dropped
+    # the picked product, and the next "2" crashed the server (500)
+    llm = ScriptLLM([_search_call("بنادول")])
+    a, conv, prof = _identified(llm)
+    a.respond(conv, "بنادول")
+    reply = a.respond(conv, "1")
+    assert "كم علبة" in reply
+    reply = a.respond(conv, "والله ابغي كل ماعندكم")
+    assert "10" in reply and conv.order["step"] == "qty" and conv.order["current"]
+    monkeypatch.setattr(GW, "search_product", lambda **kw: {"candidates": []})
+    reply = a.respond(conv, "زززقققق")                   # a search that finds nothing keeps the product
+    assert conv.order["step"] == "qty" and conv.order["current"] and "كم علبة" in reply
+    reply = a.respond(conv, "2")
+    assert "توصيل" in reply or "استلام" in reply        # quantity taken, wizard carries on
+    conv.order["step"], conv.order["current"] = "qty", None   # even a broken state never crashes
+    assert "اكتب اسم" in a.respond(conv, "2")

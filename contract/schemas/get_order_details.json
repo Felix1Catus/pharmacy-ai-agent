@@ -1,0 +1,33 @@
+{
+  "name": "get_order_details",
+  "description": "One of the customer's orders in full: items and quantities, prices, pickup branch or delivery address, prescription review result and the pharmacist's note, payment, delivery progress, whether it can still be cancelled. No order given = their latest order.",
+  "requires_confirmed_intent": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "order_id": {
+        "type": "integer",
+        "description": "An order_id from track_order."
+      },
+      "order_ref": {
+        "type": "string",
+        "description": "The order number the customer wrote, e.g. S00046."
+      }
+    },
+    "additionalProperties": false
+  },
+  "returns": {
+    "type": "object",
+    "description": "order_ref, status, items, total_sar, fulfillment, branch, delivery_address, prescription_review, pharmacist_note, payment, delivery_progress, cold_chain, can_cancel."
+  },
+  "errors": [
+    {
+      "code": "not_found",
+      "when": "no such order for this customer"
+    },
+    {
+      "code": "customer_required",
+      "when": "customer not identified"
+    }
+  ]
+}

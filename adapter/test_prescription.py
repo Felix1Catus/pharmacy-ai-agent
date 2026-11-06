@@ -294,3 +294,71 @@ def test_submit_scanned_pdf_is_ocrd_and_stored(ctx):
         assert p["document_filename"] == "rx.pdf" and p["image_filename"] == "page1.png"
     finally:
         GW.c.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])
+
+
+# ---- PDF text-layer artefacts (Wasfaty e-prescriptions exported from a browser) -----------
+_WASFATY = ("‫تاريخ إصدار الوصفة‬\n‫‪ 02‬نوفمبر ‪2026‬‬\n"
+            "‫تاريخ انتهاء الصرف‬\n‫‪ 09‬نوفمبر ‪2026‬‬\n"
+            "‫*‪WASFATY-2026-992014‬*‬\n"
+            "‫رقم الوصفة‪WSF-88410294 :‬‬\n"
+            "‫طريقة االستخدام‬\n"
+            "‫‪ .1‬أوجمنتين ‪ ١‬جرام (‪)Augmentin 1g Film-Coated Tablet‬‬\n"
+            "‫الكمية‪ :‬عبوتان (‪)Packs 2‬‬\n"
+            "‫جرعة الدواء‪ :‬مرة كل ‪ ١٢‬ساعة (‪)Once every 12 hours‬‬\n"
+            "Instructions: Take 1 tablet orally twice daily (every 12 hours) after meals for 7 days.\n")
+
+
+def test_pdf_artefacts_are_tidied():
+    t = rx.tidy(_WASFATY)
+    assert "‫" not in t and "طريقة الاستخدام" in t and "1. أوجمنتين" in t
+    assert "(Augmentin 1g Film-Coated Tablet)" in t
+
+
+def test_arabic_month_dates_and_expiry_ignored():
+    assert rx.find_dates(_WASFATY) == [date(2026, 11, 2), date(2026, 11, 9)]
+    assert rx.prescription_date(_WASFATY, today=date(2026, 11, 6)) == (date(2026, 11, 2), None)
+    assert rx.find_dates("تاريخ: 5 تشرين الثاني 2026") == [date(2026, 11, 5)]
+
+
+def test_labelled_prescription_number_beats_a_barcode():
+    assert rx.find_invoice_number(_WASFATY) == "WSF-88410294"
+
+
+def test_directions_read_as_written():
+    d = rx.extract_directions(_WASFATY)
+    assert len(d) == 1 and "Augmentin 1g" in d[0]["medicine"]
+    assert "مرة كل" in d[0]["directions"] and "after meals for 7 days" in d[0]["directions"]
+
+
+def test_combination_prescription_does_not_unlock_a_single_ingredient():
+    products = [
+        {"id": 1, "product_variant_id": [1], "name": "Augmentin 1g", "x_name_ar": "اوجمنتين ١ جرام",
+         "sfda_scientific_name": "AMOXICILLIN,CLAVULANIC ACID", "x_requires_prescription": True},
+        {"id": 2, "product_variant_id": [2], "name": "أموكسيل 500 ملجم",
+         "sfda_scientific_name": "AMOXICILLIN", "sfda_requires_prescription": True},
+    ]
+    text = "1. Augmentin 1g tablet\nالمادة الفعالة: Amoxicillin + Clavulanic Acid"
+    assert [m["product_id"] for m in rx.match_medications(text, products)] == [1]
+
+
+def test_common_words_never_name_a_product():
+    products = [{"id": 32, "product_variant_id": [32], "name": "Digital Thermometer",
+                 "x_name_ar": "ميزان حرارة رقمي"}]
+    assert rx.match_medications("الختم الالكتروني المعتمد Digital MOH Seal", products) == []
+
+
+@odoo
+def test_same_invoice_again_is_accepted_and_flagged_for_the_pharmacist(ctx):
+    # never "already used" to the customer: a repeat goes to the pharmacist with the earlier uses
+    from make_prescription import make_prescription_png
+    inv = f"INV-DUP-{time.time_ns() % 10**10}"
+    other = GW.register_customer("ZZ Dup Rx", "0500004406", "Riyadh")["customer_id"]
+    img = make_prescription_png(["Augmentin 1g"], 0, inv)
+    first = GW.submit_prescription(other, img)
+    again = GW.submit_prescription(ctx["cust"], img)
+    try:
+        assert first["ok"] and again["ok"] and again["problems"] == [] and again["needs_pharmacist"]
+        rec = GW.c.read("pharmacy.prescription", again["prescription_id"], ["state", "notes"])[0]
+        assert rec["state"] == "submitted" and "seen before" in rec["notes"] and first["prescription_id"]
+    finally:
+        GW.c.execute_kw("pharmacy.prescription", "unlink", [[first["prescription_id"], again["prescription_id"]]])

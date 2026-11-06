@@ -1,6 +1,6 @@
 # Tool contract
 
-The agent (Qwen3) may call **only** these seven actions. Each has a JSON schema in
+The agent (Qwen3) may call **only** these fourteen actions. Each has a JSON schema in
 `contract/schemas/<name>.json`. The schemas are the source of truth; this file explains
 intent, the confirmed-intent rule, and error handling. The FastAPI **adapter** (`adapter/`)
 implements every action against the real Odoo 18 instance; the agent never speaks raw Odoo.
@@ -20,7 +20,20 @@ pickup/delivery). The agent must confirm before calling them.
 | `create_dispatch` | **yes** | yes | only after a successful `create_order` |
 | `hold_item` | **yes** | yes | restricted/prescription items → escalate |
 | `track_order` | no | no | read-only |
-| `escalate_to_human` | no | (hands over) | terminal for the turn |
+| `escalate_to_human` | no | (hands over) | terminal for the turn; creates a `pharmacy.handover` in Odoo (staff queue: Pharmacy → Handovers) |
+| `get_product_details` | no | no | label facts of up to 3 products from `search_product`: ingredient, strength, form, pack, price, dispensing class, storage (fridge / room, min-max °C, light, moisture, no-freeze), shelf life, maker + country. Missing facts come back as `NOT RECORDED`. Scheduled → `scheduled_item` |
+| `get_order_details` | no | no | one of the customer's orders in full (items, pharmacist's note, payment, delivery progress, `can_cancel`) |
+| `cancel_order` | **yes** | yes | only a quotation; the customer asked to cancel AND said yes to the bot's "cancel S0…?"; confirmed orders → `not_cancellable` → handover |
+| `list_prescriptions` | no | no | the customer's prescriptions and their review status |
+| `request_stock_alert` | no | records a request | "tell me when it's back" → `pharmacy.stock.alert`; `already_available` if it is in stock |
+| `update_delivery_address` | no | yes (own contact) | only an address the customer wrote in this chat |
+
+`list_branches` takes an optional `city` and returns city, district, address, hours, phone and
+delivery per branch; `track_order` also returns the customer's latest request of each kind
+(complaint, medical question...) and its state. Account tools (`get_order_details`,
+`cancel_order`, `list_prescriptions`, `request_stock_alert`, `update_delivery_address`) run only
+for an identified customer, whose id the agent injects; product ids must come from a search
+result in the same conversation (`unknown_product` otherwise).
 
 ## Guardrails encoded in the contract
 - **No medical advice.** Dosage / diagnosis / "is this safe with…" → `escalate_to_human(reason="medical_advice")`. Never answered by any other tool.

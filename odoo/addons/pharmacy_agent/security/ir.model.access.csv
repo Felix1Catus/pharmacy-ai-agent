@@ -5,3 +5,7 @@ access_pharmacy_sfda_updater_user,pharmacy.sfda.updater.user,model_pharmacy_sfda
 access_pharmacy_sfda_updater_manager,pharmacy.sfda.updater.manager,model_pharmacy_sfda_updater,stock.group_stock_manager,1,1,0,0
 access_pharmacy_sfda_run_user,pharmacy.sfda.run.user,model_pharmacy_sfda_run,stock.group_stock_user,1,0,0,0
 access_pharmacy_sfda_run_manager,pharmacy.sfda.run.manager,model_pharmacy_sfda_run,stock.group_stock_manager,1,1,1,1
+access_pharmacy_handover_user,pharmacy.handover.user,model_pharmacy_handover,base.group_user,1,1,1,0
+access_pharmacy_handover_manager,pharmacy.handover.manager,model_pharmacy_handover,base.group_system,1,1,1,1
+access_pharmacy_stock_alert_user,pharmacy.stock.alert.user,model_pharmacy_stock_alert,base.group_user,1,1,1,0
+access_pharmacy_stock_alert_manager,pharmacy.stock.alert.manager,model_pharmacy_stock_alert,base.group_system,1,1,1,1

@@ -11,3 +11,9 @@ class ResPartner(models.Model):
     registered_via = fields.Selection(
         [("whatsapp", "WhatsApp assistant"), ("staff", "Staff")],
         string="Registered via", copy=False)
+
+    # PDPL: health data (prescriptions, the medicines on them) is sensitive personal data - stored
+    # only after the customer's explicit consent, recorded here with the notice version they saw.
+    pdpl_health_consent = fields.Datetime(string="Health-data consent given", copy=False)
+    pdpl_consent_version = fields.Char(string="Consent notice version", copy=False)
+    pdpl_consent_withdrawn = fields.Datetime(string="Consent withdrawn", copy=False)

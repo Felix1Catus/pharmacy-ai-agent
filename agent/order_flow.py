@@ -13,7 +13,7 @@ import re
 
 from gateway import guess_city
 from fuzzy_search import _STOP as _FUZZY_STOP
-from guards import is_affirmation, normalize
+from guards import is_affirmation, normalize, service_intent
 from rapidfuzz import fuzz
 
 MAX_QTY = 10
@@ -21,6 +21,9 @@ MAX_CHOICES = 5
 
 # a message during the wizard that means "cancel" or "I meant a different product"
 _CANCEL = re.compile(r"(?<!\w)(الغاء|إلغاء|الغي|إلغي|انهاء|إنهاء|انهي|إنهي|توقف|خروج|cancel|stop|abort|quit)(?!\w)")
+# "كل ماعندكم" / "all you have" at the quantity step: a quantity, not a product name
+_ALL_QTY = re.compile(r"(كل (ما|اللي|الي|الكميه|المتوفر|الموجود)|كل ماعندكم|كل الموجود|كل الكميه|كميه كبيره|"
+                      r"all (you have|of it|of them|your stock)|everything you have|as many as)")
 _CORRECTION = re.compile(r"(اقصد|قصدي|ليس هذا|ليس هو|مو هذا|مو هو|مب هذا|مش هذا|مش ده|غلط|خطا|غير هذا|غيره|not this|wrong|i mean|instead|different|other one)")
 
 T = {
@@ -38,6 +41,7 @@ T = {
         "ask_name": "تمام، اكتب اسم الدواء اللي تبغاه 🛒",
         "ask_qty": "كم علبة تبغى؟",
         "bad_qty": "اكتب الكمية رقماً من 1 إلى {max}.",
+        "max_qty": "أقصى كمية عبر المحادثة {max} علب، والكميات الأكبر نرتّبها لك من الفرع. كم علبة تبغى (1 إلى {max})؟",
         "ask_fulfil": "توصيل أو استلام من الفرع؟",
         "delivery": "🚚 توصيل", "pickup": "🏪 استلام من فرع",
         "ask_branch": "من أي فرع تستلم؟",
@@ -54,6 +58,15 @@ T = {
         "add_prompt": "تمام، اكتب اسم المنتج الثاني 🛒",
         "cancelled": "تم إلغاء الطلب. اكتب «القائمة» إذا احتجت شيئاً.",
         "rx_note": "\n📝 فيه دواء يحتاج وصفة: بعد التأكيد نطلب صورتها ويراجعها الصيدلي.",
+        "oos": "⚠️ للأسف {name} غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
+        "in_cart": "🧺 أضفته لسلتك.\n",
+        "cart_head": "🧺 سلتك:\n{lines}\n💰 الإجمالي قبل الضريبة: {total:.2f} ريال",
+        "cart_line": "• {name} × {qty} — {sub:.2f} ريال",
+        "cart_empty": "🧺 سلتك فاضية. اكتب اسم الدواء أو المنتج اللي تبغاه 🛒",
+        "cart_cleared": "🧹 فضّينا سلتك. اكتب اسم المنتج إذا تبغى تبدأ من جديد.",
+        "checkout": "✅ إتمام الطلب", "clear_cart": "🧹 تفريغ السلة",
+        "notify": "🔔 بلغني لما يتوفر", "other_product": "🔎 منتج آخر",
+        "alert_saved": "تمام ✅ سجّلنا طلبك، ونرسل لك هنا أول ما يتوفر {name}.",
     },
     "en": {
         "list": "Here's what I found 🔎\n{rows}\n\nPick a product number or tap it 👇",
@@ -68,6 +81,7 @@ T = {
         "yes_item": "✅ Yes, this one", "no_item": "🔎 No, search again",
         "ask_name": "OK, type the name of the medicine you want 🛒",
         "ask_qty": "How many boxes?",
+        "max_qty": "The most we can take through the chat is {max} boxes; larger quantities are arranged at a branch. How many (1 to {max})?",
         "bad_qty": "Type the quantity as a number from 1 to {max}.",
         "ask_fulfil": "Delivery or pickup from a branch?",
         "delivery": "🚚 Delivery", "pickup": "🏪 Pickup",
@@ -85,6 +99,15 @@ T = {
         "add_prompt": "OK, type the name of the next product 🛒",
         "cancelled": "Order cancelled. Type 'menu' if you need anything.",
         "rx_note": "\n📝 It includes a prescription medicine: after you confirm we ask for the prescription photo for the pharmacist.",
+        "oos": "⚠️ Sorry, {name} is out of stock at all our branches right now.\nShall we message you here as soon as it is back?",
+        "in_cart": "🧺 Added to your cart.\n",
+        "cart_head": "🧺 Your cart:\n{lines}\n💰 Total before VAT: {total:.2f} SAR",
+        "cart_line": "• {name} × {qty} — {sub:.2f} SAR",
+        "cart_empty": "🧺 Your cart is empty. Type the medicine or product you need 🛒",
+        "cart_cleared": "🧹 Your cart is empty now. Type a product name to start again.",
+        "checkout": "✅ Check out", "clear_cart": "🧹 Clear cart",
+        "notify": "🔔 Notify me", "other_product": "🔎 Another product",
+        "alert_saved": "Done ✅ we'll message you here as soon as {name} is back in stock.",
     },
 }
 
@@ -225,7 +248,11 @@ class OrderFlow:
         if not choices:
             q = raw.strip()[:40] or "…"
             return self.a._say(conv, t["not_found"].format(q=q), guard="search_list")
-        order = conv.order or {"items": []}
+        order = conv.order
+        if order is None:                        # a new search: carry on with the saved cart
+            saved = self._cart_items(conv)
+            order = {"items": [{k: v for k, v in i.items() if k != "cart_id"} for i in saved],
+                     "cart_id": next((i["cart_id"] for i in saved if i.get("cart_id")), None)}
         draft = order.get("draft") or {}
         draft.setdefault("qty", parse_qty(raw))
         draft["fulfillment"] = draft.get("fulfillment") or parse_fulfilment(raw)
@@ -264,6 +291,7 @@ class OrderFlow:
         step = o.get("step")
         if _pressed(raw, "cancel") or _CANCEL.search(normalize(raw)):
             conv.order = None
+            self._sync_cart(conv, [])
             return self.a._say(conv, t["cancelled"], guard="order_flow")
         if step == "confirm_item":
             if _pressed(raw, "yes_item") or is_affirmation(raw):
@@ -299,7 +327,30 @@ class OrderFlow:
             if idx is None:
                 return None
             return self._pick(conv, idx, prefix="")
+        if step == "cart":                       # the cart was shown
+            if _pressed(raw, "checkout") or is_affirmation(raw) or re.search(r"(اتمام|اكمل|كمل|checkout|check out)", normalize(raw)):
+                return self._next(conv)
+            if _pressed(raw, "clear_cart"):
+                return self.clear_cart(conv)
+            if _pressed(raw, "add") or re.search(r"(اضاف|زياده|كمان|منتج اخر|منتج ثاني|add|another)", normalize(raw)):
+                o["step"] = "add"
+                return self.a._say(conv, t["add_prompt"], guard="order_flow")
+            o["step"] = "add"                    # anything else: a new product, the cart stays
+            return None
+        if step == "oos":                        # picked an out-of-stock product
+            if _pressed(raw, "notify") or is_affirmation(raw) or service_intent(raw) == "stock_alert":
+                return self._stock_alert(conv)
+            if _pressed(raw, "other_product"):
+                conv.order = None
+                return self.a._say(conv, t["ask_name"], guard="order_flow")
+            conv.order = None
+            return None                          # something else: the agent handles it
+        if step == "qty" and not o.get("current"):
+            o["step"] = "await_name"             # nothing picked (any more): ask for the product
+            return self.a._say(conv, t["ask_name"], guard="order_flow")
         if step == "qty":
+            if _ALL_QTY.search(normalize(raw)):  # "كل ماعندكم" / "all you have": the chat limit
+                return self.a._say(conv, t["max_qty"].format(max=MAX_QTY), guard="order_flow")
             q = parse_qty(raw)
             if q is not None and 1 <= q <= MAX_QTY:
                 o["current"]["qty"] = q
@@ -372,13 +423,21 @@ class OrderFlow:
         return bool(core) and parse_qty(raw) is None and any(len(w) >= 3 for w in core.split())
 
     def _research(self, conv, raw):
-        """Customer named a different product mid-order: search again from their words."""
+        """Customer named a different product mid-order: search again from their words. If that
+        finds nothing, the product they had picked stays and the quantity is asked again."""
         o, t = conv.order, self._t(conv)
-        o["current"] = None
+        prev, step = o.get("current"), o.get("step")
         n = _CORRECTION.sub(" ", normalize(raw))
         core = _core(n)
         if core:
-            return self.present(conv, self.a.gw.search_product(query=core), raw)
+            res = self.a.gw.search_product(query=core)
+            if prev and isinstance(res, dict) and not (res.get("candidates") or res.get("alternatives")):
+                o["current"], o["step"] = prev, step
+                return self.a._say(conv, t["not_found"].format(q=raw.strip()) + "\n" + t["ask_qty"],
+                                   guard="order_flow")
+            o["current"] = None
+            return self.present(conv, res, raw)
+        o["current"] = None
         o["step"] = "await_name"
         return self.a._say(conv, t["ask_name"], guard="order_flow")
 
@@ -388,10 +447,77 @@ class OrderFlow:
         c["qty"] = o["draft"].pop("qty", None)
         if c["qty"] and not 1 <= c["qty"] <= MAX_QTY:
             c["qty"] = None
+        st = self.a.gw.check_stock(c["product_id"])
+        if isinstance(st, dict) and "stock" in st and not any(s["qty_available"] > 0 for s in st["stock"]):
+            # nothing at any branch: say so now (not after quantity and delivery) and offer the
+            # back-in-stock message instead
+            o["step"], o["oos"] = "oos", c
+            return self.a._say(conv, t["oos"].format(name=c["name"]), guard="order_flow",
+                               buttons=self._btns(conv, "notify", "other_product"))
         o["current"] = c
         o.setdefault("fulfillment", o["draft"].get("fulfillment"))
         o.setdefault("branch_id", o["draft"].get("branch_id"))
         return self._next(conv, picked=t["picked"].format(name=c["name"], price=self._price(t, c)) + "\n")
+
+    # ---- the cart: the wizard's items, mirrored to an Odoo quotation (wa_cart) ----------
+    def _sync_cart(self, conv, items) -> bool:
+        """Mirror the chat cart to the customer's cart quotation; False for a guest (their cart
+        lives in the chat until they register at checkout) or if Odoo refused."""
+        if not conv.customer_id:
+            return False
+        try:
+            res = self.a.gw.cart_sync(conv.customer_id, [{"product_id": i["product_id"], "qty": i["qty"]}
+                                                         for i in items])
+        except Exception:  # noqa: BLE001  (the chat order still works without the mirror)
+            return False
+        if conv.order is not None and isinstance(res, dict):
+            conv.order["cart_id"] = res.get("cart_id")
+        return isinstance(res, dict) and "error" not in res and bool(items)
+
+    def _cart_items(self, conv) -> list[dict]:
+        if conv.order and conv.order.get("items"):
+            return conv.order["items"]
+        if not conv.customer_id:
+            return []
+        cart = self.a.gw.get_cart(conv.customer_id)
+        items = []
+        for it in cart.get("items") or []:
+            f = self.a.gw._product_flags(it["product_id"]) or {}
+            items.append({"product_id": it["product_id"], "name": f.get("x_name_ar") or it["name"],
+                          "qty": it["qty"], "price_sar": (it["subtotal"] / it["qty"]) if it["qty"] else 0,
+                          "rx": f.get("dispensing_class") == "prescription", "cart_id": cart["cart_id"]})
+        return items
+
+    def show_cart(self, conv, prefix=""):
+        t = self._t(conv)
+        items = self._cart_items(conv)
+        if not items:
+            return self.a._say(conv, prefix + t["cart_empty"], guard="cart")
+        lines = [t["cart_line"].format(name=i["name"], qty=i["qty"], sub=(i.get("price_sar") or 0) * i["qty"])
+                 for i in items]
+        total = sum((i.get("price_sar") or 0) * i["qty"] for i in items)
+        cart_id = next((i.get("cart_id") for i in items if i.get("cart_id")), None) or \
+            (conv.order or {}).get("cart_id")
+        conv.order = {"step": "cart", "items": [{k: v for k, v in i.items() if k != "cart_id"} for i in items],
+                      "draft": {}, "cart_id": cart_id}
+        return self.a._say(conv, prefix + t["cart_head"].format(lines="\n".join(lines), total=total),
+                           guard="cart", buttons=self._btns(conv, "checkout", "add", "clear_cart"))
+
+    def clear_cart(self, conv):
+        conv.order = None
+        self._sync_cart(conv, [])
+        return self.a._say(conv, self._t(conv)["cart_cleared"], guard="cart")
+
+    def _stock_alert(self, conv, item=None):
+        t = self._t(conv)
+        c = item or conv.order["oos"]
+        args = {"product_id": c["product_id"], "customer_id": conv.customer_id}
+        if not conv.customer_id:                 # the request belongs to a contact: identify first
+            conv.order = None
+            return self.a.customer.start(conv, pending={"kind": "stock_alert", "item": c})
+        conv.order = None
+        self.a._run_tool(conv, "request_stock_alert", args)
+        return self.a._say(conv, t["alert_saved"].format(name=c["name"]), guard="stock_alert")
 
     def _next(self, conv, picked=""):
         """Ask for the first missing detail, or show the summary."""
@@ -400,9 +526,11 @@ class OrderFlow:
         if cur and not cur.get("qty"):
             o["step"] = "qty"
             return self.a._say(conv, picked + t["ask_qty"], guard="order_flow")
-        if cur:                                  # item complete: into the cart
+        if cur:                                  # item complete: into the cart (an Odoo quotation)
             o["items"] = [i for i in o.get("items", []) if i["product_id"] != cur["product_id"]] + [cur]
             o["current"] = None
+            if self._sync_cart(conv, o["items"]):
+                picked = picked + t["in_cart"]
         if not o.get("fulfillment"):
             return self._ask_fulfil(conv, picked)
         if o["fulfillment"] == "pickup" and not o.get("branch_id"):
@@ -460,6 +588,7 @@ class OrderFlow:
         if problem:
             _, gone, msg = problem
             o["items"] = [i for i in o["items"] if i["product_id"] != gone["product_id"]]
+            self._sync_cart(conv, o["items"])
             picked = picked + msg + "\n"
             if not o["items"]:
                 conv.order = None
@@ -489,6 +618,8 @@ class OrderFlow:
             args["branch_id"] = o["branch_id"]
         else:
             args["delivery_address"] = o["address"]
+        if o.get("cart_id"):                     # the cart quotation becomes the order
+            args["cart_id"] = o["cart_id"]
         conv.order = None
         if not conv.customer_id:                 # register / identify first, then place it
             return self.a.customer.start(conv, intro="intro_checkout",

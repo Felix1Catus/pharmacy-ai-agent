@@ -1,0 +1,175 @@
+<odoo>
+  <record id="seq_pharmacy_handover" model="ir.sequence">
+    <field name="name">Assistant handover</field>
+    <field name="code">pharmacy.handover</field>
+    <field name="prefix">HO-</field>
+    <field name="padding">5</field>
+  </record>
+
+  <!-- Handovers: the staff queue of chats the assistant passed to a human -->
+  <record id="view_pharmacy_handover_list" model="ir.ui.view">
+    <field name="name">pharmacy.handover.list</field>
+    <field name="model">pharmacy.handover</field>
+    <field name="arch" type="xml">
+      <list decoration-danger="state == 'new'" decoration-muted="state in ('done', 'cancelled')">
+        <field name="create_date" string="Received"/>
+        <field name="name"/>
+        <field name="partner_id"/>
+        <field name="reason" widget="badge"/>
+        <field name="summary"/>
+        <field name="sale_order_id" optional="show"/>
+        <field name="user_id" optional="show"/>
+        <field name="state" widget="badge"/>
+      </list>
+    </field>
+  </record>
+  <record id="view_pharmacy_handover_form" model="ir.ui.view">
+    <field name="name">pharmacy.handover.form</field>
+    <field name="model">pharmacy.handover</field>
+    <field name="arch" type="xml">
+      <form>
+        <header>
+          <button name="action_start" type="object" string="Take it" class="btn-primary"
+                  invisible="state != 'new'"/>
+          <button name="action_done" type="object" string="Resolved"
+                  invisible="state not in ('new', 'in_progress')"/>
+          <field name="state" widget="statusbar" statusbar_visible="new,in_progress,done"/>
+        </header>
+        <sheet>
+          <h1><field name="name"/></h1>
+          <group>
+            <group>
+              <field name="partner_id"/>
+              <field name="sale_order_id"/>
+              <field name="reason"/>
+            </group>
+            <group>
+              <field name="channel"/>
+              <field name="conv_id"/>
+              <field name="user_id"/>
+              <field name="create_date" string="Received"/>
+            </group>
+          </group>
+          <group string="What the customer needs"><field name="summary" nolabel="1" colspan="2"/></group>
+          <group string="Resolution (the assistant may tell the customer)">
+            <field name="resolution" nolabel="1" colspan="2"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+  <record id="view_pharmacy_handover_search" model="ir.ui.view">
+    <field name="name">pharmacy.handover.search</field>
+    <field name="model">pharmacy.handover</field>
+    <field name="arch" type="xml">
+      <search>
+        <field name="partner_id"/>
+        <field name="summary"/>
+        <filter string="Open" name="open" domain="[('state', 'in', ('new', 'in_progress'))]"/>
+        <filter string="Medical" name="medical" domain="[('reason', '=', 'medical_advice')]"/>
+        <filter string="Complaints" name="complaints" domain="[('reason', '=', 'complaint')]"/>
+        <group expand="0" string="Group by">
+          <filter string="Reason" name="by_reason" context="{'group_by': 'reason'}"/>
+        </group>
+      </search>
+    </field>
+  </record>
+  <record id="action_pharmacy_handover" model="ir.actions.act_window">
+    <field name="name">Handovers</field>
+    <field name="res_model">pharmacy.handover</field>
+    <field name="view_mode">list,form</field>
+    <field name="context">{"search_default_open": 1}</field>
+  </record>
+
+  <!-- Back-in-stock requests -->
+  <record id="view_pharmacy_stock_alert_list" model="ir.ui.view">
+    <field name="name">pharmacy.stock.alert.list</field>
+    <field name="model">pharmacy.stock.alert</field>
+    <field name="arch" type="xml">
+      <list editable="bottom">
+        <field name="create_date" string="Requested"/>
+        <field name="partner_id"/>
+        <field name="product_id"/>
+        <field name="warehouse_id"/>
+        <field name="qty_now"/>
+        <field name="state" widget="badge"/>
+      </list>
+    </field>
+  </record>
+  <record id="action_pharmacy_stock_alert" model="ir.actions.act_window">
+    <field name="name">Back-in-stock requests</field>
+    <field name="res_model">pharmacy.stock.alert</field>
+    <field name="view_mode">list</field>
+    <field name="domain">[("state", "=", "waiting")]</field>
+  </record>
+
+  <!-- Branch details the assistant gives customers -->
+  <record id="view_warehouse_form_pharmacy" model="ir.ui.view">
+    <field name="name">stock.warehouse.form.pharmacy</field>
+    <field name="model">stock.warehouse</field>
+    <field name="inherit_id" ref="stock.view_warehouse"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="Pharmacy branch" name="pharmacy_branch">
+          <group>
+            <group>
+              <field name="pharmacy_city"/>
+              <field name="pharmacy_district"/>
+              <field name="pharmacy_address"/>
+              <field name="pharmacy_maps_url" widget="url"/>
+            </group>
+            <group>
+              <field name="pharmacy_phone"/>
+              <field name="pharmacy_hours"/>
+              <field name="pharmacy_delivery"/>
+            </group>
+          </group>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Sales order: cold chain + handovers -->
+  <record id="view_order_form_pharmacy_handover" model="ir.ui.view">
+    <field name="name">sale.order.form.pharmacy.handover</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="Assistant" name="assistant">
+          <group>
+            <field name="wa_cart"/>
+            <field name="needs_cold_chain"/>
+            <field name="cancel_reason_wa" invisible="not cancel_reason_wa"/>
+          </group>
+          <field name="handover_ids" readonly="1">
+            <list><field name="name"/><field name="reason"/><field name="summary"/><field name="state"/></list>
+          </field>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Contact: the customer's PDPL consent for health data -->
+  <record id="view_partner_form_pharmacy_pdpl" model="ir.ui.view">
+    <field name="name">res.partner.form.pharmacy.pdpl</field>
+    <field name="model">res.partner</field>
+    <field name="inherit_id" ref="base.view_partner_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="Privacy (PDPL)" name="pdpl">
+          <group>
+            <field name="pdpl_health_consent"/>
+            <field name="pdpl_consent_version"/>
+            <field name="pdpl_consent_withdrawn"/>
+          </group>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
+  <menuitem id="menu_pharmacy_handover" parent="menu_pharmacy_root" sequence="5"
+            action="action_pharmacy_handover"/>
+  <menuitem id="menu_pharmacy_stock_alert" parent="menu_pharmacy_root" sequence="30"
+            action="action_pharmacy_stock_alert"/>
+</odoo>

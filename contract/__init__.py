@@ -16,6 +16,12 @@ ACTIONS = [
     "hold_item",
     "track_order",
     "escalate_to_human",
+    "get_product_details",
+    "get_order_details",
+    "cancel_order",
+    "list_prescriptions",
+    "request_stock_alert",
+    "update_delivery_address",
 ]
 
 

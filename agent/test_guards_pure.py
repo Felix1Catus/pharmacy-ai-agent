@@ -80,16 +80,18 @@ def test_menu_matching():
     assert match_menu("❓ Questions / inquiries", False) == "questions"
     assert match_menu("🌐 English", False) == "switch_lang"
     assert match_menu("English please", False) == "switch_lang"
-    assert match_menu("عميل جديد", False) == "customer" and match_menu("4", True) == "customer"
+    assert match_menu("عميل جديد", False) == "customer" and match_menu("5", True) == "customer"
     assert match_menu("طلب جديد", False) == "new_order"
+    assert match_menu("2", True) == "cart" and match_menu("سلتي", False) == "cart"
+    assert match_menu("فضي السلة", False) == "clear_cart" and match_menu("clear cart", False) == "clear_cart"
     assert match_menu("ابغى اطلب بنادول 500 توصيل للرياض", False) is None
     assert wants_menu("القائمة") and wants_menu("menu") and not wants_menu("بنادول")
 
 
 def test_menu_text_and_language():
-    assert "1. 🛒 طلب جديد" in menu_text("ar") and "5. 🌐 English" in menu_text("ar")
-    assert "4. 👤 عميل حالي / جديد" in menu_text("ar")
-    assert "5. 🌐 العربية" in menu_text("en")
+    assert "1. 🛒 طلب جديد" in menu_text("ar") and "6. 🌐 English" in menu_text("ar")
+    assert "5. 👤 عميل حالي / جديد" in menu_text("ar") and "2. 🧺 سلتي" in menu_text("ar")
+    assert "6. 🌐 العربية" in menu_text("en")
     assert detect_lang("Do you have Centrum?") == "en" and detect_lang("عندكم Centrum؟") == "ar"
     assert localize("عربي — English", "en") == "English" and localize("عربي — English", "ar") == "عربي"
     assert localize("عربي — English", None) == "عربي — English"
@@ -185,3 +187,22 @@ def test_is_greeting(text):
 @pytest.mark.parametrize("text", ["هلا عندكم بنادول؟", "السلام عليكم ابي اطلب", "4", "hi, where is my order", ""])
 def test_is_greeting_needs_only_greeting_words(text):
     assert not is_greeting(text)
+
+
+def test_typed_phone_numbers_must_be_real():
+    from gateway import normalize_phone as n
+    assert n("010302351100", typed=True) is None            # one digit too many (live chat 2026-11-06)
+    assert n("05012345678", typed=True) is None and n("12345", typed=True) is None
+    assert n("447700900123", typed=True) is None             # a foreign number needs its + / 00
+    assert n("+447700900123", typed=True) == "447700900123"
+    for ok in ("0501234567", "501234567", "+966 50 123 4567", "00966501234567", "٠٥٠١٢٣٤٥٦٧"):
+        assert n(ok, typed=True) == "966501234567", ok
+    assert n("01030235110", typed=True) == "201030235110"
+    assert n("447700900123") == "447700900123"               # a WhatsApp wa_id: bare international
+
+
+def test_assistant_never_promises_to_approve_a_prescription():
+    from agent import _strip_promises
+    out = _strip_promises("أرسل صورة وصفتك، وسأقوم بتحديثها واعتمادها.")
+    assert "اعتماد" not in out and "الصيدلي يراجع" in out
+    assert "pharmacist reviews" in _strip_promises("Send it. I will approve your prescription.")
