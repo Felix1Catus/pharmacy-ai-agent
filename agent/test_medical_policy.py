@@ -40,6 +40,7 @@ class NoLLM:
 
 def _customer(phone):
     prof = GW.register_customer("ZZ Policy Test", phone, "الرياض، حي العليا، شارع 3")
+    GW.record_health_consent(prof["customer_id"])         # PDPL consent given earlier
     GW.cart_sync(prof["customer_id"], [])
     for o in GW.c.search("sale.order", [["partner_id", "=", prof["customer_id"]], ["state", "in", ["draft", "sent"]]]):
         GW.c.execute_kw("sale.order", "action_cancel", [[o]])
@@ -143,3 +144,26 @@ def test_another_prescriptions_directions_are_never_read_back():
     assert GW.prescription_directions(cid, cart["cart_id"])["directions"] == ["Amoxil: 1 cap every 8 hours"]
     GW.c.write("pharmacy.prescription", [rid], {"state": "rejected"})
     GW.cart_sync(cid, [])
+
+
+def test_prescription_needs_explicit_consent_first(monkeypatch):
+    """PDPL: nothing from a prescription is read or stored before an explicit yes; a no keeps
+    nothing; consent can be withdrawn by message and is queued for staff."""
+    prof = GW.register_customer("ZZ Consent Test", "0500002206", "الرياض، حي العليا، شارع 3")
+    GW.c.write("res.partner", [prof["customer_id"]], {"pdpl_health_consent": False, "pdpl_consent_withdrawn": False})
+    submitted = []
+    monkeypatch.setattr(GW, "submit_prescription", lambda *a, **k: submitted.append(a) or {
+        "ok": False, "problems": ["no_invoice"], "date": None, "medications": [], "directions": []})
+    a, conv = _conv(prof)
+    reply = a.respond(conv, "", image=b"fake-image", image_name="rx.jpg")
+    assert "موافقتك" in reply and [b["id"] for b in conv.last_menu] == ["consent_yes", "consent_no"]
+    assert submitted == []                                # nothing read before the yes
+    reply = a.respond(conv, "❌ لا أوافق")
+    assert "ما استلمنا" in reply and submitted == [] and not GW.has_health_consent(prof["customer_id"])
+    a.respond(conv, "", image=b"fake-image", image_name="rx.jpg")
+    a.respond(conv, "✅ أوافق")
+    assert len(submitted) == 1 and GW.has_health_consent(prof["customer_id"])
+    reply = a.respond(conv, "اسحب موافقتي لو سمحت")
+    assert "سحب موافقتك" in reply and not GW.has_health_consent(prof["customer_id"])
+    h = GW.c.search_read("pharmacy.handover", [["conv_id", "=", conv.conv_id]], ["reason"])
+    assert [x["reason"] for x in h] == ["privacy_request"]

@@ -58,6 +58,11 @@ _PATTERNS: list[tuple[str, str]] = [
 ]
 _COMPILED = [(k, re.compile(p)) for k, p in _PATTERNS]
 
+# product names that contain a symptom word: an order for a product, not a symptom
+# ("ثلاث علب محلول جفاف" = oral rehydration salts, "ميزان حرارة" = a thermometer)
+PRODUCT_PHRASES = re.compile(r"محلول (ال)?(جفاف|معالجه)|اكياس (ال)?جفاف|(ميزان|مقياس|ترمومتر) (ال)?حراره|"
+                             r"(لزقه|لزقات|بلاستر) (ال)?جروح|thermometer|rehydration salts|(?<![\w])ors(?![\w])")
+
 
 def _norm(text: str) -> str:
     t = re.sub(r"[ً-ْـ]", "", (text or "").lower())      # diacritics, tatweel

@@ -1,10 +1,10 @@
 {
  "summary": {
-  "turns": 39,
-  "turns_ok": 37,
-  "turn_pass_rate": 0.949,
-  "scenarios": 13,
-  "scenarios_ok": 11,
+  "turns": 42,
+  "turns_ok": 42,
+  "turn_pass_rate": 1.0,
+  "scenarios": 14,
+  "scenarios_ok": 14,
   "model": "qwen3-8b-q4_k_m"
  },
  "scenarios": [
@@ -43,7 +43,7 @@
      "done": [],
      "guard": null,
      "reply": "مدة صلاحيته 30 شهر.",
-     "latency_s": 0.77,
+     "latency_s": 0.76,
      "problems": []
     },
     {
@@ -52,7 +52,7 @@
      "done": [],
      "guard": null,
      "reply": "الشركة المصنعة هي NOVO NORDISK, Anova Joint Venture Company Limited، والمصنعة في دنمارك وفيتنام.",
-     "latency_s": 0.9,
+     "latency_s": 0.89,
      "problems": []
     },
     {
@@ -83,17 +83,15 @@
      "say": "ابي اعرف عن زيرتيك 10 ملجم وكلاريتين 10 ملجم، كم حبة في كل علبة ويحتاجون وصفة؟",
      "tools": [
       "search_product",
-      "search_product",
       "get_product_details"
      ],
      "done": [
-      "search_product",
       "search_product",
       "get_product_details"
      ],
      "guard": null,
      "reply": "زيرتيك 10 ملجم: 10 شريط معدني، لا يحتاج وصفة. كلاريتين 10 ملجم: 10 شريط معدني، لا يحتاج وصفة.",
-     "latency_s": 6.07,
+     "latency_s": 4.48,
      "problems": []
     },
     {
@@ -102,7 +100,7 @@
      "done": [],
      "guard": null,
      "reply": "كلاريتين 10 ملجم صناعة سعودية.",
-     "latency_s": 1.65,
+     "latency_s": 1.5,
      "problems": []
     },
     {
@@ -110,8 +108,8 @@
      "tools": [],
      "done": [],
      "guard": null,
-     "reply": "كلاريتين 10 ملجم سعره 19.6 ريال، وزيروتيك 10 ملجم سعره 16.2 ريال.",
-     "latency_s": 1.24,
+     "reply": "كلاريتين 10 ملجم سعره 19.6 ريال.",
+     "latency_s": 0.64,
      "problems": []
     }
    ],
@@ -121,7 +119,7 @@
    "scenario": "cancel",
    "turns": [
     {
-     "say": "ابي تفاصيل طلبي رقم S00489",
+     "say": "ابي تفاصيل طلبي رقم S00854",
      "tools": [
       "get_order_details"
      ],
@@ -129,19 +127,17 @@
       "get_order_details"
      ],
      "guard": null,
-     "reply": "طلبك رقم S00489 مسجل وتم تأكيد استلامه. المنتج: 2 قرص من بنادول 500 ملغ. سيتم استلامه من فرع جدة - تحلية. لا يوجد دفع بعد. يمكنك إلغاء الطلب قبل التأكيد.",
-     "latency_s": 2.88,
+     "reply": "طلبك رقم S00854 مُسجل وقُبل، وحالة الطلب \"مُستلم - ينتظر تأكيد الصيدلية\". المنتج: 2 قرص من \"بنادول 500 ملغ\" بسعر 27.6 ريال. سيتم استلام الطلب من فرع جدة - تحلية. يمكنك إلغاء الطلب قبل التأكيد.",
+     "latency_s": 3.43,
      "problems": []
     },
     {
      "say": "ابي الغيه",
-     "tools": [
-      "cancel_order"
-     ],
+     "tools": [],
      "done": [],
-     "guard": null,
-     "reply": "هل ترغب في إلغاء طلبك رقم S00489؟ المنتج: 2 قرص من بنادول 500 ملغ، من فرع جدة - تحلية. يرجى التأكيد بأنك تريد الغاء الطلب.",
-     "latency_s": 2.99,
+     "guard": "cancel",
+     "reply": "تبغى نلغي الطلب S00854؟\n• Panadol 500mg × 2\n💰 27.60 ريال",
+     "latency_s": 0.04,
      "problems": []
     },
     {
@@ -152,18 +148,18 @@
      "done": [
       "cancel_order"
      ],
-     "guard": null,
-     "reply": "تم إلغاء طلبك رقم S00489 بنجاح. إذا كنت بحاجة إلى أي شيء آخر، لا تتردد في طلبها.",
-     "latency_s": 2.49,
+     "guard": "cancel",
+     "reply": "✅ تم إلغاء طلبك S00854. إذا احتجت شيئاً ثانياً أنا هنا.",
+     "latency_s": 0.09,
      "problems": []
     },
     {
-     "say": "وش وضع طلب S00489 الحين؟",
+     "say": "وش وضع طلب S00854 الحين؟",
      "tools": [],
      "done": [],
      "guard": null,
-     "reply": "طلب S00489 تم إلغاؤه بالكامل. إذا كنت بحاجة إلى أي شيء، نحن هنا لمساعدتك.",
-     "latency_s": 1.29,
+     "reply": "طلب S00854 إلغى بالكامل. إذا احتجت حاجة تانية، أنا هنا.",
+     "latency_s": 1.38,
      "problems": []
     }
    ],
@@ -181,21 +177,12 @@
       "list_branches"
      ],
      "guard": null,
-     "reply": "نعم، لدينا فرع في جدة، وهو فرع تحلية. هل ترغب في توصيل الدواء إلى جدة؟",
-     "latency_s": 1.43,
+     "reply": "نعم، لدينا فرع في جدة، وهو \"جدة - تحلية\". يعمل 24 ساعة يومياً ويوفر خدمة التوصيل.",
+     "latency_s": 1.08,
      "problems": []
     },
     {
      "say": "متى تفتحون؟",
-     "tools": [],
-     "done": [],
-     "guard": null,
-     "reply": "نفتح طوال اليوم 24 ساعة في كل الفروع. هل ترغب في توصيل الدواء إلى جدة؟",
-     "latency_s": 0.87,
-     "problems": []
-    },
-    {
-     "say": "وفي تبوك؟",
      "tools": [
       "list_branches"
      ],
@@ -203,8 +190,17 @@
       "list_branches"
      ],
      "guard": null,
-     "reply": "لا يوجد فرع في تبوك، لكننا نقوم بتوصيل الدواء إلى المدن القريبة من الفروع. هل ترغب في توصيل الدواء إلى أحد الفروع القريبة؟",
-     "latency_s": 2.04,
+     "reply": "الفروع مفتوحة 24 ساعة يومياً. إذا كنت في الرياض، ففرع \"الرياض - علايا\" مفتوح 24/7. وإذا كنت في جدة، ففرع \"جدة - تحلية\" مفتوح 24/7.",
+     "latency_s": 2.05,
+     "problems": []
+    },
+    {
+     "say": "وفي تبوك؟",
+     "tools": [],
+     "done": [],
+     "guard": null,
+     "reply": "لا، لا يوجد فرع في تبوك. يمكنك اختيار فرع آخر من القائمة.",
+     "latency_s": 0.91,
      "problems": []
     }
    ],
@@ -223,7 +219,7 @@
      ],
      "guard": "order_flow",
      "reply": "⚠️ للأسف كلاريتين 10 ملجم غير متوفر حالياً في فروعنا.\nتبغى نرسل لك رسالة هنا أول ما يتوفر؟",
-     "latency_s": 0.26,
+     "latency_s": 0.25,
      "problems": []
     },
     {
@@ -254,8 +250,8 @@
       "list_prescriptions"
      ],
      "guard": null,
-     "reply": "الوصفات اللي أرسلتها ما زالت في انتظار الصيدلي. إذا كنت تريدين تفعيلها، يفضل أن ترسلوا الوصفة مرة أخرى.",
-     "latency_s": 2.2,
+     "reply": "الوصفة التي أرسلتها ما زالت بحاجة لمراجعة الصيدلي. يرجى زيارة أحد فروع الصيدلية لتقديم الوصفة الأصلية وتأكيد تفاصيلها.",
+     "latency_s": 2.25,
      "problems": []
     },
     {
@@ -266,15 +262,13 @@
      "done": [
       "track_order"
      ],
-     "guard": null,
-     "reply": "الشكوى ما زالت في انتظار الرد. إذا كنت تريدين التقدم بها مرة أخرى، يفضل أن ترسلوا تفاصيلها مرة أخرى.",
-     "latency_s": 2.96,
-     "problems": [
-      "reply lacks ['زميل', 'زملا', 'متابع', 'يتابع', 'موظف', 'قيد', 'جاري', 'شغال', 'معالج', 'تعيين']"
-     ]
+     "guard": "complaint_status",
+     "reply": "أحد زملائنا استلم شكواك (HO-00317) ويتابعها الحين.",
+     "latency_s": 1.11,
+     "problems": []
     }
    ],
-   "ok": false
+   "ok": true
   },
   {
    "scenario": "address",
@@ -287,9 +281,9 @@
      "done": [
       "update_delivery_address"
      ],
-     "guard": null,
-     "reply": "تم تحديث عنوان التوصيل حقي إلى الرياض حي النخيل شارع العليا 45.",
-     "latency_s": 1.62,
+     "guard": "address_saved",
+     "reply": "✅ حفظنا عنوان التوصيل الجديد: الرياض حي النخيل شارع العليا 45",
+     "latency_s": 0.94,
      "problems": []
     },
     {
@@ -297,8 +291,8 @@
      "tools": [],
      "done": [],
      "guard": null,
-     "reply": "العنوان المسجل حقي الآن هو الرياض حي النخيل شارع العليا 45.",
-     "latency_s": 0.84,
+     "reply": "عنوان التوصيل المسجل حالياً هو: الرياض حي النخيل شارع العليا 45.",
+     "latency_s": 0.92,
      "problems": []
     }
    ],
@@ -313,7 +307,7 @@
      "done": [],
      "guard": "scheduled",
      "reply": "هذا دواء مقيّد (خاضع للرقابة) 🔒: يُصرف حضورياً فقط من الفرع مع وصفة طبية مختومة من الطبيب، ولا يمكن طلبه أو توصيله عبر المحادثة. أقدر أفيدك بتوفّره فقط.\n📍 متوفر حالياً في: Riyadh - Olaya، Dammam - Corniche",
-     "latency_s": 0.25,
+     "latency_s": 0.23,
      "problems": []
     },
     {
@@ -343,7 +337,44 @@
      ],
      "guard": "medical",
      "reply": "عذراً، ما أقدر أعطي نصائح طبية أو جرعات. إذا الدواء ضمن طلبك أو سلتك، أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها. ويقدر الصيدلي في أي فرع يجاوب سؤالك.",
-     "latency_s": 2.48,
+     "latency_s": 2.64,
+     "problems": []
+    }
+   ],
+   "ok": true
+  },
+  {
+   "scenario": "symptoms",
+   "turns": [
+    {
+     "say": "i want something for a sore throat",
+     "tools": [],
+     "done": [],
+     "guard": "symptom_referral",
+     "reply": "Choosing a medicine for symptoms needs a licensed pharmacist to ask about your condition, so I can't suggest a product 🙏 A pharmacist at any of our branches can help you straight away - or, if you know the product you want, type its name and I'll help you order it.",
+     "latency_s": 0.1,
+     "problems": []
+    },
+    {
+     "say": "بدي شي للسعال",
+     "tools": [],
+     "done": [],
+     "guard": "symptom_referral",
+     "reply": "اختيار الدواء المناسب للأعراض يحتاج صيدلي مرخّص يسألك عن حالتك، فما أقدر أقترح لك منتج 🙏 تقدر تزور أي فرع من فروعنا ويخدمك الصيدلي مباشرة، وإذا تعرف اسم المنتج اللي تبغاه اكتبه وأساعدك تطلبه.",
+     "latency_s": 0.05,
+     "problems": []
+    },
+    {
+     "say": "طيب عندكم ستربسلز؟",
+     "tools": [
+      "search_product"
+     ],
+     "done": [
+      "search_product"
+     ],
+     "guard": "order_flow",
+     "reply": "✅ ستربسلز — 14.00 ريال\nكم علبة تبغى؟",
+     "latency_s": 0.22,
      "problems": []
     }
    ],
@@ -357,8 +388,8 @@
      "tools": [],
      "done": [],
      "guard": "dose_ask_photo",
-     "reply": "سؤالك عن DAONIL M 250/1.25MG TABLETS (S00490). أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها كما كتبها الطبيب.",
-     "latency_s": 0.21,
+     "reply": "سؤالك عن DAONIL M 250/1.25MG TABLETS (S00855). أرسل صورة الوصفة 📎 وأقرأ لك الجرعة المكتوبة فيها كما كتبها الطبيب.",
+     "latency_s": 0.2,
      "problems": []
     },
     {
@@ -366,8 +397,8 @@
      "tools": [],
      "done": [],
      "guard": "dose_as_written",
-     "reply": "📝 مكتوب في وصفتك:\nMetformin - 500 mg tablet: 1 tab twice daily with meals\nAtorvastatin - 20 mg tablet: 1 tab at night\nهذا كما كتبه الطبيب. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، قل لي وأحوّل سؤالك مع طلبك S00490 للصيدلي.",
-     "latency_s": 2.03,
+     "reply": "📝 مكتوب في وصفتك:\nMetformin - 500 mg tablet: 1 tab twice daily with meals\nAtorvastatin - 20 mg tablet: 1 tab at night\nهذا كما كتبه الطبيب، قرأته آلياً من الصورة - تأكد منه على ملصق الصيدلية عند الاستلام. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، قل لي وأحوّل سؤالك مع طلبك S00855 للصيدلي.",
+     "latency_s": 1.81,
      "problems": []
     },
     {
@@ -375,7 +406,7 @@
      "tools": [],
      "done": [],
      "guard": "handover",
-     "reply": "تمام، حوّلت سؤالك مع طلبك S00490 ووصفتك للصيدلي، وبيراجعها ويرد عليك قريباً 👨‍⚕️",
+     "reply": "تمام، حوّلت سؤالك مع طلبك S00855 ووصفتك للصيدلي، وبيراجعها ويرد عليك قريباً 👨‍⚕️",
      "latency_s": 0.05,
      "problems": []
     }
@@ -395,7 +426,7 @@
      ],
      "guard": "order_flow",
      "reply": "✅ بنادول اكسترا — 15.00 ريال\n🧺 أضفته لسلتك.\nتوصيل أو استلام من الفرع؟",
-     "latency_s": 0.38,
+     "latency_s": 0.37,
      "problems": []
     },
     {
@@ -413,7 +444,7 @@
      "done": [],
      "guard": "cart",
      "reply": "🧹 فضّينا سلتك. اكتب اسم المنتج إذا تبغى تبدأ من جديد.",
-     "latency_s": 0.04,
+     "latency_s": 0.05,
      "problems": []
     },
     {
@@ -441,7 +472,7 @@
      ],
      "guard": "order_flow",
      "reply": "317.60 SAR\nIs this the one you mean?",
-     "latency_s": 0.89,
+     "latency_s": 0.9,
      "problems": []
     },
     {
@@ -453,8 +484,8 @@
       "get_product_details"
      ],
      "guard": null,
-     "reply": "Yes, it needs to be kept in the fridge at a temperature between 2°C and 8°C.",
-     "latency_s": 1.73,
+     "reply": "It needs to be kept in the fridge at a temperature of 2°C to 8°C.",
+     "latency_s": 1.68,
      "problems": []
     },
     {
@@ -471,8 +502,8 @@
      "tools": [],
      "done": [],
      "guard": null,
-     "reply": "The manufacturer is NOVO NORDISK, Anova Joint Venture Company Limited.",
-     "latency_s": 0.54,
+     "reply": "The product is made by NOVO NORDISK, Anova Joint Venture Company Limited.",
+     "latency_s": 0.59,
      "problems": []
     }
    ],
@@ -502,12 +533,10 @@
      "done": [
       "get_product_details"
      ],
-     "guard": null,
-     "reply": "كم علبة تبغى؟",
-     "latency_s": 1.55,
-     "problems": [
-      "reply lacks ['صيدل']"
-     ]
+     "guard": "fact_check",
+     "reply": "هالمعلومة مو مسجلة عندنا لهذا المنتج، الصيدلي يأكدها لك 👨‍⚕️",
+     "latency_s": 3.23,
+     "problems": []
     },
     {
      "say": "1",
@@ -519,7 +548,7 @@
      "problems": []
     }
    ],
-   "ok": false
+   "ok": true
   }
  ]
 }

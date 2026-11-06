@@ -9,6 +9,7 @@ REASONS = [
     ("unclear", "Unclear request"),
     ("out_of_scope", "Out of scope"),
     ("prescription", "Prescription question"),
+    ("privacy_request", "Privacy request (PDPL: access / deletion / consent withdrawn)"),
 ]
 
 

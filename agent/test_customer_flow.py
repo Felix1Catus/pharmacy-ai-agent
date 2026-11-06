@@ -207,6 +207,7 @@ def test_search_with_wrong_branch_still_finds_product():
 # ---- prescription-only order -> pharmacist review -> confirm & pay -------------------
 def test_rx_order_collects_photo_then_closes_with_review_note(monkeypatch):
     prof = GW.register_customer("ZZ Test Rx Flow", "0500000808", "Riyadh, Al Sahafa, St 2")
+    GW.record_health_consent(prof["customer_id"])         # PDPL consent given earlier
     monkeypatch.setattr(GW, "create_order", lambda **kw: {
         "order_id": 4242, "order_ref": "S04242", "state": "draft", "total": 45.0, "branch_id": 1,
         "branch_name": "Riyadh", "fulfillment": "pickup", "rx_review": "awaiting_photo"})

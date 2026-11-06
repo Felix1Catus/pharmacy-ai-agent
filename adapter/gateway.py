@@ -10,6 +10,7 @@ The agent and the FastAPI app call these functions; tests call them directly.
 from __future__ import annotations
 
 import base64
+import os
 import re
 import json
 import sys
@@ -28,6 +29,14 @@ import ingredients as ingr  # noqa: E402
 import prescription as rx  # noqa: E402
 
 RESULTS = ROOT / "results"
+# Choosing a medicine for a symptom is a licensed pharmacist's call (pharmacy practice rules), so the
+# assistant does not list products for a need ("something for a sore throat") unless the pharmacy
+# deliberately re-enables the pharmacist-approved table in adapter/needs.py.
+SYMPTOM_SUGGESTIONS = os.environ.get("SYMPTOM_SUGGESTIONS", "0") == "1"
+# cosmetics, not a medicine choice: still listed (moisturiser for dry skin, sunscreen)
+COSMETIC_NEEDS = {"dry_skin", "sun_protection"}
+SYMPTOM_HINT = ("We do not suggest medicines for symptoms: a licensed pharmacist must advise. Tell the "
+                "customer to ask the pharmacist at any branch, or to name the product they want.")
 HANDOVER_LOG = RESULTS / "handovers.jsonl"
 
 SEARCH_FIELDS = ["name", "default_code", "x_name_ar", "x_brand",
@@ -216,6 +225,8 @@ class Gateway:
         if not (query and query.strip()) and not active_ingredient:
             if not need:
                 return err("invalid_input", "query or need is required")
+            if not SYMPTOM_SUGGESTIONS and need not in COSMETIC_NEEDS:
+                return {"candidates": [], "symptom_request": need, "hint": SYMPTOM_HINT}
             return self._need_search(need, branch_id, limit)
         found = self._find(query, branch_id, limit, active_ingredient)
         # a real match (exact name or active ingredient) wins; loose sound-alikes don't beat a need
@@ -226,6 +237,8 @@ class Gateway:
         key = need or detect_need(query)
         if not key and (found.get("candidates") or found.get("alternatives")):
             return found
+        if key and not SYMPTOM_SUGGESTIONS and key not in COSMETIC_NEEDS:   # the pharmacist's call
+            return {"candidates": [], "symptom_request": key, "hint": SYMPTOM_HINT}
         if key:
             by_need = self._need_search(key, branch_id, limit)
             if by_need.get("candidates"):
@@ -1143,6 +1156,32 @@ class Gateway:
         return {"prescription_id": rows[0]["id"], "order_id": order_id,
                 "directions": [l for l in rows[0]["directions"].splitlines() if l.strip()]}
 
+    # ---- PDPL: explicit consent before health data (prescriptions) is stored ----------------
+    CONSENT_VERSION = os.environ.get("PDPL_CONSENT_VERSION", "2026-11-v1")
+
+    def has_health_consent(self, customer_id) -> bool:
+        if not customer_id:
+            return False
+        p = self.c.read("res.partner", customer_id, ["pdpl_health_consent", "pdpl_consent_withdrawn"])[0]
+        return bool(p["pdpl_health_consent"]) and not (
+            p["pdpl_consent_withdrawn"] and p["pdpl_consent_withdrawn"] >= p["pdpl_health_consent"])
+
+    def record_health_consent(self, customer_id) -> None:
+        self.c.write("res.partner", [customer_id], {
+            "pdpl_health_consent": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "pdpl_consent_version": self.CONSENT_VERSION, "pdpl_consent_withdrawn": False})
+
+    def withdraw_health_consent(self, customer_id, summary="", conv_id=None, channel=None) -> dict:
+        """Consent withdrawn / data request: recorded on the contact and queued for staff (who
+        handle access and deletion requests within the PDPL time limits)."""
+        self.c.write("res.partner", [customer_id], {
+            "pdpl_consent_withdrawn": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")})
+        hid = self.c.create("pharmacy.handover", {
+            "reason": "privacy_request", "partner_id": customer_id,
+            "summary": (summary or "customer withdrew consent / asked about their data")[:2000],
+            "conv_id": conv_id or False, "channel": channel if channel in ("whatsapp", "webchat") else "other"})
+        return {"handover_ref": self.c.read("pharmacy.handover", hid, ["name"])[0]["name"]}
+
     def link_prescription(self, prescription_id: int, order_id: int, customer_id: int) -> None:
         """A prescription sent for a dosage question goes on that order (Pharmacy -> Prescriptions
         shows it with the order); a prescription-only quotation then goes to pharmacist review."""
@@ -1173,7 +1212,7 @@ class Gateway:
 
     # ---- 7. escalate_to_human ------------------------------------------------
     _HANDOVER_REASONS = {"medical_advice", "restricted_item", "complaint", "abusive", "low_confidence",
-                         "unclear", "out_of_scope", "prescription"}
+                         "unclear", "out_of_scope", "prescription", "privacy_request"}
 
     def escalate_to_human(self, reason, summary, customer_id=None, order_id=None, medicine=None,
                           conv_id=None, channel=None):

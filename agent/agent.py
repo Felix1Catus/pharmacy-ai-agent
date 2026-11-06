@@ -37,11 +37,14 @@ sys.path.insert(0, str(ROOT / "agent"))
 import contract  # noqa: E402
 from gateway import Gateway, dispatch  # noqa: E402
 from gateway import err  # noqa: E402
-from needs import detect_need  # noqa: E402
+from needs import PRODUCT_PHRASES, detect_need  # noqa: E402
+from gateway import COSMETIC_NEEDS  # noqa: E402
 from guards import (ScheduledDenylist, abusive_intent, injection_attempt, is_affirmation,  # noqa: E402
                     looks_in_scope, medical_advice_intent, order_status_intent, prescription_rejected,
                     product_info_intent, service_intent, scheduled_refusal, disputes_directions,
                     DOSE_ASK_PHOTO, DOSE_AS_WRITTEN, DOSE_UNREADABLE, DOSE_DISPUTED, NEEDS_CONTEXT,
+                    SYMPTOM_REFERRAL, CONSENT_ASK, CONSENT_BUTTONS, CONSENT_DECLINED, CONSENT_WITHDRAWN,
+                    withdraws_consent, branch_intent,
                     reply_gives_medical_advice, pharmacist_complaint, ABUSE_HANDOVER,
                     PHARMACIST_REFERRAL, URGENT_REFERRAL,
                     MEDICAL_REFUSAL, PRESCRIPTION_HANDOVER, PRESCRIPTION_NEEDED, SCHEDULED_REFUSAL)
@@ -94,11 +97,12 @@ SYSTEM_PROMPT = (
     "WHAT TO DO:\n"
     "- Any product or medicine mentioned (name, brand, ingredient): call search_product at once "
     "with the product words only - FIRST, even when the message also names a branch, pickup, "
-    "delivery or the word order (\"order 1 Centrum\", \"بنادول موجود في فرع العليا؟\"). Something wanted FOR a symptom or purpose with no product named "
-    "(\"دوا للصداع\", \"something for a blocked nose\"): call search_product with need set to that "
-    "need and the customer's words as query - the system picks the products; never choose a "
-    "medicine or ingredient yourself. The system then shows the options and takes the order "
-    "(quantity, pickup/delivery, confirmation) itself.\n"
+    "delivery or the word order (\"order 1 Centrum\", \"بنادول موجود في فرع العليا؟\"). The system "
+    "then shows the options and takes the order (quantity, pickup/delivery, confirmation) itself.\n"
+    "- Something wanted FOR a symptom with no product named (\"دوا للصداع\", \"something for a "
+    "sore throat\"): never suggest, list or name a medicine, ingredient or product - choosing one is "
+    "a licensed pharmacist's job. Say a pharmacist at any branch will advise, or ask for the product's "
+    "name if they know it.\n"
     "- Questions about an existing order (where it is, when it arrives, whether it shipped): "
     "track_order - never create_order or hold_item.\n"
     "- Branches (where, which city or district, opening hours, phone, delivery): list_branches, "
@@ -160,7 +164,9 @@ _LEAK_MARKERS = ["scope and security", "you are the ordering assistant", "rules:
                  "<|im_", "search_product", "check_stock", "create_order", "create_dispatch",
                  "hold_item", "track_order", "list_branches", "escalate_to_human", "customer_id",
                  "get_product_details", "get_order_details", "cancel_order", "list_prescriptions",
-                 "request_stock_alert", "update_delivery_address", "not_recorded", "dispensing_meaning"]
+                 "request_stock_alert", "update_delivery_address", "not_recorded", "dispensing_meaning",
+                 # tool hints are written ABOUT the customer; a reply quoting one is a leak
+                 "العميل", "the customer", "never guess", "لا تفترض"]
 # the model sometimes WRITES an escalation as text ("call escalate_to_human reason=abusive summary=...")
 # instead of calling the tool; the leak filter would then drop it and the handover never happens.
 # Only escalations are recovered from text (the safe direction); any other tool-like text stays a leak.
@@ -191,6 +197,21 @@ _CLAIMS_DONE = [
 def _claimed_action(text: str) -> str | None:
     n = normalize(text)
     return next((tool for tool, rx in _CLAIMS_DONE if rx.search(n)), None)
+
+
+_EN_WORDS = {"i", "my", "me", "you", "your", "the", "a", "an", "is", "are", "do", "does", "can", "want",
+             "need", "have", "please", "what", "how", "where", "when", "for", "it", "this", "of", "to", "with"}
+
+
+def _switched_language(raw: str, lang: str | None) -> bool:
+    """A real sentence in the other language (not a button press, a branch or product name)."""
+    words = re.findall(r"[A-Za-z]+|[\u0600-\u06FF]+", raw)
+    if len(words) < 3:
+        return False
+    if lang == "ar":
+        latin = [w.lower() for w in words if w.isascii()]
+        return len(latin) == len(words) and bool(set(latin) & _EN_WORDS)
+    return lang == "en" and sum(not w.isascii() for w in words) >= 3
 
 
 NOT_RECORDED_REPLY = {"ar": "هالمعلومة مو مسجلة عندنا لهذا المنتج، الصيدلي يأكدها لك 👨‍⚕️",
@@ -271,6 +292,7 @@ class Conversation:
         self.interrupt_note: str | None = None         # spoken reply cut off by the customer
         self.dose_ctx: dict | None = None              # dosage question waiting for the prescription photo
         self.dose_check: dict | None = None            # directions read back; "that's wrong" -> pharmacist
+        self.consent_pending: dict | None = None       # a prescription waiting for the PDPL consent
         self.cancel_ctx: dict | None = None            # cancel wizard step (cancel_flow.py)
         self.order: dict | None = None   # order wizard state (agent/order_flow.py)
         self.started = False
@@ -284,7 +306,8 @@ class Conversation:
     _FIELDS = ("customer_id", "conv_id", "messages", "customer_facing", "lang", "wa_phone",
                "customer_name", "profile", "flow", "started", "last_ts", "menu_shown",
                "last_menu", "last_guard", "last_user_text", "awaiting_rx_order",
-               "awaiting_confirm_order", "order", "dose_ctx", "dose_check", "cancel_ctx")
+               "awaiting_confirm_order", "order", "dose_ctx", "dose_check", "cancel_ctx",
+               "consent_pending")
 
     def to_dict(self) -> dict:
         d = {k: getattr(self, k) for k in self._FIELDS}
@@ -547,13 +570,12 @@ class PharmacyAgent:
             asked = self.gw._ingr.resolve_name(args.get("active_ingredient") or args.get("query") or "")
             if said and len(said) > len(asked):
                 args["active_ingredient"] = ", ".join(sorted(said))
-            if args.get("need") and args.get("query") and product_info_intent(conv.last_user_text):
-                args.pop("need")                  # a question ABOUT named products, not a symptom
-            if not args.get("need") and not product_info_intent(conv.last_user_text):
-                # the customer's words reveal a need the model left out
-                need = detect_need(conv.last_user_text)
-                if need:
-                    args["need"] = need
+            args.pop("need", None)                # symptoms are not searched (pharmacist's call)
+            ai = (args.get("active_ingredient") or "").strip()
+            if ai and not self.gw._ingr.resolve_name(ai):
+                # a second PRODUCT name put in active_ingredient ("زيرتيك" + "كلاريتين"): search both
+                args.pop("active_ingredient")
+                args["query"] = f"{args.get('query') or ''} و {ai}".strip(" و")
         if name == "search_product" and args.get("active_ingredient") \
                 and not self._grounded(conv, args["active_ingredient"]):
             # the model's own drug knowledge is not trusted (it once mapped Hibiotic to
@@ -627,6 +649,34 @@ class PharmacyAgent:
         exact = [c for c in (res.get("candidates") or []) if c.get("match") == "exact" and not c.get("is_scheduled")] \
             if isinstance(res, dict) else []
         return words if exact else None
+
+    def _names_catalogue_product(self, raw: str) -> bool:
+        """The message names a product we carry ("بنادول للصداع", "ميزان حرارة رقمي", "سيرافي
+        moisturizer"): a search hit whose whole name appears in the message (same score as the
+        direct search)."""
+        if PRODUCT_PHRASES.search(normalize(raw)):
+            return True
+        core = " ".join(w for w in order_core(raw).split() if not _SERVICE_WORD.fullmatch(w))
+        if len(core.replace(" ", "")) < 3:
+            return False
+        try:
+            res = self.gw._find(core, None, 5, None)
+        except Exception:  # noqa: BLE001
+            return False
+        if not isinstance(res, dict):
+            return False
+        strip = lambda w: w[2:] if w.startswith("ال") and len(w) > 4 else w  # noqa: E731
+        said = {strip(w) for w in normalize(raw).split()}
+        for c in (res.get("candidates") or []):
+            if c.get("match") == "active ingredient":
+                return True
+            for name in (c.get("name_ar"), c.get("name_en"), c.get("brand")):
+                # the product's distinctive first word (brand / name, not a strength) is in the message
+                first = next((strip(w) for w in normalize(name or "").split()
+                              if len(w) >= 4 and not re.search(r"\d", w)), None)
+                if first and first in said:
+                    return True
+        return False
 
     @staticmethod
     def _seen_products(conv) -> set[int]:
@@ -845,6 +895,8 @@ class PharmacyAgent:
         new_session = conv.customer_facing and (not conv.started or now - conv.last_ts > SESSION_GAP_S)
         if conv.customer_facing and not conv.lang:
             conv.lang = detect_lang(raw) if raw.strip() else "ar"
+        elif conv.customer_facing and _switched_language(raw, conv.lang):
+            conv.lang = detect_lang(raw)          # they switched language: answer in theirs
         if new_session:
             self.auto_identify(conv)
         conv.started, conv.last_ts, conv.last_user_text = True, now, raw
@@ -857,6 +909,28 @@ class PharmacyAgent:
             conv.flow = None
             return self._say(conv, TEXTS[self._lang(conv)]["injection"], guard="injection",
                              menu=conv.customer_facing)
+
+        # --- PDPL: consent withdrawn / data request; the answer to the consent question ---
+        if not resumed and conv.customer_id and withdraws_consent(raw):
+            conv.consent_pending = None
+            try:
+                self.gw.withdraw_health_consent(conv.customer_id, f"customer wrote: {raw[:300]}",
+                                                **self._handover_ctx(conv))
+            except Exception:  # noqa: BLE001
+                pass
+            return self._say(conv, CONSENT_WITHDRAWN[self._lang(conv)], guard="pdpl_withdrawn")
+        if conv.consent_pending and not resumed and not image:
+            pend, conv.consent_pending = conv.consent_pending, None
+            n = normalize(raw)
+            yes = n in {normalize(CONSENT_BUTTONS[lg][0]) for lg in CONSENT_BUTTONS} or (
+                is_affirmation(raw) and not re.search(r"(?<!\w)(لا|ما|مو|no|not|don'?t)(?!\w)", n))
+            if not yes:
+                self._audit(conv.conv_id, "pdpl_consent", {"given": False})
+                return self._say(conv, CONSENT_DECLINED[self._lang(conv)], guard="pdpl_declined")
+            self.gw.record_health_consent(conv.customer_id)
+            self._audit(conv.conv_id, "pdpl_consent", {"given": True, "version": self.gw.CONSENT_VERSION})
+            return self.respond(conv, pend.get("text") or "", image=base64.b64decode(pend["image"]),
+                                image_name=pend.get("image_name"), resumed=True)
 
         # --- identify/register flow in progress (fixed steps, no model) ---
         if conv.flow and not resumed:
@@ -919,6 +993,12 @@ class PharmacyAgent:
         if abusive_intent(raw):
             self._audit(conv.conv_id, "abusive", {"text": raw[:200]})
             return self._say(conv, ABUSE_HANDOVER, guard="abusive")
+        # a symptom and no product named ("something for a sore throat"): no product list - picking a
+        # medicine for a condition is the licensed pharmacist's call
+        need_key = detect_need(raw) if not image else None
+        if need_key and need_key not in COSMETIC_NEEDS and not self._names_catalogue_product(raw):
+            self._audit(conv.conv_id, "symptom_referral", {"need": need_key})
+            return self._say(conv, SYMPTOM_REFERRAL, guard="symptom_referral")
         # "where is my order?" -> track_order by fixed logic (the model often reached for create_order)
         if order_status_intent(raw) and not image:
             if not conv.customer_id:
@@ -939,6 +1019,16 @@ class PharmacyAgent:
             # a prescription belongs to a customer: identify/register first, then read it
             return self.customer.start(conv, pending={"kind": "image", "image": image,
                                                       "image_name": image_name, "text": raw})
+        if image and conv.customer_facing and not self.gw.has_health_consent(conv.customer_id):
+            # nothing is read or stored before the explicit consent (PDPL: health data is sensitive)
+            conv.consent_pending = {"image": base64.b64encode(image).decode(), "image_name": image_name,
+                                    "text": raw}
+            lang = self._lang(conv)
+            privacy = os.environ.get("PRIVACY_URL", "").strip()
+            pr = (f"\nسياسة الخصوصية: {privacy}" if lang == "ar" else f"\nPrivacy policy: {privacy}") if privacy else ""
+            yes, no = CONSENT_BUTTONS[lang]
+            return self._say(conv, CONSENT_ASK[lang].format(privacy=pr), guard="pdpl_consent",
+                             buttons=[{"id": "consent_yes", "label": yes}, {"id": "consent_no", "label": no}])
         if image:
             try:
                 res = self.gw.submit_prescription(conv.customer_id, image, image_name)
@@ -996,6 +1086,21 @@ class PharmacyAgent:
         elif service == "address":
             hint += ("\n(A new delivery address: call update_delivery_address with the address exactly "
                      "as they wrote it - never say it is saved before the tool returns saved.)")
+        branch_q = branch_intent(raw) and not image and not info_q and not service \
+            and not self._names_catalogue_product(raw)          # "بنادول موجود في فرع العليا؟" is stock
+        if branch_q and conv.customer_facing:
+            # branch / hours questions are answered from the branch records, never from memory
+            # (the model once invented "9 am - 10 pm" and a Tabuk branch)
+            from gateway import guess_city
+            args = {"city": guess_city(raw)} if guess_city(raw) else {}
+            res = self.gw.list_branches(**args)
+            conv.messages.append({"role": "assistant", "content": "",
+                                  "tool_calls": [{"function": {"name": "list_branches", "arguments": args}}]})
+            conv.messages.append({"role": "tool", "tool_name": "list_branches",
+                                  "content": json.dumps(res, ensure_ascii=False)})
+            self._audit(conv.conv_id, "tool_call", {"action": "list_branches", "args": args, "result": res,
+                                                    "via": "branch_question"})
+            hint += "\n(Answer from the branch list above only: names, districts, hours exactly as given.)"
         if info_q:
             hint += ("\n(A question ABOUT a product: find it with search_product if it is not in the "
                      "results above, then call get_product_details and answer only from it.)")
@@ -1069,12 +1174,12 @@ class PharmacyAgent:
                                      guard="output_filter", menu=conv.customer_facing)
                 last_bot = next((m["content"] for m in reversed(conv.messages[:turn])
                                  if m["role"] == "assistant" and m.get("content")), "")
-                if info_q and normalize(reply) == normalize(last_bot) and not fact_nudged:
+                if info_q and normalize(reply) and normalize(reply) in normalize(last_bot) and not fact_nudged:
                     fact_nudged = True                 # it repeated our last message instead of answering
                     hint += "\n(Answer the customer's question from get_product_details; do not repeat your last message.)"
                     self._audit(conv.conv_id, "parrot_nudge", {"model_text": reply[:200]})
                     continue
-                if info_q and (bad := self._ungrounded(conv, reply)):
+                if (info_q or branch_q) and (bad := self._ungrounded(conv, reply)):
                     # a product fact that no tool returned (the model "filled in" a pack size or
                     # storage we do not hold): ask once, then say the pharmacist confirms it
                     self._audit(conv.conv_id, "ungrounded_fact", {"what": bad, "model_text": reply[:300]})
@@ -1200,9 +1305,44 @@ class PharmacyAgent:
 
             # customer chats: search results are shown by the fixed order wizard (numbered list,
             # then quantity / pickup or delivery / confirm) - no second model call
-            if name == "update_delivery_address" and isinstance(result, dict) and result.get("saved") \
-                    and conv.profile is not None:
-                conv.profile["address"] = result["address"]
+            if name == "update_delivery_address" and isinstance(result, dict) and result.get("saved"):
+                if conv.profile is not None:
+                    conv.profile["address"] = result["address"]
+                # a fixed confirmation: the model once said "not saved, try again" after it WAS saved
+                return self._say(conv, (f"✅ حفظنا عنوان التوصيل الجديد: {result['address']}" if self._lang(conv) == "ar"
+                                        else f"✅ Your new delivery address is saved: {result['address']}"),
+                                 guard="address_saved")
+            if name == "track_order" and isinstance(result, dict) and re.search(r"(شكو|شكاو|complain)", normalize(raw)):
+                comp = [r for r in result.get("requests") or [] if r.get("about") == "complaint"]
+                if comp:                          # "did anyone answer my complaint?": its real state, fixed text
+                    r0, ar = comp[0], self._lang(conv) == "ar"
+                    st = {"received - no colleague has picked it up yet": ("وصلتنا شكواك ({ref}) وما استلمها أحد الزملاء بعد، وبيتواصلون معك قريباً.",
+                                                                          "We have your complaint ({ref}); no colleague has picked it up yet - they'll contact you soon."),
+                          "a colleague has taken it and is working on it now": ("أحد زملائنا استلم شكواك ({ref}) ويتابعها الحين.",
+                                                                                "A colleague has taken your complaint ({ref}) and is working on it now."),
+                          "resolved": ("شكواك ({ref}) تم حلها.", "Your complaint ({ref}) has been resolved.")}
+                    tx = st.get(r0["status"])
+                    if tx:
+                        text = (tx[0] if ar else tx[1]).format(ref=r0["ref"])
+                        if r0.get("resolution"):
+                            text += ("\n" + ("الحل: " if ar else "Resolution: ") + r0["resolution"])
+                        return self._say(conv, text, guard="complaint_status")
+            if name == "search_product" and isinstance(result, dict) and not result.get("candidates") \
+                    and re.search(r"\s(و|and|,|،)\s*\S", normalize(args.get("query") or "")):
+                # "زيرتيك 10 ملجم وكلاريتين 10 ملجم" searched as one: search each product
+                parts = [p.strip() for p in re.split(r"\s+و(?=\S)|\s+and\s+|[,،]", args["query"]) if len(p.strip()) >= 3]
+                merged = []
+                for part in parts[:3]:
+                    r = self.gw.search_product(query=part)
+                    merged += [c for c in (r.get("candidates") or [])[:2] if not c.get("is_scheduled")] \
+                        if isinstance(r, dict) else []
+                if merged:
+                    result = {"candidates": merged}
+                    conv.messages[-1]["content"] = json.dumps(self._compact(name, result), ensure_ascii=False)
+                    self._audit(conv.conv_id, "split_search", {"parts": parts})
+            if name == "search_product" and isinstance(result, dict) and result.get("symptom_request"):
+                self._audit(conv.conv_id, "symptom_referral", {"need": result["symptom_request"], "via": "search"})
+                return self._say(conv, SYMPTOM_REFERRAL, guard="symptom_referral")
             if name == "search_product" and conv.customer_facing and isinstance(result, dict) \
                     and "error" not in result and not info_q and service != "stock_alert":
                 # the model often shortens the query ("بنادول" for "بنادول اكسترا"): also search the

@@ -159,12 +159,25 @@ _INFO_TERMS = [
     "how many tablets in", "how many in a box", "pack size", "box size", "how many ml", "syrup or",
     "tablets or", "strength", "need a prescription", "needs a prescription", "without a prescription",
     "prescription needed", "active ingredient", "ingredients",
+    # price of a product already in the chat ("وش السعر؟") - from the record, never a guess
+    "وش السعر", "كم السعر", "ايش السعر", "شو السعر", "السعر كم", "بكم سعره", "كم سعره", "كم سعرها",
+    "what's the price", "what is the price", "how much is it", "how much are they", "price of",
 ]
 
 
 _INFO_RE = re.compile(r"(how many|كم)\s+\S+(\s+\S+)?\s+(are\s+)?(in|per|inside|في|فيه|بال|داخل)\s+"
                       r"(a|one|the|each|every|ال)?\s*(box|pack|packet|bottle|pen|علبه|العلبه|عبوه|الباكيت|كرتون|قلم)",
                       re.I)
+
+
+_BRANCH_Q = re.compile(r"(فرع|فروع|الفرع|الفروع|branch|branches|تفتحون|تقفلون|تسكرون|مفتوح|مفتوحين|دوام|الدوام|"
+                       r"ساعات العمل|opening hours|open(ing)? time|what time.{0,15}(open|close)|when do you (open|close)|"
+                       r"اوقات|وين مكانكم|وين موقعكم|عنوانكم|لوكيشن|location)", re.I)
+
+
+def branch_intent(text: str) -> bool:
+    """A question about our branches, where they are or when they open."""
+    return bool(_BRANCH_Q.search(normalize(text)))
 
 
 def product_info_intent(text: str) -> bool:
@@ -357,11 +370,11 @@ DOSE_ASK_PHOTO = {
           "the dose exactly as the doctor wrote it.",
 }
 DOSE_AS_WRITTEN = {
-    "ar": "📝 مكتوب في وصفتك:\n{lines}\nهذا كما كتبه الطبيب. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، "
-          "قل لي وأحوّل سؤالك مع طلبك {ref} للصيدلي.",
-    "en": "📝 Your prescription says:\n{lines}\nThat is exactly as the doctor wrote it. If something is wrong "
-          "or different from what the doctor told you, say so and I'll pass your question with order {ref} "
-          "to the pharmacist.",
+    "ar": "📝 مكتوب في وصفتك:\n{lines}\nهذا كما كتبه الطبيب، قرأته آلياً من الصورة - تأكد منه على ملصق الصيدلية "
+          "عند الاستلام. إذا فيه شيء غير صحيح أو مختلف عن كلام الطبيب، قل لي وأحوّل سؤالك مع طلبك {ref} للصيدلي.",
+    "en": "📝 Your prescription says:\n{lines}\nThat is as the doctor wrote it, read automatically from the "
+          "photo - check it against the pharmacy label when you collect it. If something is wrong or different "
+          "from what the doctor told you, say so and I'll pass your question with order {ref} to the pharmacist.",
 }
 DOSE_UNREADABLE = {
     "ar": "ما قدرت أقرأ الجرعة من الوصفة بوضوح، فحوّلت سؤالك مع طلبك {ref} والوصفة للصيدلي ويرد عليك قريباً.",
@@ -379,6 +392,46 @@ _DISPUTE = re.compile(r"(غلط|خطا|خطأ|مو صحيح|مش صحيح|موب
 
 def disputes_directions(text: str) -> bool:
     return bool(_DISPUTE.search(normalize(text)))
+
+
+# A symptom with no product named ("something for a sore throat"): choosing a medicine is a
+# licensed pharmacist's call, so no product list - the pharmacist in person, or the product's name.
+SYMPTOM_REFERRAL = (
+    "اختيار الدواء المناسب للأعراض يحتاج صيدلي مرخّص يسألك عن حالتك، فما أقدر أقترح لك منتج 🙏 "
+    "تقدر تزور أي فرع من فروعنا ويخدمك الصيدلي مباشرة، وإذا تعرف اسم المنتج اللي تبغاه اكتبه وأساعدك تطلبه. "
+    "— Choosing a medicine for symptoms needs a licensed pharmacist to ask about your condition, so I "
+    "can't suggest a product 🙏 A pharmacist at any of our branches can help you straight away - or, if "
+    "you know the product you want, type its name and I'll help you order it."
+)
+
+# ---- PDPL: explicit consent before a prescription (health data) is stored ---------------------
+CONSENT_ASK = {
+    "ar": "🔒 قبل ما نستلم وصفتك: نحتاج موافقتك على معالجة بياناتك الصحية (الوصفة والأدوية المكتوبة فيها) "
+          "لغرض صرف طلبك ومراجعة الصيدلي فقط، ولا نستخدمها للتسويق أبداً. تقدر تسحب موافقتك متى ما بغيت "
+          "بكتابة «اسحب موافقتي».{privacy}\nتوافق؟",
+    "en": "🔒 Before we receive your prescription: we need your consent to process your health data (the "
+          "prescription and the medicines on it) only to dispense your order and for the pharmacist's "
+          "review - never for marketing. You can withdraw it at any time by typing \"withdraw consent\"."
+          "{privacy}\nDo you agree?",
+}
+CONSENT_BUTTONS = {"ar": ("✅ أوافق", "❌ لا أوافق"), "en": ("✅ I agree", "❌ I don't agree")}
+CONSENT_DECLINED = {
+    "ar": "تمام، ما استلمنا الوصفة ولا حفظنا شيء منها. تقدر تجيبها للصيدلي في أي فرع مباشرة.",
+    "en": "OK - we haven't received or kept anything from the prescription. You can take it to the "
+          "pharmacist at any branch.",
+}
+CONSENT_WITHDRAWN = {
+    "ar": "تم تسجيل سحب موافقتك 🔒 ما راح نستقبل أو نعالج بيانات صحية جديدة لك، وأحد زملائنا يتواصل معك "
+          "بخصوص بياناتك المحفوظة.",
+    "en": "Your consent withdrawal is recorded 🔒 We won't receive or process new health data for you, and "
+          "a colleague will contact you about the data we hold.",
+}
+_WITHDRAW = re.compile(r"(اسحب موافقتي|سحب الموافقه|الغي موافقتي|احذف بياناتي|امسح بياناتي|حذف بياناتي|"
+                       r"withdraw (my )?consent|delete my data|remove my data|erase my data)", re.I)
+
+
+def withdraws_consent(text: str) -> bool:
+    return bool(_WITHDRAW.search(normalize(text)))
 
 
 NEEDS_CONTEXT = {

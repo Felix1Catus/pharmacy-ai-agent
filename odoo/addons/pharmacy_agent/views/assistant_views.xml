@@ -150,6 +150,24 @@
     </field>
   </record>
 
+  <!-- Contact: the customer's PDPL consent for health data -->
+  <record id="view_partner_form_pharmacy_pdpl" model="ir.ui.view">
+    <field name="name">res.partner.form.pharmacy.pdpl</field>
+    <field name="model">res.partner</field>
+    <field name="inherit_id" ref="base.view_partner_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//notebook" position="inside">
+        <page string="Privacy (PDPL)" name="pdpl">
+          <group>
+            <field name="pdpl_health_consent"/>
+            <field name="pdpl_consent_version"/>
+            <field name="pdpl_consent_withdrawn"/>
+          </group>
+        </page>
+      </xpath>
+    </field>
+  </record>
+
   <menuitem id="menu_pharmacy_handover" parent="menu_pharmacy_root" sequence="5"
             action="action_pharmacy_handover"/>
   <menuitem id="menu_pharmacy_stock_alert" parent="menu_pharmacy_root" sequence="30"

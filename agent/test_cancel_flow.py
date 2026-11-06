@@ -106,7 +106,8 @@ def test_another_customers_order_is_never_touched():
 def test_no_open_order():
     prof = _customer("0500003305")
     a, conv = _conv(prof)
-    assert "ما عندك طلب مفتوح" in a.respond(conv, "cancel my order")
+    assert "ما عندك طلب مفتوح" in a.respond(conv, "الغي طلبي")
+    assert "no open order" in a.respond(conv, "please cancel my order")    # English in, English out
 
 
 def test_confirmed_order_goes_to_a_colleague_with_the_order():

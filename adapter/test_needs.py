@@ -36,9 +36,10 @@ def test_no_need_in_product_and_other_messages(text):
     assert detect_need(text) is None
 
 
-def test_contract_enum_matches_needs_table():
+def test_model_is_not_offered_symptom_search():
+    # choosing a medicine for a symptom is the licensed pharmacist's call: no `need` for the model
     schema = json.loads((ROOT / "contract" / "schemas" / "search_product.json").read_text(encoding="utf-8"))
-    assert schema["parameters"]["properties"]["need"]["enum"] == list(NEEDS)
+    assert "need" not in schema["parameters"]["properties"]
     for key, n in NEEDS.items():
         assert n["terms"] and n["ar"] and n["en"], key
 
@@ -52,12 +53,24 @@ def _gw():
         return None
 
 
-@pytest.fixture(scope="module")
-def gw():
+@pytest.fixture()
+def gw(monkeypatch):
     g = _gw()
     if g is None:
         pytest.skip("Odoo or the SFDA catalogue is not available")
+    import gateway
+    monkeypatch.setattr(gateway, "SYMPTOM_SUGGESTIONS", True)   # the pharmacist-approved table, opt-in
     return g
+
+
+def test_symptoms_return_no_products_by_default():
+    g = _gw()
+    if g is None:
+        pytest.skip("Odoo or the SFDA catalogue is not available")
+    for kw in ({"need": "sore_throat"}, {"query": "سعال"}, {"query": "something for a headache"}):
+        r = g.search_product(**kw)
+        assert r["candidates"] == [] and r.get("symptom_request") and "pharmacist" in r["hint"], kw
+    assert g.search_product(query="بنادول")["candidates"]         # a named product is still found
 
 
 def test_need_lists_over_the_counter_products_only(gw):

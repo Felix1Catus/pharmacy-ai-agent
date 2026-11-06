@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import re
 
+import os
+
 from guards import normalize
 
 MENU_IDS = ["new_order", "cart", "track_order", "questions", "customer", "switch_lang"]
 
 TEXTS = {
     "ar": {
-        "greeting": "أهلاً وسهلاً بك في الصيدلية 👋\nكيف أقدر أخدمك اليوم؟ اختر من القائمة:",
+        "greeting": "أهلاً وسهلاً بك في الصيدلية 👋\n🤖 معك المساعد الآلي للصيدلية - للاستشارة الدوائية يخدمك صيدلي "
+                    "مرخّص في أي فرع.\nكيف أقدر أخدمك اليوم؟ اختر من القائمة:",
         "labels": {"new_order": "🛒 طلب جديد", "cart": "🧺 سلتي", "track_order": "📦 تتبع طلب",
                    "questions": "❓ أسئلة واستفسارات", "customer": "👤 عميل حالي / جديد",
                    "switch_lang": "🌐 English"},
@@ -40,7 +43,9 @@ TEXTS = {
         "currency": "ريال",
     },
     "en": {
-        "greeting": "Welcome to the pharmacy 👋\nHow can I help you today? Choose from the menu:",
+        "greeting": "Welcome to the pharmacy 👋\n🤖 You're chatting with the pharmacy's automated assistant - for "
+                    "advice about medicines, a licensed pharmacist at any branch can help.\nHow can I help you "
+                    "today? Choose from the menu:",
         "labels": {"new_order": "🛒 New order", "cart": "🧺 My cart", "track_order": "📦 Track order",
                    "questions": "❓ Questions / inquiries", "customer": "👤 Existing / new customer",
                    "switch_lang": "🌐 العربية"},
@@ -93,10 +98,31 @@ def menu_items(lang: str) -> list[dict]:
     return [{"id": i, "label": TEXTS[lang]["labels"][i]} for i in MENU_IDS]
 
 
+def store_identity(lang: str) -> str:
+    """The seller details the e-commerce law and the MOH online-pharmacy rules require on the
+    channel (name, commercial registration, MOH / SFDA licences, VAT, address, contact), from
+    .env (STORE_*). Missing values are left out - never invented."""
+    f = [("STORE_NAME", "", ""), ("STORE_CR", "السجل التجاري", "Commercial registration"),
+         ("STORE_MOH_LICENSE", "ترخيص وزارة الصحة", "MOH licence"),
+         ("STORE_SFDA_LICENSE", "ترخيص هيئة الغذاء والدواء", "SFDA licence"),
+         ("STORE_VAT", "الرقم الضريبي", "VAT no."), ("STORE_ADDRESS", "العنوان", "Address"),
+         ("STORE_PHONE", "التواصل", "Contact"), ("PRIVACY_URL", "سياسة الخصوصية", "Privacy policy")]
+    out = []
+    for key, ar, en in f:
+        v = os.environ.get(key, "").strip()
+        if v:
+            label = ar if lang == "ar" else en
+            out.append(f"{label}: {v}" if label else v)
+    return " · ".join(out)
+
+
 def menu_text(lang: str, head: str | None = None) -> str:
     t = TEXTS[lang]
     lines = [head or t["greeting"]]
     lines += [f"{n}. {t['labels'][i]}" for n, i in enumerate(MENU_IDS, 1)]
+    ident = store_identity(lang)
+    if ident and not head:
+        lines.append("ℹ️ " + ident)
     return "\n".join(lines)
 
 
