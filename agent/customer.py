@@ -149,7 +149,7 @@ class CustomerFlow:
         t, step, d = T[lang], f["step"], f["data"]
         n = normalize(raw)
         if step == "ask_phone":
-            if not normalize_phone(raw):
+            if not normalize_phone(raw, typed=True):
                 return self.a._say(conv, t["bad_phone"], guard="customer")
             return self._lookup(conv, raw, "")
         if step == "confirm_profile":
@@ -178,8 +178,8 @@ class CustomerFlow:
         if step == "ask_alt":
             if _pressed(raw, lang, "skip") or _SKIP_WORDS.search(n):
                 d["alt_phone"] = None
-            elif normalize_phone(raw):
-                d["alt_phone"] = normalize_phone(raw)
+            elif normalize_phone(raw, typed=True):
+                d["alt_phone"] = normalize_phone(raw, typed=True)
             else:
                 return self.a._say(conv, t["bad_phone"], guard="customer", buttons=_btn(lang, "skip"))
             f["step"] = "confirm_new"
@@ -209,7 +209,7 @@ class CustomerFlow:
         if prof:
             f["data"], f["step"] = dict(prof), "confirm_profile"
             return self._ask_confirm_profile(conv, prof, head)
-        f["data"], f["step"] = {"phone": normalize_phone(phone)}, "ask_name"
+        f["data"], f["step"] = {"phone": normalize_phone(phone, typed=True) or normalize_phone(phone)}, "ask_name"
         return self.a._say(conv, head + T[lang]["not_found"], guard="customer")
 
     def _ask_confirm_profile(self, conv, prof, head):

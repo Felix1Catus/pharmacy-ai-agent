@@ -69,23 +69,34 @@ _CITIES = {"الرياض": "Riyadh", "جده": "Jeddah", "جدة": "Jeddah", "ا
            "mecca": "Makkah", "madinah": "Madinah", "medina": "Madinah", "khobar": "Khobar"}
 
 
-def normalize_phone(raw) -> str | None:
-    """Phone number -> international digits without '+', the WhatsApp wa_id format.
-    Saudi mobiles in any local form (05XXXXXXXX, 5XXXXXXXX, +966..., 00966...) -> 9665XXXXXXXX."""
+def normalize_phone(raw, typed: bool = False) -> str | None:
+    """Phone number -> international digits without '+', the WhatsApp wa_id format, or None if it
+    is not a real number. Saudi mobiles in any local form (05XXXXXXXX, 5XXXXXXXX, +966...,
+    00966...) -> 9665XXXXXXXX; Egyptian mobiles 01XXXXXXXXX -> 201XXXXXXXXX.
+    typed=True (a number the customer typed): bare digits must be a Saudi or Egyptian mobile;
+    other countries need their + / 00 prefix. A wa_id from WhatsApp is bare international digits."""
     if not raw:
         return None
-    d = "".join(ch for ch in str(raw).translate(_PHONE_DIGITS) if ch.isdigit())
+    s = str(raw).translate(_PHONE_DIGITS).strip()
+    intl = s.startswith("+") or s.lstrip("+").startswith("00")
+    d = "".join(ch for ch in s if ch.isdigit())
     if d.startswith("00"):
         d = d[2:]
-    if len(d) == 10 and d.startswith("05"):
-        d = "966" + d[1:]
-    elif len(d) == 9 and d.startswith("5"):
-        d = "966" + d
-    elif d.startswith("9660"):
-        d = "966" + d[4:]
-    elif len(d) == 11 and d.startswith("01"):     # Egyptian mobile 01XXXXXXXXX -> 201XXXXXXXXX
-        d = "20" + d[1:]
-    return d if 9 <= len(d) <= 15 else None
+    if re.fullmatch(r"05\d{8}", d):
+        return "966" + d[1:]
+    if re.fullmatch(r"5\d{8}", d) and not intl:
+        return "966" + d
+    if re.fullmatch(r"9660?5\d{8}", d):
+        return "966" + d[-9:]
+    if re.fullmatch(r"01[0125]\d{8}", d) and not intl:     # Egyptian mobile
+        return "20" + d[1:]
+    if re.fullmatch(r"201[0125]\d{8}", d):
+        return d
+    if d.startswith(("966", "20")) or d.startswith("0"):
+        return None                                        # a Saudi / Egyptian / local number of the wrong length
+    if typed and not intl:
+        return None                                        # bare digits that are no mobile we know
+    return d if 8 <= len(d) <= 15 else None
 
 
 def guess_city(address: str) -> str | None:

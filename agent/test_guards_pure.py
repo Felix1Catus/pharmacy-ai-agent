@@ -187,3 +187,22 @@ def test_is_greeting(text):
 @pytest.mark.parametrize("text", ["هلا عندكم بنادول؟", "السلام عليكم ابي اطلب", "4", "hi, where is my order", ""])
 def test_is_greeting_needs_only_greeting_words(text):
     assert not is_greeting(text)
+
+
+def test_typed_phone_numbers_must_be_real():
+    from gateway import normalize_phone as n
+    assert n("010302351100", typed=True) is None            # one digit too many (live chat 2026-11-06)
+    assert n("05012345678", typed=True) is None and n("12345", typed=True) is None
+    assert n("447700900123", typed=True) is None             # a foreign number needs its + / 00
+    assert n("+447700900123", typed=True) == "447700900123"
+    for ok in ("0501234567", "501234567", "+966 50 123 4567", "00966501234567", "٠٥٠١٢٣٤٥٦٧"):
+        assert n(ok, typed=True) == "966501234567", ok
+    assert n("01030235110", typed=True) == "201030235110"
+    assert n("447700900123") == "447700900123"               # a WhatsApp wa_id: bare international
+
+
+def test_assistant_never_promises_to_approve_a_prescription():
+    from agent import _strip_promises
+    out = _strip_promises("أرسل صورة وصفتك، وسأقوم بتحديثها واعتمادها.")
+    assert "اعتماد" not in out and "الصيدلي يراجع" in out
+    assert "pharmacist reviews" in _strip_promises("Send it. I will approve your prescription.")

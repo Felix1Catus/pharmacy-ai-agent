@@ -242,14 +242,27 @@ _ASKED_CONFIRM = re.compile(r"(تاكيد|تاكد|توكد|تؤكد|اكد|مو
 # promises the pharmacy cannot keep (no tracking links / SMS exist): such sentences are removed
 _PROMISE = re.compile(r"(رابط\s*(ال)?تتبع|رابط\s*للتتبع|رسال[ةه]\s*نصي[ةه]|SMS|tracking\s*link|"
                       r"track(ing)?\s*(url|number)|link to track|will (text|sms|email) you)", re.I)
+# only the pharmacist approves a prescription: a sentence promising it is replaced by what happens
+_APPROVAL = re.compile(r"(سا|س|راح|بـ?|رح)\s*(اقوم|قوم)?\s*(ب)?(تحديث|اعتماد|اعتمد|قبول|الموافقه علي)(ها|ه)?|"
+                       r"اعتماد(ها|ه)|(i will|i'll|we will|we'll) (approve|verify|accept|validate) (it|your|the)|"
+                       r"(approve|verify|validate) your prescription", re.I)
+_RX_REVIEW = {"ar": "الصيدلي يراجع الوصفة ويعتمدها، ونبلغك بالنتيجة هنا.",
+              "en": "The pharmacist reviews and approves the prescription, and we'll tell you the result here."}
 
 
 def _strip_promises(text: str) -> str:
-    if not _PROMISE.search(text):
+    if not _PROMISE.search(text) and not _APPROVAL.search(text):
         return text
     out = []
     for line in text.split("\n"):
-        kept = [s for s in re.split(r"(?<=[.!؟?])\s+", line) if not _PROMISE.search(s)]
+        kept = []
+        for sent in re.split(r"(?<=[.!؟?])\s+", line):
+            if _APPROVAL.search(sent):
+                sent = _RX_REVIEW["ar" if re.search(r"[\u0600-\u06FF]", sent) else "en"]
+                if sent in kept:
+                    continue
+            if not _PROMISE.search(sent):
+                kept.append(sent)
         if kept or not line.strip():
             out.append(" ".join(kept))
     return "\n".join(out).strip()
