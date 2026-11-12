@@ -88,7 +88,11 @@ from odoo_client import OdooClient
 c = OdooClient(); c.write("res.users", [c.uid], {"password": sys.argv[1]})
 PY
   sed -i "s|^ODOO_PASSWORD=.*|ODOO_PASSWORD=$NEWPW|" .env
+  # the chat services get their own least-privilege Odoo login; the administrator's stays in
+  # .env as ODOO_ADMIN_USER / ODOO_ADMIN_PASSWORD for set-up scripts and tests
+  .venv/bin/python scripts/create_service_user.py --write-env
 fi
+chmod 600 .env
 
 log "   WhatsApp-style test chat page (systemd service on :8090, password in .env)"
 grep -q '^WEBCHAT_PASSWORD=..*' .env || { sed -i '/^WEBCHAT_PASSWORD=/d;/^WEBCHAT_USER=/d' .env
@@ -130,6 +134,9 @@ fi
 
 log "DONE. Odoo: http://$(curl -s https://api.ipify.org 2>/dev/null || echo localhost):8069 (db pharmacy, user admin,
    password = ODOO_PASSWORD in .env). Test chat: http://<server>:8090 (user/password =
-   WEBCHAT_USER/WEBCHAT_PASSWORD in .env). Both listen on all interfaces: open them with
-   'ufw allow 8069/tcp' / 'ufw allow 8090/tcp' only if you want them public. Chat with the agent: .venv/bin/python agent/chat.py
+   WEBCHAT_USER/WEBCHAT_PASSWORD in .env). Both listen on all interfaces. NOTE: Odoo's port is
+   published by Docker, which bypasses ufw - :8069 is reachable from outside whatever ufw says.
+   To keep Odoo private: cp deploy/odoo-compose.override.yml odoo/docker-compose.override.yml &&
+   (cd odoo && docker compose up -d), then put HTTPS in front (deploy/Caddyfile.template).
+   Chat with the agent: .venv/bin/python agent/chat.py
    Next steps / status: docs/RESTORE.md and the TO-DO list in docs/progress.md"

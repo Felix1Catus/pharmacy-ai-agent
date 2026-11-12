@@ -37,7 +37,7 @@ _MEDICAL_TERMS = [
     "المناسب لي", "الدواء المناسب", "العلاج المناسب", "وش اعطي", "ايش اعطي", "وش الدوا",
     "ايش الدوا", "اخد ايه", "اخد ايش", "اخذ ايش", "وش اخذ", "ايش اخذ", "ايه اخد", "شو اخذ",
     "تنصحني", "تنصح", "انصح", "امن مع", "ينفع اخذ", "ينفع اشرب", "اقدر اخذ", "اخذها مع",
-    "مع بعض", "اعراض", "تشخيص", "حامل اخذ", "للحامل",
+    "اعراض", "تشخيص", "حامل اخذ",
     # english
     "dose", "dosage", "how often", "is it safe", "can i take", "should i take",
     "safe to take", "interact", "interaction", "side effect", "symptom", "diagnos",
@@ -56,9 +56,21 @@ _EN_DOSE = (r"(how many|how much).{0,40}(take|give|per day|a day|daily|every|tim
             r"(per day|a day|daily|every \d+ hours?)\b.{0,20}\?|how often|max(imum)? (dose|per day)")
 
 
+# "X و Y مع بعض" is an order for two things; "اخذهم مع بعض؟" / "ينفع مع بعض" asks about combining
+_TAKE = r"(اخذ|اخد|اخذه|اخذها|اخذهم|ناخذ|ياخذ|تاخذ|باخذ|باخد|اشرب|استخدم|استعمل|ينفع|يصلح|يضر|امن|خطر|يتعارض|تعارض)"
+_TOGETHER_Q = re.compile(rf"{_TAKE}\w*.{{0,40}}مع بعض|مع بعض.{{0,40}}{_TAKE}")
+# "فيتامينات للحامل" is a product; "ينفع للحامل؟" / "امن للحامل" / "is it safe in pregnancy" is advice
+_PREGNANCY_Q = re.compile(
+    r"(ينفع|يصلح|يناسب|مناسب|امن|امنه|يضر|مضر|خطر|ممنوع|مسموح|تقدر|اقدر|عادي)\w*.{0,30}"
+    r"(للحامل|الحامل|حامل|للمرضع|المرضع|مرضع|الحمل|الرضاعه)|"
+    r"(للحامل|الحامل|حامل|للمرضع|المرضع|مرضع).{0,30}(تاخذ|تاخد|ينفع|يصلح|يناسب|امن|يضر|خطر|عادي)|"
+    r"(safe|ok|okay|allowed|harm\w*|danger\w*|risk\w*).{0,30}(pregnan\w*|breast\s*feed\w*|nursing)|"
+    r"(pregnan\w*|breast\s*feed\w*).{0,30}(safe|take|use|ok|okay|allowed|harm\w*)")
+
+
 def medical_advice_intent(text: str) -> bool:
     n = normalize(text)
-    if re.search(_EN_DOSE, n):
+    if re.search(_EN_DOSE, n) or _TOGETHER_Q.search(n) or _PREGNANCY_Q.search(n):
         return True
     if re.search(rf"كم\s.{{0,25}}{_DOSE_UNIT}", n) and re.search(_DOSE_CTX, n) \
             and not re.search(_PACK, n):
@@ -224,9 +236,20 @@ _AFFIRM = ["نعم", "ايوه", "ايوا", "ايه", "اكيد", "اكد", "ا
            "please do", "place it", "do it", "correct", "right"]
 
 
+# A "yes" that is negated ("لا", "ما ابي", "مو الحين") or qualified ("تمام بس غير الكمية",
+# "ok but make it 3", "طيب لحظة") is NOT a confirmation: an order or a cancellation is only
+# placed on a plain yes. Erring this way costs one extra question; the other way places an order
+# the customer was still changing.
+_NOT_YES = re.compile(
+    r"(?<!\w)(لا|ما|مو|مش|مب|موب|ليس|بلاش|الغ|الغي|الغاء|كنسل|بس|لكن|الا|غير|غيري|غيرها|غيره|عدل|عدلي|"
+    r"بدل|بدله|بدلها|زود|نقص|شيل|احذف|لحظه|دقيقه|انتظر|استني|استنى|اصبر|بعدين|لاحقا|مو الحين|"
+    r"no|not|nope|don'?t|do not|never|cancel|stop|wait|hold on|later|but|except|instead|"
+    r"change|remove|without|actually)(?!\w)")
+
+
 def is_affirmation(text: str) -> bool:
     n = normalize(text)
-    if re.search(r"(?<!\w)(لا|no|not|cancel|الغ|مو|مش)(?!\w)", n):
+    if _NOT_YES.search(n) or "?" in n or "؟" in n:
         return False
     return any(re.search(rf"(?<!\w){re.escape(a)}(?!\w)", n) for a in _AFFIRM)
 
@@ -235,8 +258,31 @@ def is_affirmation(text: str) -> bool:
 class ScheduledDenylist:
     """Terms (name/brand/ingredient, normalized) for products flagged is_scheduled in Odoo."""
 
+    # A term this long is specific enough to match inside a longer word ("ترامادولات",
+    # "tramadol50"); a shorter one ("xan", a 4-letter brand) must stand as a word of its own,
+    # optionally behind an Arabic prefix - otherwise it blocks unrelated messages that merely
+    # contain those letters.
+    SUBSTRING_MIN = 6
+    _LETTER = "a-z\u0621-\u064a"
+    # words that are never a medicine's name on their own (first tokens of some product names)
+    _GENERIC = {"new", "the", "plus", "extra", "forte", "max", "pro", "tab", "tabs", "tablet", "tablets",
+                "cap", "caps", "capsule", "capsules", "syrup", "cream", "gel", "drops", "spray",
+                "solution", "injection", "oral", "adult", "kids", "baby", "junior", "حبوب", "شراب",
+                "كريم", "قطره", "بخاخ", "كبسول", "اقراص", "محلول", "حقن", "جل", "دواء", "علاج"}
+
     def __init__(self, terms: list[str]):
-        self.terms = [normalize(t) for t in terms if t and len(normalize(t)) >= 3]
+        seen, self.terms = set(), []
+        for raw in terms:
+            t = normalize(raw or "")
+            if len(t) < 3 or t in self._GENERIC or t.isdigit() or t in seen:
+                continue
+            seen.add(t)
+            self.terms.append(t)
+        short = sorted((t for t in self.terms if len(t) < self.SUBSTRING_MIN), key=len, reverse=True)
+        self._long = [t for t in self.terms if len(t) >= self.SUBSTRING_MIN]
+        self._short_re = re.compile(
+            rf"(?<![{self._LETTER}])(?:وال|بال|لل|ال|و|ب|ل|ف)?(" + "|".join(map(re.escape, short))
+            + rf")(?![{self._LETTER}])") if short else None
 
     @classmethod
     def from_odoo(cls, client) -> "ScheduledDenylist":
@@ -261,9 +307,13 @@ class ScheduledDenylist:
 
     def match(self, text: str) -> str | None:
         n = normalize(text)
-        for t in self.terms:
-            if t and t in n:
+        for t in self._long:
+            if t in n:
                 return t
+        if self._short_re:
+            m = self._short_re.search(n)
+            if m:
+                return m.group(1)
         return None
 
 

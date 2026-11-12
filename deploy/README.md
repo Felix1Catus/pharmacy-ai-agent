@@ -23,8 +23,10 @@ cd /home/pharmacy-ai-agent && git checkout fix/agent-abuse-and-order-status   # 
 sudo bash deploy/bootstrap_gpu.sh            # PUBLIC=0 to skip public HTTPS and firewall changes
 ```
 Then:
-1. **Change the Odoo admin password** (Settings -> Users -> admin) and put the new one in `.env` as
-   `ODOO_PASSWORD`, then `systemctl restart pharmacy-webchat`. The webchat password is generated into `.env`.
+1. Nothing to change by hand for Odoo: on a fresh database the bootstrap rotates the administrator's
+   password (`ODOO_ADMIN_PASSWORD` in `.env`) and creates the chat services' own least-privilege login
+   (`ODOO_USER=pharmacy-assistant`). The webchat password is generated into `.env` too. Give each
+   pharmacist the group *Pharmacy: pharmacist (prescription review)*.
 2. Check: `curl -s 127.0.0.1:8080/health`, open `https://chat.<ip-with-dashes>.sslip.io`, send «عندكم بنادول؟».
 3. Run the full agent eval: `.venv/bin/python evals/runners/agent_eval.py` (2026-11-04 on 2x A16:
    90% acceptable, 55% exact, 0 wrong actions, 100% medical refusal / restricted safe).
@@ -34,6 +36,9 @@ The bootstrap seeds sample data and imports the SFDA file. To carry the live Odo
 `pg_dump` / `pg_restore` steps in `docs/RESTORE.md` §4, then set `ODOO_PASSWORD` to the old admin password.
 
 ## Not automated
-- WhatsApp Cloud API credentials (`WHATSAPP_*` in `.env`) and the webhook service.
+- WhatsApp: the service `pharmacy-whatsapp` and the `/webhook` proxy route are installed but not
+  started. Add the `WHATSAPP_*` values to `.env` (incl. the approved template name), then
+  `systemctl enable --now pharmacy-whatsapp` (`docs/operator-guide.md` §7).
+- An Odoo on another server instead of the local one: `docs/odoo-connection.md`.
 - The distillation teacher's Claude Code login (`distill/README.md`).
 - Fine-tuned models: see `train/README.md` (the dataset is in `distill/data/`; `train/pipeline_v2.sh` runs labels -> train -> eval unattended).

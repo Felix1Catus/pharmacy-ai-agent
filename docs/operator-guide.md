@@ -295,19 +295,54 @@ Full flow: `docs/customer-flow.md`.
   - *Delivery:* review and confirm (approve); it then goes to the Delivery Dispatcher (future module).
 - **Contacts:** customers registered by the assistant have *Registered via: WhatsApp assistant*,
   their WhatsApp number, phone, alternative phone (mobile) and address. Edit them like any contact;
-  the assistant uses the WhatsApp number / phone / mobile to recognise them.
+  the assistant recognises a customer by the WhatsApp number or the main phone. The alternative
+  phone is NOT used to recognise anyone: the customer types it themself and nobody verifies it.
 - **Prescription review** (Pharmacy → Prescription review): quotations with prescription-only
   medicines wait here (*Pending approval*). Open one → tab *Prescription review* → check the
   image and OCR pre-check → **✅ Approve prescription**, or write the reason in *Review note* and
   **❌ Reject prescription**. The customer is messaged automatically (approved → confirm & pay
   with the payment link; rejected → the reason). *Awaiting prescription* = the customer has not
-  sent the photo yet.
+  sent the photo yet. Only users in the group **Pharmacy: pharmacist (prescription review)** see
+  prescriptions and these buttons; Odoo refuses to confirm a quotation whose prescription is
+  awaiting, pending or rejected, whoever presses Confirm.
+- **Back-in-stock requests** (Pharmacy → Back-in-stock requests): when the product is available
+  again the customer gets one message and the request turns *Customer notified*.
 
 ## 7. WhatsApp channel (Meta Cloud API)
-`channels/whatsapp/webhook.py`. Fill `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
-`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` in `.env`, run
-`.venv/bin/uvicorn --app-dir channels/whatsapp webhook:app --host 127.0.0.1 --port 8091` behind an
-HTTPS reverse proxy, and register `https://<domain>/webhook` (+ the verify token) in the Meta app.
-Without the access token / phone id it is a **dry run**: replies go to
-`results/whatsapp_outbox.jsonl` instead of WhatsApp. Health: `GET /health`.
-Tests: `.venv/bin/python -m pytest channels/whatsapp/ -q`.
+`channels/whatsapp/webhook.py`, service `pharmacy-whatsapp` (`deploy/systemd/`, 127.0.0.1:8091).
+Go live:
+1. Fill `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`,
+   `WHATSAPP_PHONE_NUMBER_ID` in `.env`.
+2. In Meta's WhatsApp Manager create a **utility template without variables**, e.g. *"لديك تحديث
+   بخصوص طلبك من الصيدلية. رد على هذه الرسالة لعرضه."*, wait for approval, and set
+   `WHATSAPP_TEMPLATE_NOTIFY=<its name>` / `WHATSAPP_TEMPLATE_LANG=ar`.
+3. `systemctl enable --now pharmacy-whatsapp`; the HTTPS proxy forwards only `/webhook` to it
+   (`deploy/Caddyfile.template`). Register `https://<domain>/webhook` + the verify token in the
+   Meta app and subscribe to `messages`.
+
+How it behaves:
+- **Saved conversations**: every chat is saved after each message
+  (`results/whatsapp_sessions/`, private files), so a restart or deploy loses nothing. A
+  prescription photo that was waiting for the consent answer is the one exception (health data is
+  never written to these files): the customer is asked to send it again.
+- **Never silent**: if Odoo or the model cannot be reached the customer gets "the system is busy,
+  try again in a minute"; the error is in `journalctl -u pharmacy-whatsapp`.
+- **Messages the pharmacy starts** (prescription approved / rejected, back in stock) are free text
+  only within 24 h of the customer's last message - Meta's rule. Later than that the template of
+  step 2 is sent once a day and the real message follows as soon as the customer replies. A
+  message is marked as delivered in Odoo only when Meta accepted it; otherwise it is retried.
+  Without a template the log says which customer needs a phone call.
+- Without the access token / phone id it is a **dry run**: replies go to
+  `results/whatsapp_outbox.jsonl` instead of WhatsApp. Health: `GET /health`.
+
+Tests: `.venv/bin/python -m pytest channels/whatsapp tests -q`.
+
+## 8. Logs and retention
+- Service logs (errors with tracebacks): `journalctl -u pharmacy-whatsapp -u pharmacy-webchat`;
+  `LOG_LEVEL=DEBUG` in `.env` for more.
+- `results/audit.jsonl` records every turn (customer text, tool calls, replies). Prescription
+  contents (medicines, directions, invoice number, OCR text) are **not** written there - they
+  live in Odoo, behind the pharmacist group.
+- `pharmacy-prune-logs.timer` runs `scripts/prune_logs.py` daily: audit log, handover log,
+  WhatsApp outbox, saved chats and voice files older than `LOG_RETENTION_DAYS` (90) are deleted.
+  All of these files are created readable by the service user only.

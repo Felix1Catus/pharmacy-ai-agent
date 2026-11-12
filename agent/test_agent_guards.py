@@ -6,19 +6,18 @@ Run:  pytest agent/test_agent_guards.py -q
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"), str(ROOT / "odoo")]
 
 try:
     from agent import Conversation, PharmacyAgent
     from gateway import Gateway
     from guards import SCHEDULED_REFUSAL
     GW = Gateway()
+    GW.c.search("res.partner", [], limit=1)       # the connection is lazy: make sure Odoo answers
 except Exception:                     # Odoo down
     GW = None
 pytestmark = pytest.mark.skipif(GW is None, reason="Odoo not reachable")

@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "adapter"))
-sys.path.insert(0, str(ROOT / "odoo" / "addons" / "pharmacy_agent" / "models"))
+# the Odoo module's pure parser (not on the shared test path: that folder also has a prescription.py)
+sys.path.append(str(ROOT / "odoo" / "addons" / "pharmacy_agent" / "models"))
 
 from storage_parse import manufacturer_country, parse_storage, shelf_life_months  # noqa: E402
 
@@ -68,7 +68,10 @@ def cust(gw):
 
 
 def _pid(gw, name):
-    return gw.c.search("product.product", [["name", "=", name]], limit=1)[0]
+    ids = gw.c.search("product.product", [["name", "=", name]], limit=1)
+    if not ids:
+        pytest.skip(f"{name} is not in this catalogue (SFDA import needed)")
+    return ids[0]
 
 
 @live
@@ -104,6 +107,8 @@ def test_dispensing_class_mapping(gw):
 
 @live
 def test_branches_by_city(gw):
+    if not any(b.get("city") for b in gw.branches()):
+        pytest.skip("branch cities are not filled in on this Odoo")
     r = gw.list_branches("جدة")
     assert [b["city"] for b in r["branches"]] == ["Jeddah"] and r["branches"][0]["hours"] == "24/7"
     assert "note" in gw.list_branches("tabuk") and "loc_id" not in gw.list_branches()["branches"][0]

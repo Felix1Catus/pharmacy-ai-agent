@@ -1,5 +1,9 @@
 # Project status — Pharmacy AI Agent (as of 2026-10-21)
 
+> **This page is a snapshot of 2026-10-21** (CPU server, Qwen3-4B). For the current state - the
+> GPU stack with Qwen3-8B, the model's tool list, the hardening round of 2026-11-12 and the open
+> items - read [HANDOVER.md](HANDOVER.md). Results and history below are kept for reference.
+
 Repo: https://github.com/Felix1Catus/pharmacy-ai-agent (private) · server: Vultr 155.138.193.148
 (4 vCPU / 16 GB RAM, Ubuntu 24.04, **no GPU**; the earlier 32-vCPU server was 155.138.207.131).
 Rebuild elsewhere: `docs/RESTORE.md`. Customer / ordering flow: `docs/customer-flow.md`.

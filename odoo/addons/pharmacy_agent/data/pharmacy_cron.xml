@@ -1,0 +1,12 @@
+<odoo noupdate="1">
+  <!-- holds placed through the assistant are released when their time is up -->
+  <record id="ir_cron_expire_holds" model="ir.cron">
+    <field name="name">Pharmacy: release expired holds</field>
+    <field name="model_id" ref="sale.model_sale_order"/>
+    <field name="state">code</field>
+    <field name="code">model._cron_expire_holds()</field>
+    <field name="interval_number">15</field>
+    <field name="interval_type">minutes</field>
+    <field name="active" eval="True"/>
+  </record>
+</odoo>

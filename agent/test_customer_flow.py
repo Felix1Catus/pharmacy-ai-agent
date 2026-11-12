@@ -6,14 +6,12 @@ Run:  pytest agent/test_customer_flow.py -q
 """
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"), str(ROOT / "odoo")]
 
 try:
     from agent import Conversation, PharmacyAgent
@@ -274,7 +272,11 @@ def test_conversation_survives_save_and_reload():
     import json
     back = Conversation.from_dict(json.loads(json.dumps(conv.to_dict())))
     assert back.customer_id == 123 and back.customer_name == "ZZ Test Saved"
-    assert back.flow["pending"]["image"] == b"\x89PNG" and back.awaiting_confirm_order == 77
+    # a waiting prescription photo is health data: it stays in memory and is never written to
+    # the session file (after a restart the customer is asked to send it again)
+    assert "PNG" not in json.dumps(conv.to_dict()) and conv.flow["pending"]["image"] == b"\x89PNG"
+    assert back.flow["pending"]["image"] is None and back.flow["pending"]["image_lost"]
+    assert back.awaiting_confirm_order == 77
     assert back.messages == conv.messages and back.wa_phone == "966500000001"
 
 

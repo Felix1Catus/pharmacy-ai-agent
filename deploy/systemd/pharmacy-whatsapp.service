@@ -1,0 +1,17 @@
+[Unit]
+Description=Pharmacy agent - WhatsApp Cloud API webhook (channels/whatsapp)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=@REPO@
+Environment=LD_LIBRARY_PATH=@REPO@/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:@REPO@/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:@REPO@/.venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib
+# localhost only: Meta reaches it through the HTTPS reverse proxy (deploy/Caddyfile.template, /webhook)
+ExecStart=@REPO@/.venv/bin/uvicorn --app-dir channels/whatsapp webhook:app --host 127.0.0.1 --port 8091
+Restart=on-failure
+RestartSec=5
+# customers' chats are saved under results/: private to this service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

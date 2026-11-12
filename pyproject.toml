@@ -1,0 +1,23 @@
+[project]
+name = "pharmacy-ai-agent"
+version = "0.2.0"
+description = "WhatsApp ordering assistant for a pharmacy, on Odoo 18"
+requires-python = ">=3.12"
+
+# The code is a set of top-level modules in agent/, adapter/, odoo/ and channels/*; the services
+# are started with `uvicorn --app-dir ...` and the scripts add those folders to sys.path. Tests
+# get the same folders from here, so a test file needs no path set-up of its own.
+[tool.pytest.ini_options]
+pythonpath = [".", "agent", "adapter", "odoo", "channels/webchat", "channels/whatsapp", "scripts", "evals/datasets"]
+testpaths = ["agent", "adapter", "channels", "tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = ["finetune", "train", "distill", "data_sources", "results", "odoo/addons"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]          # syntax errors, undefined names, unused imports/variables
+ignore = ["E402"]             # imports follow the sys.path set-up in entry-point modules

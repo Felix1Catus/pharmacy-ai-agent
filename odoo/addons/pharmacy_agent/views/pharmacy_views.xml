@@ -60,5 +60,6 @@
 
   <menuitem id="menu_pharmacy_root" name="Pharmacy"/>
   <menuitem id="menu_pharmacy_prescription" parent="menu_pharmacy_root"
-            action="action_pharmacy_prescription"/>
+            action="action_pharmacy_prescription"
+            groups="pharmacy_agent.group_pharmacy_pharmacist"/>
 </odoo>

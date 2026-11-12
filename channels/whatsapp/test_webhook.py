@@ -10,15 +10,12 @@ import hashlib
 import hmac
 import json
 import os
-import sys
 import time
-from pathlib import Path
 
 import pytest
 
 os.environ.update({"WHATSAPP_VERIFY_TOKEN": "test-verify", "WHATSAPP_APP_SECRET": "test-secret",
                    "WHATSAPP_ACCESS_TOKEN": "", "WHATSAPP_PHONE_NUMBER_ID": ""})
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 try:
     from fastapi.testclient import TestClient
@@ -69,7 +66,7 @@ def test_known_number_greeted_by_name_with_menu_list():
     assert out["type"] == "interactive" and out["interactive"]["type"] == "list"
     assert prof["name"] in out["interactive"]["body"]["text"]
     titles = [r["title"] for r in out["interactive"]["action"]["sections"][0]["rows"]]
-    assert "👤 عميل حالي / جديد" in titles and len(titles) == 5
+    assert "👤 عميل حالي / جديد" in titles and "🧺 سلتي" in titles and len(titles) == 6
 
 
 def test_unknown_number_registers_through_buttons():

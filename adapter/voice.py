@@ -45,7 +45,7 @@ _DIGIT_WORDS = {
     # frequent Whisper mishearings of Gulf digits (only ever converted inside a run of digits)
     "وافد": "1", "وحد": "1", "صف": "0", "سفر": "0", "سفى": "0", "زفر": "0", "اثنن": "2",
     "ثماني": "8", "ثمانى": "8", "تماني": "8",
-    "تسع": "9", "ستّة": "6",
+    "ستّة": "6",
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
     "seven": "7", "eight": "8", "nine": "9", "oh": "0",
 }

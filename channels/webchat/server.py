@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 import os
 import secrets
 import sys
@@ -36,6 +37,11 @@ load_env()
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway, normalize_phone  # noqa: E402
 from llm import LLMClient  # noqa: E402
+from private_files import private_dir, write_private  # noqa: E402
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
+                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("pharmacy.webchat")
 
 USER = os.environ.get("WEBCHAT_USER", "pharmacy")
 PASSWORD = os.environ.get("WEBCHAT_PASSWORD", "")
@@ -50,6 +56,13 @@ security = HTTPBasic()
 gw = Gateway()
 _agents: dict[str, PharmacyAgent] = {}
 _sessions: dict[str, dict] = {}
+_session_locks: dict[str, threading.Lock] = {}     # one message at a time per chat
+_locks_guard = threading.Lock()
+
+
+def _session_lock(sid: str | None) -> threading.Lock:
+    with _locks_guard:
+        return _session_locks.setdefault(sid or "", threading.Lock())
 # load the model in the background at startup so the first message doesn't pay ~90 s
 threading.Thread(target=lambda: LLMClient(model=DEFAULT_MODEL).warm_up(), daemon=True).start()
 
@@ -59,7 +72,7 @@ def _warm_asr():
         from voice import transcriber
         transcriber().warm_up()           # speech-to-text model for voice notes
     except Exception:                     # faster-whisper missing: voice notes report an error
-        pass
+        log.warning("speech-to-text not warmed up (voice notes may be unavailable)", exc_info=True)
 
 
 threading.Thread(target=_warm_asr, daemon=True).start()
@@ -71,7 +84,7 @@ def _warm_tts():
         for _lg in ("ar", "en"):
             tts.prewarm(_lg)               # pre-voice fixed prompts so read-back is instant
     except Exception:
-        pass
+        log.warning("text-to-speech not warmed up (spoken replies may be unavailable)", exc_info=True)
 
 
 threading.Thread(target=_warm_tts, daemon=True).start()
@@ -170,11 +183,9 @@ def _save(sid: str) -> None:
     s = _sessions.get(sid)
     if not s:
         return
-    SESS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = SESS_DIR / f"{_safe(sid)}.tmp"
-    tmp.write_text(json.dumps({"model": s["model"], "conv": s["conv"].to_dict()},
-                              ensure_ascii=False), encoding="utf-8")
-    tmp.replace(SESS_DIR / f"{_safe(sid)}.json")
+    private_dir(SESS_DIR)                    # customers' messages: readable by the service only
+    write_private(SESS_DIR / f"{_safe(sid)}.json",
+                  json.dumps({"model": s["model"], "conv": s["conv"].to_dict()}, ensure_ascii=False))
 
 
 def _load(sid: str) -> dict | None:
@@ -185,6 +196,7 @@ def _load(sid: str) -> dict | None:
         d = json.loads(f.read_text(encoding="utf-8"))
         return {"model": d["model"], "conv": Conversation.from_dict(d["conv"])}
     except Exception:                                    # corrupt/old file: start a new chat
+        log.warning("saved chat %s could not be read; starting a new one", _safe(sid), exc_info=True)
         return None
 
 
@@ -234,6 +246,13 @@ def chat(m: ChatIn):
     if not text and not image and not audio:
         raise HTTPException(400, "empty message")
     model = m.model or DEFAULT_MODEL
+    # two requests for the same chat (a double tap, a slow reply) must not interleave: the
+    # conversation state is changed step by step
+    with _session_lock(m.session_id):
+        return _chat(m, model, text, image, audio)
+
+
+def _chat(m: ChatIn, model: str, text: str, image, audio):
     sid, conv = _session(m.session_id, model)
     before = len(conv.messages)
     t0 = time.time()
@@ -254,7 +273,7 @@ def chat(m: ChatIn):
         tools.insert(0, {"name": "speech_to_text", "args": {"language": v.get("language")},
                          "result": f"{v.get('text', '')!r} - {v.get('seconds')}s for "
                                    f"{v.get('audio_seconds')}s of audio"})
-    if image and new and str(new[0].get("content", "")).startswith("[Prescription verified]"):
+    if image and new and str(new[0].get("content", "")).startswith("[Prescription received]"):
         tools.insert(0, {"name": "prescription_check", "args": {},
                          "result": new[0]["content"][:600]})
     _save(sid)
@@ -272,6 +291,9 @@ def _speech(conv):
     job = tts.new_job(said, "en" if conv.lang == "en" else "ar")
     if not job:
         return None
+    if len(_speech_owner) > 200:             # finished jobs nobody interrupted
+        for old in list(_speech_owner)[:100]:
+            _speech_owner.pop(old, None)
     _speech_owner[job.id] = conv
     return {"job": job.id, "count": len(job.sentences)}
 
@@ -319,14 +341,15 @@ class PollIn(BaseModel):
 def poll(m: PollIn):
     """Messages the system sends on its own, e.g. the pharmacist's prescription decision
     (on WhatsApp these are pushed; the test page asks every few seconds)."""
-    s = _sessions.get(m.session_id) or _load(m.session_id)
-    if not s:
-        return {"messages": []}
-    conv = s["conv"]
-    _sessions[m.session_id] = s
-    msgs = agent_for(s["model"]).customer.deliver_notifications(conv)
-    if msgs:
-        _save(m.session_id)
+    with _session_lock(m.session_id):
+        s = _sessions.get(m.session_id) or _load(m.session_id)
+        if not s:
+            return {"messages": []}
+        conv = s["conv"]
+        _sessions[m.session_id] = s
+        msgs = agent_for(s["model"]).customer.deliver_notifications(conv)
+        if msgs:
+            _save(m.session_id)
     return {"messages": [{"reply": x["reply"], "menu": x["menu"],
                           "debug": {"tools": [], "guard": GUARD_LABELS["review_result"],
                                     "seconds": 0}} for x in msgs]}

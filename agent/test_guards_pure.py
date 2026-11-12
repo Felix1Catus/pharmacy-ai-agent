@@ -5,12 +5,9 @@ Run:  pytest agent/test_guards_pure.py -q
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from guards import (abusive_intent, injection_attempt, is_affirmation, looks_in_scope,  # noqa: E402
                     order_status_intent, pharmacist_complaint)
 from menu import detect_lang, is_greeting, localize, match_menu, menu_text, wants_menu  # noqa: E402
@@ -123,8 +120,6 @@ def test_reply_filter_blocks_dosage():
 
 
 def test_internal_ids_stripped_from_replies():
-    import re
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "adapter"))
     from agent import _ID_MENTION
     assert _ID_MENTION.sub("", "ميتفورمين 500 مغ – (رقم المنتج 2979) متوفر").strip() == "ميتفورمين 500 مغ – متوفر"
     assert _ID_MENTION.sub("", "Augmentin 1g (product_id 36)") == "Augmentin 1g"

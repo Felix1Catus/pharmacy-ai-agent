@@ -8,14 +8,12 @@ from __future__ import annotations
 
 import shutil
 import time
-import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "evals" / "datasets")]
 
 import prescription as rx  # noqa: E402
 
@@ -114,12 +112,18 @@ def _odoo():
 
 
 GW = _odoo()
+# what a pharmacist / staff member does in Odoo (approve, reject, stock, clean-up) runs as the
+# administrator: the assistant's own login is deliberately not allowed to
+STAFF = None
+if GW is not None:
+    from odoo_client import OdooClient
+    STAFF = OdooClient.admin()
 odoo = pytest.mark.skipif(GW is None, reason="Odoo not reachable / module not upgraded")
 
 
 @pytest.fixture()
 def ctx():
-    c = GW.c
+    c = STAFF                # set-up a customer cannot do: stock top-up, verified prescriptions
     # dedicated customer, so prescriptions sent while trying the chat page never interfere
     ids = c.search("res.partner", [["ref", "=", "CUST-RXTEST"]])
     cust = ids[0] if ids else c.create("res.partner", {"name": "ZZ Test RX Customer",
@@ -215,7 +219,7 @@ def test_review_approve_notify_confirm_pay(ctx):
     ctx["make"]([aug], state="auto_verified")
     r = _order(ctx, aug)
     oid = r["order_id"]
-    GW.c.execute_kw("sale.order", "action_rx_approve", [[oid]])
+    STAFF.execute_kw("sale.order", "action_rx_approve", [[oid]])
     o = GW.c.read("sale.order", oid, ["rx_review_state", "notify_state", "prescription_ids"])[0]
     assert o["rx_review_state"] == "approved" and o["notify_state"] == "pending"
     assert GW.c.read("pharmacy.prescription", o["prescription_ids"][0], ["state"])[0]["state"] == "verified"
@@ -235,9 +239,9 @@ def test_reject_needs_a_reason_then_notifies(ctx):
     oid = r["order_id"]
     GW.c.write("sale.order", [oid], {"rx_review_state": "pending"})
     with pytest.raises(Exception):
-        GW.c.execute_kw("sale.order", "action_rx_reject", [[oid]])
+        STAFF.execute_kw("sale.order", "action_rx_reject", [[oid]])
     GW.c.write("sale.order", [oid], {"rx_review_note": "Prescription is not legible"})
-    GW.c.execute_kw("sale.order", "action_rx_reject", [[oid]])
+    STAFF.execute_kw("sale.order", "action_rx_reject", [[oid]])
     note = [n for n in GW.pending_notifications(ctx["cust"]) if n["order_id"] == oid][0]
     assert note["review"] == "rejected" and "legible" in note["note"]
 
@@ -257,7 +261,7 @@ def test_submit_generated_prescription_photo(ctx):
         assert "date_too_old" in old["problems"]
     finally:
         ids = [i for i in (res.get("prescription_id"), locals().get("old", {}).get("prescription_id")) if i]
-        GW.c.execute_kw("pharmacy.prescription", "unlink", [ids])
+        STAFF.execute_kw("pharmacy.prescription", "unlink", [ids])
 
 
 # ---- PDFs ---------------------------------------------------------------------
@@ -267,7 +271,8 @@ def test_is_pdf():
     assert not rx.is_pdf(b"\x89PNG\r\n\x1a\n")
 
 
-@pytest.mark.skipif(not shutil.which("pdftotext"), reason="poppler-utils not installed")
+@pytest.mark.skipif(not (shutil.which("pdftotext") and shutil.which("pdftoppm")),
+                    reason="poppler-utils not installed")
 def test_read_text_pdf_uses_text_layer():
     from make_prescription import make_prescription_pdf
     doc = rx.read_document(make_prescription_pdf(["Augmentin 1g"], 0, "INV-2026-123456"))
@@ -293,7 +298,7 @@ def test_submit_scanned_pdf_is_ocrd_and_stored(ctx):
         assert "scanned pdf" in p["ocr_engine"] and p["state"] == "auto_verified"
         assert p["document_filename"] == "rx.pdf" and p["image_filename"] == "page1.png"
     finally:
-        GW.c.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])
+        STAFF.execute_kw("pharmacy.prescription", "unlink", [[res["prescription_id"]]])
 
 
 # ---- PDF text-layer artefacts (Wasfaty e-prescriptions exported from a browser) -----------
@@ -348,6 +353,7 @@ def test_common_words_never_name_a_product():
 
 
 @odoo
+@pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
 def test_same_invoice_again_is_accepted_and_flagged_for_the_pharmacist(ctx):
     # never "already used" to the customer: a repeat goes to the pharmacist with the earlier uses
     from make_prescription import make_prescription_png
@@ -361,4 +367,4 @@ def test_same_invoice_again_is_accepted_and_flagged_for_the_pharmacist(ctx):
         rec = GW.c.read("pharmacy.prescription", again["prescription_id"], ["state", "notes"])[0]
         assert rec["state"] == "submitted" and "seen before" in rec["notes"] and first["prescription_id"]
     finally:
-        GW.c.execute_kw("pharmacy.prescription", "unlink", [[first["prescription_id"], again["prescription_id"]]])
+        STAFF.execute_kw("pharmacy.prescription", "unlink", [[first["prescription_id"], again["prescription_id"]]])

@@ -1,5 +1,5 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 class SaleOrder(models.Model):
@@ -45,7 +45,15 @@ class SaleOrder(models.Model):
         string="Payment (WhatsApp)", default="none", copy=False)
     payment_link = fields.Char(string="Payment link", copy=False)
 
+    def _check_pharmacist(self):
+        """Only a pharmacist decides on a prescription - never the assistant's service account
+        or another internal user calling the method directly."""
+        if not (self.env.user.has_group("pharmacy_agent.group_pharmacy_pharmacist")
+                or self.env.is_superuser()):
+            raise AccessError(_("Only a pharmacist can approve or reject a prescription."))
+
     def action_rx_approve(self):
+        self._check_pharmacist()
         for order in self:
             if order.rx_review_state != "pending":
                 raise UserError(_("Only quotations pending prescription approval can be approved."))
@@ -55,6 +63,7 @@ class SaleOrder(models.Model):
         return True
 
     def action_rx_reject(self):
+        self._check_pharmacist()
         for order in self:
             if order.rx_review_state not in ("pending", "awaiting_photo"):
                 raise UserError(_("Only quotations waiting for prescription review can be rejected."))
@@ -83,3 +92,41 @@ class SaleOrder(models.Model):
         string="Chat cart (not checked out)", copy=False, index=True,
         help="Items the customer added in the chat but has not checked out yet. A pharmacist "
              "answering a question about them sees the items here.")
+
+    # ---- dispensing rules enforced in Odoo itself, whoever (or whatever) confirms ----------
+    def action_confirm(self):
+        """A quotation whose prescription has not been approved is never confirmed, and a
+        chat order never contains a scheduled medicine - also when a colleague presses Confirm
+        in Odoo or another integration calls the method."""
+        waiting = {"awaiting_photo": _("it is waiting for the customer's prescription"),
+                   "pending": _("a pharmacist has not reviewed its prescription yet"),
+                   "rejected": _("its prescription was rejected")}
+        for order in self:
+            if order.rx_review_state in waiting:
+                raise UserError(_("%(order)s cannot be confirmed: %(why)s.",
+                                  order=order.name, why=waiting[order.rx_review_state]))
+            if order.wa_order or order.wa_cart:
+                scheduled = order.order_line.filtered(lambda l: l.product_id.is_scheduled)
+                if scheduled:
+                    raise UserError(_(
+                        "%(order)s is a chat order with a scheduled medicine (%(names)s): "
+                        "scheduled medicines are dispensed in person only.",
+                        order=order.name, names=", ".join(scheduled.mapped("product_id.display_name"))))
+        return super().action_confirm()
+
+    # ---- holds: a draft quotation kept aside until hold_expires_at -------------------------
+    hold_expires_at = fields.Datetime(
+        string="Held until", copy=False, index=True,
+        help="Set on a hold placed through the assistant. Until then the assistant counts the "
+             "quantity as unavailable for other customers; afterwards the hold is cancelled.")
+
+    @api.model
+    def _cron_expire_holds(self):
+        expired = self.search([("hold_expires_at", "!=", False),
+                               ("hold_expires_at", "<", fields.Datetime.now()),
+                               ("state", "in", ("draft", "sent"))])
+        for order in expired:
+            order.message_post(body=_("Hold expired: released automatically."))
+        if expired:
+            expired._action_cancel()
+        return True

@@ -9,6 +9,7 @@ details are asked, each with buttons. The quotation is created only by the ✅ c
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from gateway import guess_city
@@ -16,6 +17,7 @@ from fuzzy_search import _STOP as _FUZZY_STOP
 from guards import is_affirmation, normalize, service_intent
 from rapidfuzz import fuzz
 
+log = logging.getLogger("pharmacy.order")
 MAX_QTY = 10
 MAX_CHOICES = 5
 
@@ -469,6 +471,7 @@ class OrderFlow:
             res = self.a.gw.cart_sync(conv.customer_id, [{"product_id": i["product_id"], "qty": i["qty"]}
                                                          for i in items])
         except Exception:  # noqa: BLE001  (the chat order still works without the mirror)
+            log.warning("cart not mirrored to Odoo for customer %s", conv.customer_id, exc_info=True)
             return False
         if conv.order is not None and isinstance(res, dict):
             conv.order["cart_id"] = res.get("cart_id")
