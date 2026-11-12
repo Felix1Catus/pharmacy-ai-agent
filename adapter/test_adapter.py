@@ -7,18 +7,16 @@ Run:  pytest adapter/test_adapter.py -q
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "adapter"))
 
 from app import app  # noqa: E402
 from gateway import Gateway  # noqa: E402
+from odoo_client import OdooClient  # noqa: E402
 
 client = TestClient(app)
 
@@ -208,13 +206,14 @@ def test_escalate_bad_reason_is_422():
 @pytest.fixture()
 def sfda_rx_product(gw):
     """Temporary product flagged ONLY via the SFDA import field (no x_ flags, not scheduled)."""
-    tmpl = gw.c.create("product.template", {
+    staff = OdooClient.admin()           # the assistant's own login cannot create products
+    tmpl = staff.create("product.template", {
         "name": "TEST SFDA RX ONLY", "type": "consu", "sale_ok": True,
         "sfda_reg_no": "TEST-SFDA-RX", "sfda_requires_prescription": True,
         "sfda_dispensing": "يحتاج الى وصفة طبية", "sfda_control": "غير مقيد"})
     vid = gw.c.read("product.template", tmpl, ["product_variant_id"])[0]["product_variant_id"][0]
     yield vid
-    gw.c.execute_kw("product.template", "unlink", [[tmpl]])
+    staff.execute_kw("product.template", "unlink", [[tmpl]])
 
 
 def test_create_order_sfda_prescription_goes_to_review(sfda_rx_product, no_rx_customer):

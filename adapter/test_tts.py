@@ -7,7 +7,6 @@ Run:  pytest adapter/test_tts.py -q
 from __future__ import annotations
 
 import io
-import sys
 import time
 import wave
 from pathlib import Path
@@ -15,7 +14,6 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / "adapter")]
 
 from speech_text import sentences, speakable  # noqa: E402
 
@@ -105,7 +103,6 @@ def test_chat_speech_endpoints_and_interrupt_note():
     if not _piper_ready():
         pytest.skip("Piper voice not installed")
     try:
-        sys.path[:0] = [str(ROOT), str(ROOT / "agent"), str(ROOT / "odoo"), str(ROOT / "channels" / "webchat")]
         import os
         os.environ.setdefault("WEBCHAT_PASSWORD", "test")
         from fastapi.testclient import TestClient

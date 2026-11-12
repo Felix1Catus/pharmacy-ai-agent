@@ -12,13 +12,11 @@ Run:  pytest agent/test_medical_policy.py -q
 from __future__ import annotations
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"), str(ROOT / "odoo")]
 
 from agent import Conversation, PharmacyAgent  # noqa: E402
 from gateway import Gateway  # noqa: E402

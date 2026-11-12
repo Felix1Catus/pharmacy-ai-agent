@@ -1,0 +1,9 @@
+[Unit]
+Description=Pharmacy agent - daily chat-log retention
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

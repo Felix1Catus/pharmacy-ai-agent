@@ -1,0 +1,4 @@
+# Tests and linting (not needed on the server):   pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.3.4
+httpx==0.28.1        # fastapi.testclient
+ruff==0.8.4

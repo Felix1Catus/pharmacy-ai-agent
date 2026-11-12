@@ -1,0 +1,63 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install fastapi==0.115.6 requests==2.32.3 httpx==0.28.1 pytest==8.3.4 jsonschema==4.23.0 \
+                      rapidfuzz==3.11.0 Pillow==11.1.0 num2words==0.5.14 ruff==0.8.4
+      - name: Lint (syntax errors, undefined names)
+        run: ruff check agent adapter channels odoo/odoo_client.py scripts conftest.py
+      - name: Unit tests (no Odoo - the integration tests skip themselves)
+        env:
+          ODOO_URL: http://127.0.0.1:9      # nothing listens here: Odoo-dependent tests must skip, not hang
+          ODOO_RETRIES: "0"
+          ODOO_TIMEOUT: "3"
+        run: pytest
+
+  odoo-integration:
+    # the whole suite against a real Odoo 18 with the pharmacy_agent module and the sample data
+    runs-on: ubuntu-24.04
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools (OCR for the prescription tests)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr tesseract-ocr-ara poppler-utils
+          pip install fastapi==0.115.6 requests==2.32.3 httpx==0.28.1 pytest==8.3.4 jsonschema==4.23.0 \
+                      rapidfuzz==3.11.0 Pillow==11.1.0 num2words==0.5.14
+      - name: Start Odoo 18 with the module
+        run: |
+          NET=$(docker network ls --filter name=github_network -q | head -1)
+          RUN="docker run --network $NET -v $PWD/odoo/addons:/mnt/extra-addons -e HOST=db -e USER=odoo -e PASSWORD=odoo"
+          $RUN --rm odoo:18 odoo -i base,product,stock,sale_management,sale_stock,contacts,pharmacy_agent \
+            -d pharmacy --without-demo=all --stop-after-init --db_host=db --db_user=odoo --db_password=odoo
+          $RUN -d --name odoo -p 8069:8069 odoo:18 odoo -d pharmacy --db_host=db --db_user=odoo --db_password=odoo
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:8069/web/login && break; sleep 3; done
+      - name: Seed the sample pharmacy
+        run: python odoo/seed_data.py
+      - name: Tests
+        env:
+          WEBCHAT_PASSWORD: ci-only
+        run: pytest

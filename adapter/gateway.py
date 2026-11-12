@@ -1,6 +1,7 @@
 """Contract -> Odoo gateway.
 
-Implements each of the seven contract actions against the real Odoo 18 instance.
+Implements the contract actions (contract/schemas/) against the Odoo 18 instance - the local
+docker one or an Odoo on another server (see odoo/odoo_client.py for the connection settings).
 `product_id` in the contract is an Odoo product.product (variant) id; `branch_id` is a
 stock.warehouse id. Every function returns either a success dict (matching the schema's
 `returns`) or {"error": {"code", "message", "details"}}.
@@ -10,9 +11,9 @@ The agent and the FastAPI app call these functions; tests call them directly.
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import re
-import json
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,12 +23,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "odoo"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from odoo_client import OdooClient, OdooError  # noqa: E402
+from odoo_client import OdooClient, OdooError, make_client  # noqa: E402
+from private_files import append_jsonl  # noqa: E402
 from fuzzy_search import FuzzyIndex, normalize  # noqa: E402
 from needs import NEEDS, detect_need  # noqa: E402
 import ingredients as ingr  # noqa: E402
 import prescription as rx  # noqa: E402
 
+log = logging.getLogger("pharmacy.gateway")
 RESULTS = ROOT / "results"
 # Choosing a medicine for a symptom is a licensed pharmacist's call (pharmacy practice rules), so the
 # assistant does not list products for a need ("something for a sore throat") unless the pharmacy
@@ -99,6 +102,27 @@ def normalize_phone(raw, typed: bool = False) -> str | None:
     return d if 8 <= len(d) <= 15 else None
 
 
+def phone_key(raw) -> str | None:
+    """The digits a contact is stored and looked up under: normalize_phone(), or - for a WhatsApp
+    sender id it does not recognise (a landline business number, another country's format) - the
+    bare international digits as WhatsApp sent them. Never None for a real wa_id, so a WhatsApp
+    chat is always identified by its own sender number and never by a number someone types."""
+    norm = normalize_phone(raw)
+    if norm:
+        return norm
+    d = "".join(ch for ch in str(raw or "").translate(_PHONE_DIGITS) if ch.isdigit())
+    return d if 8 <= len(d) <= 15 else None
+
+
+def _utc_now() -> datetime:
+    """Naive UTC, the form Odoo stores datetimes in."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _odoo_dt(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def guess_city(address: str) -> str | None:
     """City named in a free-text address: the FIRST city word, so "6 دمام شارع جدة الجديد"
     is Dammam (the street is named after Jeddah)."""
@@ -118,8 +142,11 @@ def err(code: str, message: str, **details) -> dict:
 
 class Gateway:
     def __init__(self, client: OdooClient | None = None):
-        self.c = client or OdooClient()
+        self.c = client or make_client()
         self._branch_cache = None
+        self._public_base: str | None = None
+        self._rx_catalogue: tuple[float, list[dict]] | None = None
+        self._holds_supported = True
         self._fuzzy = FuzzyIndex(self.c)      # phonetic Arabic<->English name matching
         self._ingr = ingr.IngredientIndex(self.c)   # same active ingredient, other brands
 
@@ -157,7 +184,49 @@ class Gateway:
                                                f"delivery reaches cities near them"}
         return {"branches": rows}
 
+    def _held(self, product_ids: list[int], except_customer=None) -> list[tuple[int, int, float]]:
+        """(product_id, branch_id, qty) kept aside by holds that have not expired yet."""
+        if not self._holds_supported:
+            return []
+        try:
+            dom = [["hold_expires_at", ">", _odoo_dt(_utc_now())], ["state", "in", ["draft", "sent"]]]
+            if except_customer:
+                dom.append(["partner_id", "!=", except_customer])
+            orders = self.c.search_read("sale.order", dom, ["warehouse_id"])
+        except OdooError as e:               # module older than 18.0.1.12.0: no hold field yet
+            self._holds_supported = False
+            log.warning("holds are not subtracted from stock (upgrade the pharmacy_agent module): %s", e)
+            return []
+        if not orders:
+            return []
+        wh = {o["id"]: o["warehouse_id"][0] for o in orders if o.get("warehouse_id")}
+        lines = self.c.search_read("sale.order.line", [["order_id", "in", list(wh)],
+                                                       ["product_id", "in", product_ids]],
+                                   ["order_id", "product_id", "product_uom_qty"])
+        return [(l["product_id"][0], wh[l["order_id"][0]], l["product_uom_qty"]) for l in lines]
+
+    def _avail_map(self, product_ids, branches=None, except_customer=None) -> dict[int, dict[int, float]]:
+        """{product_id: {branch_id: quantity a customer can still get}} - one stock query per
+        branch for all the products together, less what unexpired holds keep aside."""
+        ids = sorted({int(i) for i in product_ids if i})
+        bs = self.branches() if branches is None else branches
+        out = {i: {b["branch_id"]: 0.0 for b in bs} for i in ids}
+        if not ids:
+            return out
+        for b in bs:
+            for q in self.c.search_read(
+                    "stock.quant", [["product_id", "in", ids], ["location_id", "child_of", b["loc_id"]]],
+                    ["product_id", "available_quantity"]):
+                out[q["product_id"][0]][b["branch_id"]] += q["available_quantity"]
+        for pid, bid, qty in self._held(ids, except_customer):
+            if pid in out and bid in out[pid]:
+                out[pid][bid] = max(0.0, out[pid][bid] - qty)
+        return out
+
     def _avail_at(self, variant_id: int, loc_id: int) -> float:
+        b = next((b for b in self.branches() if b["loc_id"] == loc_id), None)
+        if b:
+            return self._avail_map([variant_id], [b])[variant_id][b["branch_id"]]
         quants = self.c.search_read(
             "stock.quant",
             [["product_id", "=", variant_id], ["location_id", "child_of", loc_id]],
@@ -194,12 +263,20 @@ class Gateway:
                 found += [(rows[tid], "spelling variant") for tid, _ in ranked if tid in rows]
         return found
 
-    def _candidate(self, t: dict, how: str, branch_id=None) -> dict | None:
+    def _in_stock_at(self, rows: list[dict], branch_id) -> set[int] | None:
+        """Variant ids of `rows` in stock at the branch (one query), or None = no branch filter."""
+        if branch_id is None:
+            return None
+        b = self._branch(branch_id)
+        if not b:
+            return set()
+        avail = self._avail_map([t["product_variant_id"][0] for t in rows], [b])
+        return {pid for pid, per in avail.items() if per[branch_id] > 0}
+
+    def _candidate(self, t: dict, how: str, in_stock: set[int] | None = None) -> dict | None:
         vid = t["product_variant_id"][0]
-        if branch_id is not None:
-            b = self._branch(branch_id)
-            if not b or self._avail_at(vid, b["loc_id"]) <= 0:
-                return None
+        if in_stock is not None and vid not in in_stock:
+            return None
         return {
             "product_id": vid,
             "name_en": t["name"],
@@ -344,11 +421,12 @@ class Gateway:
             picked = [by_id[i] for i in ranked if i in by_id] + \
                      [x for x in found if x[0]["id"] not in ranked]
         cands, names = [], set()
+        in_stock = self._in_stock_at([t for t, _ in picked], branch_id)
         for t, how in picked:
             key = normalize_name(t["name"])
             if key in names:                     # SFDA lists some products twice
                 continue
-            c = self._candidate(t, how, branch_id)
+            c = self._candidate(t, how, in_stock)
             if c:
                 names.add(key)
                 cands.append(c)
@@ -362,11 +440,13 @@ class Gateway:
                 shown = {c["product_id"] for c in cands}
                 alt_ids = self._ingr.rank(self._ingr.same_ingredients(ing), ing, strength, form)
                 alts = []
-                for t in self._rows(alt_ids[: lim * 4]):
+                alt_rows = self._rows(alt_ids[: lim * 4])
+                alt_stock = self._in_stock_at(alt_rows, branch_id)
+                for t in alt_rows:
                     key = normalize_name(t["name"])
                     if t["product_variant_id"][0] in shown or key in names:
                         continue
-                    c = self._candidate(t, "same active ingredient, other brand", branch_id)
+                    c = self._candidate(t, "same active ingredient, other brand", alt_stock)
                     if c:
                         names.add(key)
                         alts.append(c)
@@ -402,8 +482,9 @@ class Gateway:
             if not b:
                 return err("not_found", f"no branch with id {branch_id}")
             branches = [b]
+        avail = self._avail_map([product_id], branches)[product_id]
         stock = [{"branch_id": b["branch_id"], "branch_name": b["name"],
-                  "qty_available": self._avail_at(product_id, b["loc_id"])}
+                  "qty_available": avail[b["branch_id"]]}
                  for b in branches]
         return {"stock": stock}
 
@@ -434,7 +515,8 @@ class Gateway:
                 else:
                     rx_review = True             # quotation goes to the pharmacist for review
                     rx_pids.append(it["product_id"])
-        # choose branch
+        # choose branch (the customer's own holds do not count against them)
+        avail = self._avail_map([it["product_id"] for it in items], except_customer=customer_id)
         if fulfillment == "pickup":
             if not branch_id:
                 return err("invalid_input", "branch_id is required for pickup")
@@ -444,7 +526,7 @@ class Gateway:
         elif fulfillment == "delivery":
             if not delivery_address:
                 return err("invalid_input", "delivery_address is required for delivery")
-            chosen = self._pick_branch_with_stock(items)
+            chosen = self._pick_branch_with_stock(items, avail)
             if chosen is None:
                 return err("out_of_stock", "no branch has all items in stock")
         else:
@@ -452,7 +534,7 @@ class Gateway:
         # stock check at chosen branch
         b = self._branch(chosen)
         for it in items:
-            if self._avail_at(it["product_id"], b["loc_id"]) < it["qty"]:
+            if avail[it["product_id"]][chosen] < it["qty"]:
                 return err("out_of_stock",
                            f"product {it['product_id']} short at {b['name']}",
                            branch_id=chosen, product_id=it["product_id"])
@@ -490,8 +572,7 @@ class Gateway:
             # Only attach a prescription the customer sent JUST NOW for one of THIS order's
             # rx products (photo-first flow); never a stale or unrelated one - otherwise ask
             # for the photo for this order. A pharmacist then approves/rejects it in Odoo.
-            import datetime as _dt
-            cutoff = (_dt.datetime.utcnow() - _dt.timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
+            cutoff = _odoo_dt(_utc_now() - timedelta(minutes=20))
             sent = self.c.search("pharmacy.prescription", [
                 ["partner_id", "=", customer_id], ["sale_order_id", "=", False],
                 ["state", "in", ["submitted", "auto_verified"]],
@@ -508,10 +589,10 @@ class Gateway:
                 "next_step": ("prescription review by the pharmacist" if review != "none"
                               else "customer pays via the payment link, then it is confirmed")}
 
-    def _pick_branch_with_stock(self, items):
+    def _pick_branch_with_stock(self, items, avail=None):
+        avail = avail or self._avail_map([it["product_id"] for it in items])
         for b in self.branches():
-            if all(self._avail_at(it["product_id"], b["loc_id"]) >= it["qty"]
-                   for it in items):
+            if all(avail[it["product_id"]][b["branch_id"]] >= it["qty"] for it in items):
                 return b["branch_id"]
         return None
 
@@ -530,8 +611,8 @@ class Gateway:
         if courier_note:
             try:
                 self.c.write("stock.picking", [pid], {"note": courier_note})
-            except OdooError:
-                pass
+            except OdooError as e:
+                log.warning("courier note not saved on picking %s: %s", pid, e)
         p = self.c.read("stock.picking", pid, ["name", "state"])[0]
         return {"dispatch_id": pid, "state": p["state"], "tracking_ref": p["name"]}
 
@@ -551,17 +632,31 @@ class Gateway:
             return err("not_found", f"no branch with id {branch_id}")
         if not self.c.search("res.partner", [["id", "=", customer_id]]):
             return err("not_found", f"no customer with id {customer_id}")
-        if self._avail_at(product_id, b["loc_id"]) < qty:
+        if self._avail_map([product_id], [b], except_customer=customer_id)[product_id][branch_id] < qty:
             return err("out_of_stock", f"product {product_id} short at {b['name']}")
+        hours = max(1, min(int(hours or 24), 72))
         expires = datetime.now(timezone.utc) + timedelta(hours=hours)
-        # A hold is modelled as a DRAFT sale order (not confirmed), tagged + dated.
+        # A hold is a DRAFT sale order with hold_expires_at: until then _avail_map counts its
+        # quantity as unavailable to other customers; Odoo's cron then cancels it
+        # (sale.order._cron_expire_holds).
         ref = f"HOLD-{int(time.time())}"
-        oid = self.c.create("sale.order", {
+        vals = {
             "partner_id": customer_id, "warehouse_id": branch_id,
             "client_order_ref": ref,
             "note": f"HOLD until {expires.isoformat()} at {b['name']}",
             "order_line": [(0, 0, {"product_id": product_id, "product_uom_qty": qty})],
-        })
+        }
+        if self._holds_supported:
+            vals["hold_expires_at"] = _odoo_dt(expires.replace(tzinfo=None))
+        try:
+            oid = self.c.create("sale.order", vals)
+        except OdooError as e:
+            if "hold_expires_at" not in vals or "hold_expires_at" not in str(e):
+                raise
+            self._holds_supported = False      # module not upgraded yet: the old, unreserved hold
+            log.warning("hold created without an expiry (upgrade the pharmacy_agent module): %s", e)
+            vals.pop("hold_expires_at")
+            oid = self.c.create("sale.order", vals)
         return {"hold_id": oid, "expires_at": expires.isoformat(),
                 "branch_id": branch_id, "ref": ref}
 
@@ -577,19 +672,31 @@ class Gateway:
                 "city": p.get("city") or "", "whatsapp_number": p.get("whatsapp_number") or ""}
 
     def find_customer(self, phone: str) -> dict | None:
-        """Customer whose WhatsApp number, phone or mobile is this number (any format:
-        0501234567, +966 50 123 4567, 966501234567...), or None."""
-        norm = normalize_phone(phone)
+        """Customer whose WhatsApp number or main phone is this number (any format:
+        0501234567, +966 50 123 4567, 966501234567...), or None.
+
+        The alternative phone (`mobile`) is deliberately NOT a way in: the customer types it
+        themself and nobody verifies it, so matching on it would hand one person's account -
+        orders, address, prescriptions - to whoever owns the number they typed."""
+        norm = phone_key(phone)
         if not norm:
             return None
-        rows = self.c.search_read("res.partner", [
-            "|", "|", ["whatsapp_number", "=", norm], ["phone", "ilike", norm[-4:]],
-            ["mobile", "ilike", norm[-4:]]], self._PARTNER_FIELDS, order="id", limit=50)
-        for p in rows:
-            if norm in {p.get("whatsapp_number"), normalize_phone(p.get("phone")),
-                        normalize_phone(p.get("mobile"))}:
-                return self._profile(p)
-        return None
+        rows = self.c.search_read("res.partner", [["whatsapp_number", "=", norm]],
+                                  self._PARTNER_FIELDS, order="id", limit=1)
+        if rows:
+            return self._profile(rows[0])
+        # contacts typed in by staff have the number only in `phone`, in any spelling: narrow by
+        # the last digits (paged, so a busy ending is never cut off), then compare normalised
+        offset, page = 0, 200
+        while True:
+            rows = self.c.search_read("res.partner", [["phone", "ilike", norm[-4:]]],
+                                      self._PARTNER_FIELDS, order="id", limit=page, offset=offset)
+            for p in rows:
+                if phone_key(p.get("phone")) == norm:
+                    return self._profile(p)
+            if len(rows) < page:
+                return None
+            offset += page
 
     def get_customer(self, customer_id: int) -> dict | None:
         rows = self.c.search_read("res.partner", [["id", "=", customer_id]], self._PARTNER_FIELDS)
@@ -602,7 +709,9 @@ class Gateway:
         existing = self.find_customer(phone)
         if existing:
             return existing
-        norm = normalize_phone(phone)
+        norm = phone_key(phone)
+        if not norm:
+            raise ValueError("register_customer needs a valid phone number")
         sa = self.c.search("res.country", [["code", "=", "SA"]], limit=1)
         pid = self.c.create("res.partner", {
             "name": name.strip(), "phone": "+" + norm, "whatsapp_number": norm,
@@ -632,11 +741,19 @@ class Gateway:
         """A photo sent after the quotation: put it on that order -> pending pharmacist review."""
         if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id]]):
             return err("not_found", "no such order for this customer")
+        if not self._own_prescription(prescription_id, customer_id):
+            return err("not_found", "no such prescription for this customer")
         self.c.write("pharmacy.prescription", [prescription_id],
                      {"sale_order_id": order_id, "state": "submitted"})
         self.c.write("sale.order", [order_id], {"rx_review_state": "pending"})
         o = self.c.read("sale.order", order_id, ["name", "amount_total"])[0]
         return {"order_id": order_id, "order_ref": o["name"], "total": o["amount_total"]}
+
+    def _own_prescription(self, prescription_id, customer_id) -> bool:
+        """The prescription exists, is this customer's, and is not already used or rejected."""
+        return bool(prescription_id and customer_id and self.c.search("pharmacy.prescription", [
+            ["id", "=", prescription_id], ["partner_id", "=", customer_id],
+            ["state", "not in", ["used", "rejected"]]]))
 
     def order_summary(self, order_id: int) -> dict:
         o = self.c.read("sale.order", order_id, [
@@ -664,7 +781,7 @@ class Gateway:
             s = self.order_summary(oid)
             p = self.c.read("res.partner", s["customer_id"], ["name", "whatsapp_number", "phone"])[0]
             s.update(customer_name=p["name"],
-                     whatsapp_number=p["whatsapp_number"] or normalize_phone(p["phone"]))
+                     whatsapp_number=p["whatsapp_number"] or phone_key(p["phone"]))
             out.append(s)
         return out
 
@@ -675,23 +792,61 @@ class Gateway:
         """Link the customer pays from: the quotation's Odoo customer page (online payment is
         enabled there once a payment provider is configured - payment capture/recording is the
         next phase)."""
-        base = (self.c.search_read("ir.config_parameter", [["key", "=", "web.base.url"]],
-                                   ["value"]) or [{"value": ""}])[0]["value"].rstrip("/")
         path = self.c.execute_kw("sale.order", "get_portal_url", [[order_id]])
-        url = base + path
+        url = self._public_url() + path
         self.c.write("sale.order", [order_id], {"payment_link": url, "payment_state_wa": "link_sent"})
         return url
 
+    def _public_url(self) -> str:
+        """The Odoo address customers can open. ODOO_PUBLIC_URL when set (needed when the
+        assistant reaches Odoo over a private address, or logs in as the service user, who
+        cannot read Odoo's own setting); else Odoo's web.base.url; else ODOO_URL."""
+        if self._public_base is None:
+            base = os.environ.get("ODOO_PUBLIC_URL", "").strip()
+            if not base:
+                try:
+                    rows = self.c.search_read("ir.config_parameter", [["key", "=", "web.base.url"]],
+                                              ["value"])
+                    base = (rows or [{"value": ""}])[0]["value"] or ""
+                except OdooError:
+                    base = ""
+            if not base:
+                base = getattr(self.c, "public_url", "") or getattr(self.c, "url", "")
+                log.warning("payment links use %s - set ODOO_PUBLIC_URL to the address customers "
+                            "can open", base)
+            self._public_base = base.rstrip("/")
+        return self._public_base
+
+    _RX_NOT_CLEARED = {"awaiting_photo": "the prescription photo has not been received yet",
+                       "pending": "the pharmacist has not reviewed the prescription yet",
+                       "rejected": "the pharmacist did not approve the prescription"}
+
     def customer_confirms(self, order_id: int, customer_id: int) -> dict:
-        """The customer accepted an approved quotation: record it and hand back the payment link."""
-        if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id],
-                                            ["state", "in", ["draft", "sent"]]]):
+        """The customer accepted a quotation: confirm it and hand back the payment link. Never
+        for a quotation whose prescription is not approved (checked here AND by Odoo's own
+        sale.order.action_confirm)."""
+        rows = self.c.search_read("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id],
+                                                 ["state", "in", ["draft", "sent"]]],
+                                  ["rx_review_state", "name"])
+        if not rows:
             return err("not_found", "no open quotation for this customer")
-        self.c.write("sale.order", [order_id], {"customer_confirmed": True})
+        review = rows[0].get("rx_review_state") or "none"
+        if review in self._RX_NOT_CLEARED:
+            return err("prescription_not_approved", self._RX_NOT_CLEARED[review], order_id=order_id)
         try:                                 # approved quote -> confirmed sales order, then payment
             self.c.execute_kw("sale.order", "action_confirm", [[order_id]])
-        except OdooError:
-            pass                             # keep the confirmation recorded even if confirm validates
+        except OdooError as e:
+            # Odoo refused (stock rule, credit limit, a dispensing rule...): no payment link for
+            # an order that is not confirmed - a colleague gets it with the reason
+            log.error("action_confirm failed for order %s: %s", order_id, e)
+            try:
+                self.escalate_to_human("low_confidence", f"Odoo refused to confirm {rows[0]['name']}: {e}",
+                                       customer_id=customer_id, order_id=order_id)
+            except Exception:  # noqa: BLE001
+                log.exception("could not hand over the failed confirmation of order %s", order_id)
+            return err("confirm_failed", "a colleague will confirm it and contact you",
+                       order_id=order_id, odoo=str(e))
+        self.c.write("sale.order", [order_id], {"customer_confirmed": True})
         return {**self.order_summary(order_id), "payment_link": self.payment_link(order_id)}
 
     def customer_cancels(self, order_id: int, customer_id: int) -> dict:
@@ -713,6 +868,17 @@ class Gateway:
             ["matched_product_ids", "in", [product_id]]], order="id desc", limit=1)
         return ids[0] if ids else None
 
+    _RX_CATALOGUE_TTL_S = 600
+
+    def _rx_products(self) -> list[dict]:
+        """The catalogue rows a prescription is matched against, kept for 10 minutes (reading
+        every product on each upload was the slowest part of a prescription check)."""
+        now = time.time()
+        if not self._rx_catalogue or now - self._rx_catalogue[0] > self._RX_CATALOGUE_TTL_S:
+            self._rx_catalogue = (now, self.c.search_read(
+                "product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS))
+        return self._rx_catalogue[1]
+
     def submit_prescription(self, customer_id, image: bytes, filename: str | None = None):
         """Read a prescription photo or PDF, run the checks, store it in Odoo (Pharmacy →
         Prescriptions) and return the outcome. Auto-verified only if date + invoice number + a
@@ -726,7 +892,7 @@ class Gateway:
                      "document": b64(image), "document_filename": filename or "prescription.pdf"}
         else:
             files = {"image": b64(image), "image_filename": filename or "prescription.jpg"}
-        rows = self.c.search_read("product.template", [["sale_ok", "=", True]], RX_PRODUCT_FIELDS)
+        rows = self._rx_products()
         res = rx.evaluate(text, rows)
         # Prescriptions name the ACTIVE INGREDIENT ("Metformin - 500 mg tablet") while our
         # catalogue lists brands ("DIALON 500 MG", "METFORMIN HYDROCHLORIDE"): match each Rx line
@@ -839,6 +1005,7 @@ class Gateway:
             try:
                 req = self.open_requests(customer_id)
             except Exception:  # noqa: BLE001
+                log.exception("could not read the customer's open requests")
                 req = []
             if req:
                 out["requests"] = req
@@ -1047,8 +1214,7 @@ class Gateway:
         b = self._branch(branch_id) if branch_id else None
         if branch_id and not b:
             return err("not_found", f"no branch with id {branch_id} - call list_branches")
-        avail = self._avail_at(product_id, b["loc_id"]) if b else \
-            sum(self._avail_at(product_id, x["loc_id"]) for x in self.branches())
+        avail = sum(self._avail_map([product_id], [b] if b else None)[product_id].values())
         if avail > 0:
             return {"already_available": True,
                     "where": b["name"] if b else "in stock - check_stock shows the branches",
@@ -1063,20 +1229,37 @@ class Gateway:
                 "branch": b["name"] if b else "any branch",
                 "next_step": "we message the customer here once it is back in stock"}
 
-    def due_stock_alerts(self) -> list[dict]:
-        """Waiting back-in-stock requests whose product is available again (for the notifier)."""
+    def due_stock_alerts(self, customer_id: int | None = None) -> list[dict]:
+        """Waiting back-in-stock requests whose product is available again (for the notifier).
+        Scheduled medicines are never announced."""
+        dom = [["state", "=", "waiting"]]
+        if customer_id:
+            dom.append(["partner_id", "=", customer_id])
+        alerts = self.c.search_read("pharmacy.stock.alert", dom,
+                                    ["partner_id", "product_id", "warehouse_id"])
+        if not alerts:
+            return []
+        pids = sorted({a["product_id"][0] for a in alerts})
+        avail = self._avail_map(pids)
+        prods = {p["id"]: p for p in self.c.search_read(
+            "product.product", [["id", "in", pids]], ["name", "x_name_ar", "is_scheduled"])}
+        partners = {p["id"]: p for p in self.c.search_read(
+            "res.partner", [["id", "in", sorted({a["partner_id"][0] for a in alerts})]],
+            ["name", "whatsapp_number", "phone"])}
         out = []
-        for a in self.c.search_read("pharmacy.stock.alert", [["state", "=", "waiting"]],
-                                    ["partner_id", "product_id", "warehouse_id"]):
-            pid = a["product_id"][0]
+        for a in alerts:
+            pid, prod = a["product_id"][0], prods.get(a["product_id"][0]) or {}
+            if prod.get("is_scheduled"):
+                continue
             bs = [self._branch(a["warehouse_id"][0])] if a["warehouse_id"] else self.branches()
-            where = [b["name"] for b in bs if b and self._avail_at(pid, b["loc_id"]) > 0]
-            if where:
-                p = self.c.read("res.partner", a["partner_id"][0], ["name", "whatsapp_number", "phone"])[0]
-                out.append({"alert_id": a["id"], "customer_id": a["partner_id"][0],
-                            "customer_name": p["name"],
-                            "whatsapp_number": p["whatsapp_number"] or normalize_phone(p["phone"]),
-                            "product": a["product_id"][1], "branches": where})
+            where = [b["name"] for b in bs if b and avail[pid].get(b["branch_id"], 0) > 0]
+            p = partners.get(a["partner_id"][0])
+            if where and p:
+                out.append({"alert_id": a["id"], "customer_id": p["id"], "customer_name": p["name"],
+                            "whatsapp_number": p["whatsapp_number"] or phone_key(p["phone"]),
+                            "product": prod.get("x_name_ar") or prod.get("name") or a["product_id"][1],
+                            "product_en": prod.get("name") or a["product_id"][1],
+                            "branches": where})
         return out
 
     def mark_stock_alert_sent(self, alert_id: int) -> None:
@@ -1142,10 +1325,9 @@ class Gateway:
             ids = self.c.search("product.product", [["is_scheduled", "=", True], "|", "|",
                                                     ["name", "ilike", name], ["x_name_ar", "ilike", name],
                                                     ["sfda_scientific_name", "ilike", name]], limit=5)
-        where = []
-        for b in self.branches():
-            if any(self._avail_at(i, b["loc_id"]) > 0 for i in ids):
-                where.append(b["name"])
+        avail = self._avail_map(ids)
+        where = [b["name"] for b in self.branches()
+                 if any(avail[i][b["branch_id"]] > 0 for i in ids)]
         names = [r["name"] for r in self.c.read("product.product", ids, ["name"])] if ids else []
         return {"products": names, "branches": where}
 
@@ -1164,7 +1346,7 @@ class Gateway:
             items = [l["product_id"][0] for l in self.c.search_read(
                 "sale.order.line", [["order_id", "=", order_id], ["display_type", "=", False]],
                 ["product_id"]) if l["product_id"]]
-            since = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
+            since = (_utc_now() - timedelta(days=30)).strftime("%Y-%m-%d")
             rows = self.c.search_read("pharmacy.prescription", base + [
                 ["sale_order_id", "=", False], ["create_date", ">=", since],
                 ["matched_product_ids", "in", items]], fields, order="id desc", limit=1) if items else []
@@ -1185,14 +1367,14 @@ class Gateway:
 
     def record_health_consent(self, customer_id) -> None:
         self.c.write("res.partner", [customer_id], {
-            "pdpl_health_consent": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "pdpl_health_consent": _odoo_dt(_utc_now()),
             "pdpl_consent_version": self.CONSENT_VERSION, "pdpl_consent_withdrawn": False})
 
     def withdraw_health_consent(self, customer_id, summary="", conv_id=None, channel=None) -> dict:
         """Consent withdrawn / data request: recorded on the contact and queued for staff (who
         handle access and deletion requests within the PDPL time limits)."""
         self.c.write("res.partner", [customer_id], {
-            "pdpl_consent_withdrawn": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")})
+            "pdpl_consent_withdrawn": _odoo_dt(_utc_now())})
         hid = self.c.create("pharmacy.handover", {
             "reason": "privacy_request", "partner_id": customer_id,
             "summary": (summary or "customer withdrew consent / asked about their data")[:2000],
@@ -1203,6 +1385,8 @@ class Gateway:
         """A prescription sent for a dosage question goes on that order (Pharmacy -> Prescriptions
         shows it with the order); a prescription-only quotation then goes to pharmacist review."""
         if not self.c.search("sale.order", [["id", "=", order_id], ["partner_id", "=", customer_id]]):
+            return
+        if not self._own_prescription(prescription_id, customer_id):
             return
         o = self.c.read("sale.order", order_id, ["rx_review_state", "state"])[0]
         self.c.write("pharmacy.prescription", [prescription_id], {"sale_order_id": order_id})
@@ -1216,7 +1400,7 @@ class Gateway:
             return None
         ids = self._cart_ids(customer_id) or self.c.search("sale.order", [
             ["partner_id", "=", customer_id], ["state", "in", ["draft", "sent", "sale"]],
-            ["create_date", ">=", (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")]],
+            ["create_date", ">=", (_utc_now() - timedelta(days=30)).strftime("%Y-%m-%d")]],
             order="id desc", limit=1)
         if not ids:
             return None
@@ -1242,11 +1426,8 @@ class Gateway:
                        "this is about; a handover needs one of them.")
         if medicine:
             summary = f"[{medicine}] {summary}"
-        RESULTS.mkdir(exist_ok=True)
-        entry = {"ts": datetime.now(timezone.utc).isoformat(), "reason": reason,
-                 "summary": summary, "customer_id": customer_id}
-        with HANDOVER_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        append_jsonl(HANDOVER_LOG, {"ts": datetime.now(timezone.utc).isoformat(), "reason": reason,
+                                    "summary": summary, "customer_id": customer_id})
         handover_id, ref = None, None
         try:
             vals = {"reason": reason if reason in self._HANDOVER_REASONS else "unclear",
@@ -1259,6 +1440,7 @@ class Gateway:
             handover_id = self.c.create("pharmacy.handover", vals)
             ref = self.c.read("pharmacy.handover", handover_id, ["name"])[0]["name"]
         except Exception:  # noqa: BLE001  (Odoo down / timeout: the local log still has it)
+            log.exception("handover not recorded in Odoo (kept in %s): reason=%s", HANDOVER_LOG.name, reason)
             handover_id = sum(1 for _ in HANDOVER_LOG.open(encoding="utf-8"))
         ack = ("حوّلت طلبك إلى صيدلي/موظف وسيتواصل معك قريبًا."
                " (Handed over to a human pharmacist; they'll follow up shortly.)")

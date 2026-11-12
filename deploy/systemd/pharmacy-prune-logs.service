@@ -1,0 +1,8 @@
+[Unit]
+Description=Pharmacy agent - delete chat logs and saved chats older than LOG_RETENTION_DAYS (PDPL)
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/.venv/bin/python scripts/prune_logs.py
+UMask=0077

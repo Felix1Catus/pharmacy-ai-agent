@@ -20,9 +20,11 @@
     <field name="arch" type="xml">
       <xpath expr="//header" position="inside">
         <button name="action_rx_approve" type="object" string="✅ Approve prescription"
-                class="btn-primary" invisible="rx_review_state != 'pending'"/>
+                class="btn-primary" invisible="rx_review_state != 'pending'"
+                groups="pharmacy_agent.group_pharmacy_pharmacist"/>
         <button name="action_rx_reject" type="object" string="❌ Reject prescription"
                 invisible="rx_review_state not in ('pending', 'awaiting_photo')"
+                groups="pharmacy_agent.group_pharmacy_pharmacist"
                 confirm="Reject this prescription? The reason in the Prescription review tab is sent to the customer."/>
       </xpath>
       <xpath expr="//div[@name='button_box']" position="after">
@@ -48,7 +50,8 @@
               <field name="rx_review_note" placeholder="Required to reject: the reason sent to the customer"/>
             </group>
           </group>
-          <field name="prescription_ids" readonly="1">
+          <field name="prescription_ids" readonly="1"
+                 groups="pharmacy_agent.group_pharmacy_pharmacist,pharmacy_agent.group_pharmacy_assistant">
             <list>
               <field name="name"/>
               <field name="prescription_date"/>
@@ -66,6 +69,7 @@
               <field name="fulfillment_type"/>
               <field name="dispatch_status"/>
               <field name="delivery_address_text"/>
+              <field name="hold_expires_at" invisible="not hold_expires_at"/>
             </group>
             <group>
               <field name="notify_state"/>
@@ -150,7 +154,7 @@
   </record>
 
   <menuitem id="menu_prescription_review" name="Prescription review" parent="menu_pharmacy_root"
-            action="action_prescription_review" sequence="1"/>
+            action="action_prescription_review" sequence="1" groups="pharmacy_agent.group_pharmacy_pharmacist"/>
   <menuitem id="menu_whatsapp_quotations" name="WhatsApp orders" parent="menu_pharmacy_root"
             action="action_whatsapp_quotations" sequence="5"/>
 </odoo>

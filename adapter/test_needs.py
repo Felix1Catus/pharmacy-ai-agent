@@ -6,13 +6,11 @@ The pure tests run anywhere; the catalogue tests use the real (demo) Odoo and sk
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter")]
 
 from needs import NEEDS, detect_need  # noqa: E402
 

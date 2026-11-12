@@ -20,7 +20,10 @@ What the bootstrap does (idempotent):
 2. Python venv from `requirements.txt` (and `requirements-train.txt` with `--with-training`).
 3. Fresh secrets: `.env` (from `.env.example`) and `odoo/config/odoo.conf` (from
    `odoo.conf.example`) with a random **master password**; after seeding, the Odoo **admin
-   password is rotated** to a random value stored as `ODOO_PASSWORD` in `.env`.
+   password is rotated** and the chat services get their own least-privilege login
+   (`scripts/create_service_user.py`): `.env` then has `ODOO_USER=pharmacy-assistant` /
+   `ODOO_PASSWORD`, and the administrator as `ODOO_ADMIN_USER` / `ODOO_ADMIN_PASSWORD`.
+   To use an Odoo on another server instead of the local one: `docs/odoo-connection.md`.
 4. **Odoo 18 + Postgres** via `odoo/docker-compose.yml`, database `pharmacy` with modules
    `product, stock, sale_management, sale_stock, pharmacy_agent` (no demo data), then the
    **sample pharmacy data** (`odoo/seed_data.py`: 42 products, 3 branches, demo customer).
@@ -29,8 +32,9 @@ What the bootstrap does (idempotent):
    `pharmacy-4b-ft3` / `pharmacy-4b-ft` in Ollama.
 
 Things that are deliberately NOT automatic (decide on the new server):
-- Odoo is published on :8069 — run `ufw allow 8069/tcp` only if it should be public, and put
-  HTTPS in front before real data (docs/operator-guide.md §3.5).
+- Odoo is published on :8069 by Docker, which **bypasses ufw**: it is reachable from outside
+  whatever the firewall says. To keep it private use `deploy/odoo-compose.override.yml` (binds
+  127.0.0.1) and put HTTPS in front before real data (docs/operator-guide.md §3.5).
 - **SFDA drugs data is not imported**: import `data_sources/sfda/data/sfda_products_odoo_import.xlsx`
   yourself (Inventory → Products → ⚙ → Import records), then optionally switch on
   *Update List → Automatic updates* (use pages 0–458 for the full registry).

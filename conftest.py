@@ -4,14 +4,14 @@ quotations/holds, prescriptions and "ZZ Test ..." contacts - is removed when the
 Otherwise test quotations show up in Pharmacy > WhatsApp orders next to real chat orders."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "odoo"))
 
 TEST_PREFIX = "ZZ Test"
+# scripts that are piped into `odoo shell` (their names start with test_ but they are not pytest
+# modules), and training code that needs torch
+collect_ignore_glob = ["data_sources/*", "odoo/addons/*", "finetune/*", "train/*", "distill/*"]
 
 
 def _max_id(c, model):
@@ -24,7 +24,7 @@ def _remove_test_records():
     try:
         from odoo_client import OdooClient, load_env
         load_env()
-        c = OdooClient()
+        c = OdooClient.admin()           # deleting test records needs more than the service user
         start = {m: _max_id(c, m) for m in ("sale.order", "pharmacy.prescription")}
     except Exception:                    # Odoo down: those tests skip anyway
         yield

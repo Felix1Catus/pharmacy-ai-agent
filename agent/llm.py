@@ -10,6 +10,7 @@ struct dump), so re-run the agent eval when switching.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 import threading
@@ -26,6 +27,7 @@ sys.path.insert(0, str(ROOT / "odoo"))
 from odoo_client import load_env  # reuse the tiny .env loader  # noqa: E402
 
 load_env()
+log = logging.getLogger("pharmacy.llm")
 MODEL = os.environ.get("AGENT_MODEL", "hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M")
 OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
 # Ollama defaults to one thread per PHYSICAL core; on small hyper-threaded VMs (Vultr 4 vCPU =
@@ -64,8 +66,11 @@ def _to_openai(messages: list[dict]) -> list[dict]:
 
 class LLMClient:
     def __init__(self, model: str | None = None, url: str | None = None,
-                 temperature: float = 0.0, num_ctx: int = 4096, num_predict: int = 300,
+                 temperature: float = 0.0, num_ctx: int | None = None, num_predict: int = 300,
                  api: str | None = None):
+        # the context the server is started with: 4096 for Ollama, 8192 for llama-server
+        # (deploy/bootstrap_gpu.sh: -c 8192). Keep AGENT_HISTORY_CHARS in step with it.
+        num_ctx = num_ctx or int(os.environ.get("AGENT_NUM_CTX") or 4096)
         self.model = model or MODEL
         self.url = (url or OLLAMA).rstrip("/")
         self.api = (api or API).lower()
@@ -110,10 +115,10 @@ class LLMClient:
             fn = tc.get("function", {})
             args = fn.get("arguments")
             if isinstance(args, str):
-                import json
                 try:
                     args = json.loads(args)
-                except Exception:  # noqa: BLE001
+                except ValueError:
+                    log.warning("model sent tool arguments that are not JSON: %.200s", args)
                     args = {}
             calls.append({"name": fn.get("name"), "arguments": args or {}})
         return {"content": msg.get("content", "") or "", "tool_calls": calls}

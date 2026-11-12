@@ -1,17 +1,24 @@
 """FastAPI contract adapter.
 
 Exposes one endpoint per contract action. Request bodies are validated against the JSON
-schema in contract/schemas/<action>.json before the call reaches Odoo. The agent talks to
-THIS service, never to Odoo directly.
+schema in contract/schemas/<action>.json before the call reaches Odoo.
 
-Run:  uvicorn adapter.app:app --host 0.0.0.0 --port 8080
+This HTTP surface is OPTIONAL: the agent calls adapter/gateway.py in-process. It exists for other
+back-office integrations and the contract tests. It acts on whatever customer_id the caller
+sends, so it is never an open port:
+  - ADAPTER_TOKEN set  -> every /tool/* call needs the header  X-Adapter-Token: <token>
+  - ADAPTER_TOKEN unset -> only calls from this machine (loopback) are accepted
+
+Run:  uvicorn --app-dir adapter app:app --host 127.0.0.1 --port 8085
 """
 from __future__ import annotations
 
+import hmac
+import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from jsonschema import Draft202012Validator
 
@@ -52,6 +59,16 @@ def get_contract():
             "requires_confirmed_intent": sorted(contract.actions_requiring_confirmed_intent())}
 
 
+_LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def _authorised(request: Request) -> bool:
+    token = os.environ.get("ADAPTER_TOKEN", "")
+    if token:
+        return hmac.compare_digest(request.headers.get("x-adapter-token", ""), token)
+    return (request.client.host if request.client else "") in _LOOPBACK
+
+
 def _handle(action: str, body: dict):
     validator = _VALIDATORS.get(action)
     if validator is None:
@@ -68,7 +85,9 @@ def _handle(action: str, body: dict):
 # one route per action keeps the OpenAPI surface explicit
 for _action in contract.ACTIONS:
     def _make(action):
-        async def endpoint(body: dict | None = None):
+        def endpoint(request: Request, body: dict | None = None):
+            if not _authorised(request):
+                return JSONResponse(status_code=401, content=err("unauthorised", "missing or wrong X-Adapter-Token"))
             return _handle(action, body or {})
         endpoint.__name__ = f"tool_{action}"
         return endpoint

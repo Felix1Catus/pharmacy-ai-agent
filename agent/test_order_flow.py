@@ -6,13 +6,11 @@ Run:  pytest agent/test_order_flow.py -q
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter"), str(ROOT / "agent"), str(ROOT / "odoo")]
 
 from order_flow import match_branch, parse_choice, parse_fulfilment, parse_qty  # noqa: E402
 
@@ -248,7 +246,7 @@ def test_switch_from_delivery_to_pickup_at_the_address_question(shop):
     a.respond(conv, "ابي علبة بنادول توصيل")
     a.respond(conv, "1")
     assert conv.order["step"] == "address_saved"
-    reply = a.respond(conv, "لا خلاص استلام من الفرع")
+    a.respond(conv, "لا خلاص استلام من الفرع")
     assert conv.order["fulfillment"] == "pickup" and conv.order["step"] == "branch"
 
 
@@ -309,6 +307,7 @@ def test_voice_selection_during_order_not_blocked_by_medical_guard(shop):
     assert reply.startswith("✅ بنادول اكسترا") and "كم علبة" in reply
 
 
+@live
 def test_cancel_only_when_the_customer_asked(monkeypatch):
     cancelled = []
     monkeypatch.setattr(GW, "cancel_order", lambda **kw: cancelled.append(kw) or {"cancelled": True})

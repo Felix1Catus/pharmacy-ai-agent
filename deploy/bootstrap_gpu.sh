@@ -37,6 +37,7 @@ log "== 4/9 .env (secrets generated here, never committed)"
 [ -f .env ] || cp .env.example .env
 setv(){ grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
 setv LLM_API openai; setv OLLAMA_URL http://127.0.0.1:8080; setv AGENT_MODEL qwen3-8b-q4_k_m
+setv AGENT_NUM_CTX 8192; setv AGENT_HISTORY_CHARS 7000     # llama-server below runs with -c 8192
 setv ASR_MODEL large-v3; setv ASR_GPU "$([ "$GPUS" -ge 2 ] && echo 1 || echo 0)"; setv TTS_ENGINE namaa
 setv TTS_NAMAA_URL http://127.0.0.1:8095
 grep -q "^WEBCHAT_PASSWORD=..*" .env || setv WEBCHAT_PASSWORD "$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
@@ -62,6 +63,17 @@ if [ "${FRESH_DB:-0}" = 1 ]; then
   (cd odoo && docker compose run --rm -T -v "$REPO/data_sources/sfda/data:/sfda:ro" odoo odoo shell -d pharmacy \
     --db_host=db --db_user=odoo --db_password=odoo --no-http < "$REPO/data_sources/sfda/test_import_odoo_shell.py") 2>/dev/null \
     | grep "^IMPORT_RESULT" | cut -c1-200 | tee -a "$LOG"
+  # a fresh database starts as admin/admin and step 9 publishes Odoo: rotate the administrator's
+  # password now, and give the chat services their own least-privilege login
+  NEWPW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
+  .venv/bin/python - "$NEWPW" <<'PY' || fail "rotate Odoo admin password"
+import sys; sys.path.insert(0, "odoo")
+from odoo_client import OdooClient
+c = OdooClient(); c.write("res.users", [c.uid], {"password": sys.argv[1]})
+PY
+  setv ODOO_PASSWORD "$NEWPW"
+  .venv/bin/python scripts/create_service_user.py --write-env >>"$LOG" 2>&1 || fail "service user"
+  log "Odoo: administrator password rotated (ODOO_ADMIN_PASSWORD in .env); services use the pharmacy-assistant login"
 fi
 
 log "== 6/9 model: Qwen3-8B Q4_K_M (the exact qwen3:8b weights the evals used) on llama-server"
@@ -92,11 +104,14 @@ done
   || fail "namaa venv"
 
 log "== 8/9 services"
-for u in pharmacy-webchat pharmacy-tts-namaa pharmacy-distill; do
-  sed -e "s|@REPO@|$REPO|g" -e "s|@SNAPSHOT@|$REPO|g" "deploy/systemd/$u.service" > "/etc/systemd/system/$u.service"
+for u in pharmacy-webchat.service pharmacy-tts-namaa.service pharmacy-distill.service pharmacy-whatsapp.service          pharmacy-prune-logs.service pharmacy-prune-logs.timer; do
+  sed -e "s|@REPO@|$REPO|g" -e "s|@SNAPSHOT@|$REPO|g" "deploy/systemd/$u" > "/etc/systemd/system/$u"
 done
 systemctl daemon-reload
 systemctl enable --now pharmacy-tts-namaa pharmacy-webchat >/dev/null 2>&1   # distill stays off until you start it
+systemctl enable --now pharmacy-prune-logs.timer >/dev/null 2>&1             # daily chat-log retention (PDPL)
+# pharmacy-whatsapp is installed but not started: add the WHATSAPP_* values to .env first, then
+#   systemctl enable --now pharmacy-whatsapp
 for i in $(seq 1 60); do curl -s -o /dev/null -w "%{http_code}" 127.0.0.1:8090/ | grep -q 401 && break; sleep 3; done
 
 log "== 9/9 public HTTPS"
@@ -111,4 +126,4 @@ if [ "$PUBLIC" = 1 ]; then
   log "chat: https://chat.$DASHED.sslip.io   odoo: https://odoo.$DASHED.sslip.io"
 fi
 log "== done. Webchat user: $(grep ^WEBCHAT_USER= .env | cut -d= -f2-), password in $REPO/.env; Odoo user admin."
-log "   Change the Odoo admin password before sharing the links (deploy/README.md)."
+log "   Odoo administrator: user admin, password = ODOO_ADMIN_PASSWORD in $REPO/.env."

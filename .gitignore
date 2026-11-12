@@ -29,3 +29,6 @@ distill/out/
 distill/work/
 distill/test/
 distill/*.log
+# saved chats, outboxes and voice replies: customers' data, never in git
+results/whatsapp_sessions/
+results/whatsapp_media/

@@ -2,7 +2,13 @@
 # sslip.io names resolve to the IP and get real Let's Encrypt certificates (needs ports 80 and 443 open).
 chat.@DASHED@.sslip.io {
 	bind @IP@
-	reverse_proxy 127.0.0.1:8090
+	# Meta's WhatsApp webhook (channels/whatsapp, pharmacy-whatsapp.service): only this path
+	handle /webhook {
+		reverse_proxy 127.0.0.1:8091
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8090
+	}
 }
 
 odoo.@DASHED@.sslip.io {

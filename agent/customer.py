@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from gateway import guess_city, normalize_phone  # noqa: F401  (guess_city re-exported for tests)
+from gateway import guess_city, normalize_phone, phone_key  # noqa: F401  (guess_city re-exported for tests)
 from guards import is_affirmation, normalize
 
 T = {
@@ -62,6 +62,8 @@ T = {
         "cancelled": "تم إلغاء الطلب رقم {ref}. إذا احتجت شيئاً آخر اكتب «القائمة».",
         "line": "• {name} × {qty:g} — {total:.2f} ريال",
         "confirm_pay": "✅ أؤكد وأدفع", "cancel_order": "❌ إلغاء الطلب",
+        "confirm_handover": "وصلنا تأكيدك ✅ طلبك يحتاج مراجعة أخيرة من زميلنا، وبيتواصل معك قريباً لإتمامه.",
+        "back_in_stock": "🔔 {name} صار متوفر الآن في: {where}\nاكتب اسمه إذا تبغى تطلبه 🛒",
     },
     "en": {
         "ask_phone": "📱 Type your mobile number (e.g. 0501234567)",
@@ -106,6 +108,9 @@ T = {
         "cancelled": "Order {ref} has been cancelled. Type 'menu' if you need anything else.",
         "line": "• {name} × {qty:g} — {total:.2f} SAR",
         "confirm_pay": "✅ Confirm & pay", "cancel_order": "❌ Cancel order",
+        "confirm_handover": "We have your confirmation ✅ A colleague needs to finish this order and "
+                            "will contact you shortly.",
+        "back_in_stock": "🔔 {name} is back in stock at: {where}\nType its name if you'd like to order it 🛒",
     },
 }
 _EDIT_WORDS = re.compile(r"(?<!\w)(تعديل|عدل|غير|تغيير|لا|edit|change|no|redo|اعاده)(?!\w)")
@@ -209,7 +214,8 @@ class CustomerFlow:
         if prof:
             f["data"], f["step"] = dict(prof), "confirm_profile"
             return self._ask_confirm_profile(conv, prof, head)
-        f["data"], f["step"] = {"phone": normalize_phone(phone, typed=True) or normalize_phone(phone)}, "ask_name"
+        # a WhatsApp sender id is taken as it is (phone_key); a typed number must be a real mobile
+        f["data"], f["step"] = {"phone": normalize_phone(phone, typed=True) or phone_key(phone)}, "ask_name"
         return self.a._say(conv, head + T[lang]["not_found"], guard="customer")
 
     def _ask_confirm_profile(self, conv, prof, head):
@@ -237,6 +243,9 @@ class CustomerFlow:
         if pending["kind"] == "text":            # an account question asked before identifying
             return self.a.respond(conv, pending["text"], resumed=True)
         if pending["kind"] == "image":
+            if not pending.get("image"):         # the service restarted while the photo was waiting
+                from agent import RESEND_PHOTO
+                return self.a._say(conv, head + RESEND_PHOTO[lang], guard="customer")
             return self.a.respond(conv, pending.get("text") or "", image=pending["image"],
                                   image_name=pending.get("image_name"), resumed=True)
         return self.a._say(conv, head + self.a.menu_text_for(conv), guard="menu", menu=True)
@@ -312,14 +321,27 @@ class CustomerFlow:
         return self.a._say(conv, t["rx_rejected"].format(ref=s["order_ref"], note=s["note"] or "—"),
                            guard="review_result")
 
+    def stock_alert_message(self, conv, alert: dict) -> str:
+        """"It's back in stock" (the customer asked to be told), as a chat message."""
+        lang = conv.lang or "ar"
+        where = ("، " if lang == "ar" else ", ").join(alert["branches"])
+        name = alert["product"] if lang == "ar" else alert.get("product_en") or alert["product"]
+        return self.a._say(conv, T[lang]["back_in_stock"].format(name=name, where=where),
+                           guard="stock_alert")
+
     def deliver_notifications(self, conv) -> list:
-        """Send this customer every review result not yet delivered (test chat polling)."""
+        """Send this customer every review result and back-in-stock message not yet delivered
+        (test chat polling; on WhatsApp the notifier pushes them)."""
         if not conv.customer_id:
             return []
         out = []
         for s in self.a.gw.pending_notifications(conv.customer_id):
             text = self.review_message(conv, s)
             self.a.gw.mark_notified(s["order_id"])
+            out.append({"reply": text, "menu": conv.last_menu})
+        for alert in self.a.gw.due_stock_alerts(conv.customer_id):
+            text = self.stock_alert_message(conv, alert)
+            self.a.gw.mark_stock_alert_sent(alert["alert_id"])
             out.append({"reply": text, "menu": conv.last_menu})
         return out
 
@@ -336,6 +358,8 @@ class CustomerFlow:
             conv.awaiting_confirm_order = None
             res = self.a.gw.customer_confirms(oid, conv.customer_id)
             if "error" in res:
+                if res["error"]["code"] == "confirm_failed":     # handed to a colleague by the gateway
+                    return self.a._say(conv, t["confirm_handover"], guard="handover", escalated=True)
                 return self.a._say(conv, t["order_failed"].format(why=res["error"]["message"]), guard="order")
             return self.a._say(conv, t["pay_link"].format(ref=res["order_ref"], total=res["total"],
                                                           link=res["payment_link"]), guard="order")

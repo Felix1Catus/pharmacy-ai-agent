@@ -6,13 +6,11 @@ Run:  pytest adapter/test_ingredients.py -q
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT), str(ROOT / "adapter")]
 
 import ingredients as ingr  # noqa: E402
 
@@ -101,7 +99,6 @@ def test_salt_forms_are_the_same_ingredient():
 
 @live
 def test_prescription_lines_matched_by_ingredient_and_strength():
-    import prescription as rx
     text = ("Patient: Test Patient B\nDiagnosis: Type 2 diabetes / dyslipidemia\n"
             "1. Metformin - 500 mg tablet\nSig: 1 tab twice daily with meals\n"
             "2. Atorvastatin - 20 mg tablet\nSig: 1 tab at night\n")
